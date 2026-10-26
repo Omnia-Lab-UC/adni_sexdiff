@@ -5,8 +5,8 @@
 # so the raw files, the cleaned matrices, the cohort table, the MOTCO input
 # blocks, latent_scores.csv and analysis_metadata.csv never leave the machine
 # they were made on. Only aggregate outputs move (result.json,
-# stage_means.csv, pls_loadings.csv, manifests, summary.md, stage_counts.csv,
-# diagnostics tables). The filter list below mirrors .gitignore and
+# stage_means.csv, pls_loadings.csv, manifests incl. cleaned/*/clean_manifest.json,
+# summary.md, stage_counts.csv, diagnostics tables). The filter list below mirrors .gitignore and
 # constants.PARTICIPANT_LEVEL_PATTERNS; change all three together.
 #
 # Usage: scripts/sync_results.sh [--push] [extra rsync args, e.g. -n]
@@ -29,17 +29,21 @@ fi
 
 # rsync filters: the first match wins, so the aggregate exceptions come
 # before the pattern they are excepted from. Patterns with a leading / are
-# anchored at results/.
+# anchored at results/. In-progress directories and logs are excluded first,
+# so no exception below re-includes a file inside them.
 filters=(
-    --exclude '/cleaned/'
+    --exclude '*.tmp/'
+    --exclude 'logs/'
+    --include '/cleaned/'
+    --include '/cleaned/*/'
+    --include '/cleaned/*/clean_manifest.json'
+    --exclude '/cleaned/**'
     --include '/cohort/stage_counts.csv'
     --exclude '/cohort/*.csv'
     --include '/motco_input/**manifest*'
     --exclude '/motco_input/**.csv'
     --exclude 'latent_scores.csv'
     --exclude 'analysis_metadata.csv'
-    --exclude '*.tmp/'
-    --exclude 'logs/'
 )
 
 cd "$(dirname "$0")/.."
@@ -59,7 +63,7 @@ rsync -av "${filters[@]}" "$@" "$src" "$dst"
 # new name is caught only once it is added to the filters above).
 if [ "$direction" = pull ] && [ -d "${ADNI_SYNC_TARGET:-$local_dir}" ]; then
     found=$(cd "${ADNI_SYNC_TARGET:-$local_dir}" && find . \
-        \( -path './cleaned' -o -path './cleaned/*' \
+        \( \( -path './cleaned/*' ! -type d ! -name clean_manifest.json \) \
            -o -path './cohort/*.csv' ! -name stage_counts.csv \
            -o \( -path './motco_input/*' -name '*.csv' ! -name '*manifest*' \) \
            -o -name latent_scores.csv -o -name analysis_metadata.csv \) -print)

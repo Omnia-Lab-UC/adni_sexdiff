@@ -14,21 +14,33 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 (the SEA-AD astrocyte case study); its conventions apply here unless this
 file says otherwise.
 
-Status (2026-10-26): scaffold only. Every step below is a stub whose body
-raises `NotImplementedError`; its docstring in `data.py` states the inputs,
-the outputs and the output contract. No data is in place. No scientific
-constant is decided (see "Flag and ask"). Each step is implemented by its own
+Status (2026-10-26): `clean` is implemented (change
+`adni-metabolomics-clean`) and run on the workstation, whose data root holds
+the raw metabolomics files; the cluster copy and clone do not exist yet.
+Every other step below is a stub whose body raises `NotImplementedError`;
+its docstring in `data.py` states the inputs, the outputs and the output
+contract. One scientific constant is decided, `CLEAN_OPTIONS`; the others
+are undecided (see "Flag and ask"). Each step is implemented by its own
 OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
-   pinned release's `clean_files` pipeline with the options of the
-   (undecided) `CLEAN_OPTIONS`, run in a working copy because metabo_adni
-   changes into the data directory and writes its cleaned files there.
-   Writes `results/cleaned/<platform>/`: metabo_adni's cleaned files under
-   the names it gives them (participant × metabolite, keyed by `RID`;
-   participant-level) and `clean_manifest.json` (versions, options, input
-   file hashes, participant and metabolite counts before and after each
-   metabo_adni step, findings; aggregate).
+   pinned release's QC functions called in-process in the order of its
+   `__main__.main` (the console script `clean_files`; metabo_adni has no
+   library entry point), with `CLEAN_OPTIONS` (QC at the default cutoffs,
+   `--merge`, no transform), in a working copy (`<platform>.tmp/work/`)
+   because metabo_adni changes into the data directory and writes its
+   output there. Its printed output (it lists `RID`s) is captured to
+   `logs/metabo_adni.log`, never shown. Writes `results/cleaned/<platform>/`:
+   `P180.csv` / `NMR.csv` (the merged table under the name metabo_adni
+   gives it; participant × metabolite, keyed by `RID`; participant-level),
+   for p180 `p180_runs.csv` (`RID`, `run` ∈ {`ADNI1`, `ADNI2GO`};
+   participant-level), the log (participant-level) and `clean_manifest.json`
+   (versions, options and `cli_equivalent`, input hashes and known repairs,
+   raw inventory, participants × metabolites after each metabo_adni step,
+   imputed points, value summary, runs, output hashes, the predeclared
+   `CLEAN_EXPECTED_COUNTS` beside the observed ones, findings, upstream
+   behaviours; aggregate, the one file under `results/cleaned/` that is
+   committed and synced).
 2. `cohort` – from `results/cleaned/` and the ADNI clinical tables in the
    data root: the baseline visit per participant, sex, the merged stage
    (`STAGE_LABELS` = CN / MCI / AD by the undecided `STAGE_RULE`), the
@@ -82,21 +94,25 @@ behavior or defaults change.
 
 ### 1. ADNI is controlled-access (DUA): nothing participant-level is ever committed
 
-- Never commit a raw ADNI file, a cleaned matrix, `cohort.csv`, a MOTCO
+- Never commit a raw ADNI file, a cleaned matrix, `p180_runs.csv`,
+  metabo_adni's log, `cohort.csv`, a MOTCO
   input block, `metadata.csv`, `covariates.csv`, `latent_scores.csv`,
   `analysis_metadata.csv`, or any table with an `RID`, under any path,
   in any form (also not in a report, a proposal, a spike note, a test
   fixture, a docstring or a commit message).
 - Committed outputs are aggregate only: `result.json`, `stage_means.csv`,
-  `pls_loadings.csv`, manifests with hashes, `summary.md`,
+  `pls_loadings.csv`, manifests with hashes (among them
+  `results/cleaned/*/clean_manifest.json`), `summary.md`,
   `stage_counts.csv` (group × stage counts), the diagnostics tables and the
   reports under `reports/`.
-- `.gitignore` enforces this: `data/`, `results/cleaned/`,
+- `.gitignore` enforces this: `data/`, `results/cleaned/**` except
+  `results/cleaned/*/clean_manifest.json`,
   `results/cohort/*.csv` except `stage_counts.csv`,
   `results/motco_input/**/*.csv` except manifests,
   `results/**/latent_scores.csv`, `results/**/analysis_metadata.csv`,
   `results/**/*.tmp/`, `results/**/logs/`. The same list is
-  `constants.PARTICIPANT_LEVEL_PATTERNS` and the filter of
+  `constants.PARTICIPANT_LEVEL_PATTERNS` (exceptions in
+  `constants.AGGREGATE_EXCEPTIONS`) and the filter of
   `scripts/sync_results.sh`. A change that adds a participant-level output
   extends all three in the same change, before the output exists. Before
   committing under `results/`, name every file you add and say why it is
@@ -132,11 +148,13 @@ behavior or defaults change.
 - Cleaning is metabo_adni's (PyPI, `tomszar/metabo_adni`), pinned to an
   exact version (`metabo_adni==0.5.8` in `pyproject.toml`,
   `constants.METABO_ADNI_VERSION`, checked at run time), never
-  reimplemented here. Its QC cutoffs and transforms (`--mmc`, `--mpc`,
-  `--cv`, `--icc`, `--log2`, `--zscore`, `--winsorize`,
-  `--remove-moutliers`, `--residualize-meds`) are scientific choices
-  (`CLEAN_OPTIONS`, undecided). A metabo_adni defect is reported upstream
-  and the pin moved by a change, never patched or vendored here.
+  reimplemented here. Its QC cutoffs, merge and transforms (`--mmc`,
+  `--mpc`, `--cv`, `--icc`, `--merge`, `--log2`, `--zscore`,
+  `--winsorize`, `--remove-moutliers`, `--residualize-meds`) are scientific
+  choices (`CLEAN_OPTIONS`, decided by `adni-metabolomics-clean`). A
+  metabo_adni defect is reported upstream and the pin moved by a change,
+  never patched or vendored here; the pinned release's known behaviours are
+  counted in `clean_manifest.json` under `upstream_behaviours`.
 
 ### 4. MOTCO pin
 
@@ -160,8 +178,9 @@ behavior or defaults change.
   feature rule and the diagnostic variables are scientific decisions. Each
   enters only through an OpenSpec proposal that states it before any run,
   lives as a named constant in `src/adni_sexdiff/constants.py`, and is
-  listed under "Flag and ask" below. None is decided today; `constants.py`
-  reserves their names in its docstring and defines none of them.
+  listed under "Flag and ask" below. Decided so far: `CLEAN_OPTIONS`;
+  `constants.py` reserves the others' names in its docstring and defines
+  none of them.
 - Never set, change or default one of them in code, a flag or a script
   without a proposal. Never choose one from a result.
 
@@ -190,13 +209,16 @@ behavior or defaults change.
   messages.
 - `src/adni_sexdiff/constants.py` – named constants: conventions (paths,
   environment variables, platforms, columns, output names, pins, the
-  participant-level patterns) defined; scientific constants reserved by
-  name only until a proposal defines them.
-- `src/adni_sexdiff/data.py` – all logic: the six steps (stubs today),
-  `resolve_data_root`, the version checks.
+  participant-level patterns, the clean inputs and the raw-file repair
+  registry) defined; scientific constants reserved by name only until a
+  proposal defines them (`CLEAN_OPTIONS` defined, with its predeclared
+  `CLEAN_EXPECTED_COUNTS` and `RAW_INPUT_SHA256`).
+- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`
+  implemented, the others stubs), `resolve_data_root`, the version checks,
+  the raw-input helpers and the manifest / `.tmp` helpers every step reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
-  and the cluster). No sbatch scripts yet; they come with the first step
-  that needs the cluster.
+  and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
+  `spike_raw_inventory.py` (the clean change's read-only spike).
 - `data/` – raw ADNI files, uploaded by hand; gitignored, never committed.
 - `results/` – pipeline outputs; only the aggregate files named in
   constraint 1 are committed.
@@ -254,8 +276,10 @@ behavior or defaults change.
   `7ad17d63eed26368a3e51254c942e9c2f39890d43decda37f7b1a2ade38de3a6`.
   `clean` records the file's sha256 in `clean_manifest.json` and names
   this repair when the hash is the repaired one; a fresh LONI download
-  must be repaired the same way before it is put in the archive. The
-  clean proposal states this rule. The clinical tables the cohort step reads
+  must be repaired the same way before it is put in the archive. `clean`
+  implements this rule (`constants.KNOWN_RAW_FILE_REPAIRS`): LONI's
+  unrepaired hash stops it before anything is written, and any other
+  unknown hash is a finding. The clinical tables the cohort step reads
   (diagnosis, demographics, covariate sources) are named by the cohort
   proposal and uploaded the same way.
 - `RID` is ADNI's participant key (`constants.PARTICIPANT_ID_COLUMN`). Any
@@ -263,8 +287,14 @@ behavior or defaults change.
   sample column is `rid`, the group column `sex`, the stage column `stage`
   with `STAGE_LABELS` CN / MCI / AD in trajectory order.
 - Flag and ask before changing, and never set without a proposal
-  (constraint 5); none is decided today:
-  - `CLEAN_OPTIONS` – metabo_adni's cutoffs and transforms per platform.
+  (constraint 5); decided so far: `CLEAN_OPTIONS`; the others are
+  undecided:
+  - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
+    platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
+    for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
+    `merge` on; `log2`, `zscore`, `winsorize`, `remove_moutliers`,
+    `residualize_meds` off. Its predeclared counts are
+    `CLEAN_EXPECTED_COUNTS`. A change of it is a new proposal.
   - `COHORT_RULE` – the baseline visit per participant, the platform
     intersection, exclusions; the predeclared counts the manifest checks.
   - `STAGE_RULE` – the ADNI diagnosis → CN / MCI / AD mapping and the
@@ -299,8 +329,10 @@ behavior or defaults change.
   glibc 2.17 and cannot import the numpy wheels installed from the login
   node (glibc 2.34).
 - Compute nodes have no internet access. Light steps (`cohort`, `export`,
-  `report`) run on the login node; `clean` and `analyze` through sbatch
-  scripts that a later change adds under `scripts/` (none yet).
+  `report`) run on the login node; `clean` through `scripts/clean.sbatch`
+  (it calls `.venv/bin/adni-sexdiff`, synced on the login node, since
+  `uv run` could try to reach the network), `analyze` through an sbatch
+  script its change adds.
 - Only aggregate outputs leave the cluster: `scripts/sync_results.sh`
   (constraint 2). Never copy raw files, cleaned matrices or MOTCO inputs
   between machines.
@@ -317,7 +349,11 @@ behavior or defaults change.
 - Each step reads only the previous steps' outputs, checks their manifests'
   hashes, writes `<name>.tmp/` and renames when complete, and records
   inputs (with sha256), settings, versions, git revision and findings in a
-  manifest.
+  manifest. `data.py`'s shared helpers do this (`require_raw_files`,
+  `hash_raw_file`, `check_known_repairs`, `_finalize_output_dir`,
+  `_write_manifest`, `_git_revision`, `_software_versions`); manifests use
+  the top-level keys `step`, `versions`, `git_revision`, `inputs`,
+  `settings`, `outputs`, `findings`.
 
 ## OpenSpec workflow
 
