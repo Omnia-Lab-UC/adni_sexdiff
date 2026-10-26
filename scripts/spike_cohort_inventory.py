@@ -12,7 +12,7 @@ written.
 
 Usage (inside the Nix shell):
   uv run python -I scripts/spike_cohort_inventory.py --data-root data \
-      --cleaned-dir results/cleaned --out openspec/changes/adni-cohort/spike.md
+      --cleaned-dir results/cleaned --out openspec/changes/<change>/spike.md
 """
 
 from __future__ import annotations
