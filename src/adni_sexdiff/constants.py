@@ -13,14 +13,13 @@ Scientific constants
     a named constant here, and is listed under "Flag and ask" in
     ``AGENTS.md``. Decided so far: ``CLEAN_OPTIONS`` (metabo_adni's QC
     cutoffs, merge and transforms per platform), by the change
-    ``adni-metabolomics-clean``. The others are undecided and not defined;
+    ``adni-metabolomics-clean``; ``COHORT_RULE`` (the clinical table, the
+    baseline row and baseline sample per participant, the platform
+    intersection), ``STAGE_RULE`` (``DX.bl`` onto ``STAGE_LABELS``, subtypes
+    merged) and ``ANALYSIS_COVARIATES`` (set, order, sources and coding), by
+    the change ``adni-cohort``. The others are undecided and not defined;
     the names reserved for them (a proposal may rename them) are:
 
-    - ``COHORT_RULE`` – the baseline visit per participant, the platform
-      intersection and any exclusion.
-    - ``STAGE_RULE`` – the mapping of ADNI diagnoses onto
-      ``STAGE_LABELS`` (CN / MCI / AD), including how subtypes are merged.
-    - ``ANALYSIS_COVARIATES`` – the covariate set, order and coding.
     - ``ANALYSIS_PERMUTATIONS``, ``ANALYSIS_SEED``, ``ANALYSIS_ALPHA`` –
       MOTCO's RRPP permutations, seed and rejection rule.
     - ``ANALYSIS_RANK_FLOOR`` – the latent-rank floor passed to MOTCO.
@@ -53,7 +52,7 @@ SAMPLE_COLUMN = "rid"
 GROUP_COLUMN = "sex"
 STAGE_COLUMN = "stage"
 #: The stages of the design, in trajectory order. The rule that assigns a
-#: participant to one of them (``STAGE_RULE``) is undecided.
+#: participant to one of them is ``STAGE_RULE``.
 STAGE_LABELS: tuple[str, ...] = ("CN", "MCI", "AD")
 
 # --- Output directories ----------------------------------------------------
@@ -137,8 +136,9 @@ REPORTED_N_JOBS = 1
 #: The fasting file metabo_adni reads (``-F``; baseline rows of ``RID``,
 #: ``VISCODE2``, ``BIFAST``).
 CLEAN_FASTING_FILE = "BIOMARK.csv"
-#: The medication table metabo_adni's ``--residualize-meds`` reads. Named
-#: only: ``clean`` does not read it (the flag is off in ``CLEAN_OPTIONS``).
+#: The medication table. metabo_adni's ``--residualize-meds`` reads it, but
+#: the flag is off in ``CLEAN_OPTIONS`` and ``clean`` does not read it;
+#: ``cohort`` reads its statin column (``ANALYSIS_COVARIATES``).
 CLEAN_MEDICATION_FILE = "ADMCPATIENTDRUGCLASSES_20170512.csv"
 #: The p180 concentration files per metabo_adni table key, in the order of
 #: metabo_adni's ``load.read_files``; the run is the key's prefix.
@@ -306,12 +306,13 @@ CLEAN_EXPECTED_COUNTS: dict[str, dict] = {
     },
 }
 
-#: The sha256 of each raw metabolomics file in the data root at the
-#: predeclaration of ``adni-metabolomics-clean`` (the LONI downloads of
-#: 10-11 July 2024, the UPLC ADNI-GO/2 file with its repair). A step that
-#: finds another hash records a finding (a fresh LONI download); the counts
-#: above hold for these bytes only. The medication table is listed because
-#: the spike inventoried it; ``clean`` does not read it.
+#: The sha256 of each raw file in the data root at its predeclaration: the
+#: metabolomics files at ``adni-metabolomics-clean`` (the LONI downloads of
+#: 10-11 July 2024, the UPLC ADNI-GO/2 file with its repair; the medication
+#: table, which ``clean`` does not read, because its spike inventoried it)
+#: and the ADNIMERGE freeze at ``adni-cohort``. A step that finds another
+#: hash records a finding (a fresh download); the predeclared counts hold
+#: for these bytes only.
 RAW_INPUT_SHA256: dict[str, str] = {
     "ADMCDUKEP180UPLC_01_15_16.csv": "b99835be2d07460f5c1089fd72276454099d3ec7c14e662c740b496de0dad4fb",
     "ADMCDUKEP180FIA_01_15_16.csv": "0c765d0048f05fdc89f0eaa575b31f655fcefa2faf9fb0da92263836959f7290",
@@ -324,4 +325,142 @@ RAW_INPUT_SHA256: dict[str, str] = {
     "ADNINIGHTINGALE2.csv": "524bde27672021fe8a9c4cc4b5d0d89a38f6f04129b930c955bd31e04c651ebf",
     "BIOMARK.csv": "0c7bc024fd3de367395c1edf7ab870bb7af37bc66dffaa11312d66570541671d",
     "ADMCPATIENTDRUGCLASSES_20170512.csv": "2f0dd41dfb4c17f679818f19f8a5a41a2de81c30712863286a74e29fdd597343",
+    "ADNI_adnimerge_20170629_QT-freeze.csv": "e3eae0464106f0a3df4eb23946e57f1f7fd5f8456eb60af6540654a36a16f7a2",
+}
+
+
+# --- cohort: scientific constants -------------------------------------------
+
+#: Decided by the change ``adni-cohort``. The clinical table is the QT-PAD
+#: ADNIMERGE freeze of 2017-06-29 (the file of the 2022 study); each
+#: participant's clinical values come from its row at ``baseline_visit``
+#: (ADNIMERGE ``VISCODE``). A cleaned participant enters a platform's set only
+#: if every raw record of the participant on that platform has visit
+#: ``sample_visit`` (read from the column ``sample_visit_columns`` names per
+#: raw file) and it has a ``baseline_visit`` row; the ADNI-1 p180 files carry
+#: no visit column, so participants of the runs in ``runs_without_visit``
+#: (``p180_runs.csv``) count as baseline (ADMC measured ADNI-1 baseline
+#: serum). The analysis cohort is the intersection of the ``platforms``' sets.
+#: No other exclusion, and none depends on sex, stage or a covariate value.
+#: Never changed by a flag, a result or a count.
+COHORT_RULE: dict = {
+    "clinical_file": "ADNI_adnimerge_20170629_QT-freeze.csv",
+    "baseline_visit": "bl",
+    "sample_visit": "bl",
+    "sample_visit_columns": {
+        "ADMCDUKEP180UPLCADNI2GO.csv": "VISCODE",
+        "ADMCDUKEP180FIAADNI2GO.csv": "VISCODE",
+        "ADNINIGHTINGALE2.csv": "VISCODE2",
+    },
+    "runs_without_visit": ("ADNI1",),
+    "platforms": ("p180", "nmr"),
+}
+
+#: Decided by the change ``adni-cohort``. The stage is ADNI's enrollment
+#: category ``DX.bl`` on the baseline row, merged as in the 2022 study: SMC
+#: into CN, EMCI and LMCI into MCI. ``DX.bl`` is kept beside the stage; a value
+#: outside ``map`` stops the step.
+STAGE_RULE: dict = {
+    "source": "DX.bl",
+    "map": {"CN": "CN", "SMC": "CN", "EMCI": "MCI", "LMCI": "MCI", "AD": "AD"},
+}
+
+#: Decided by the change ``adni-cohort``: the covariates, in this order, with
+#: their source (``clinical``: the ADNIMERGE baseline row; ``medication``: the
+#: medication table's row at ``visit``) and coding. ``levels`` are the values
+#: a categorical covariate may take; ``map`` recodes the source value first.
+#: ``statin`` is ``1`` when the cell is filled and ``0`` when it is empty.
+#: Missing policy ``error``: a missing value stops ``cohort``, nothing is
+#: imputed and nobody is dropped for it. The ``coding`` is what ``analyze``
+#: declares to MOTCO (``apoe4`` and ``statin`` are written as integers).
+ANALYSIS_COVARIATES: dict[str, dict] = {
+    "age": {"file": "clinical", "column": "AGE", "coding": "numeric"},
+    "education": {"file": "clinical", "column": "PTEDUCAT", "coding": "numeric"},
+    "apoe4": {"file": "clinical", "column": "APOE4", "coding": "categorical", "levels": (0, 1, 2)},
+    "phase": {
+        "file": "clinical",
+        "column": "ORIGPROT",
+        "coding": "categorical",
+        "levels": ("ADNI1", "ADNI2GO"),
+        "map": {"ADNI1": "ADNI1", "ADNIGO": "ADNI2GO", "ADNI2": "ADNI2GO"},
+    },
+    "statin": {
+        "file": "medication",
+        "column": "HMG CoA reductase inhibitors",
+        "visit": "sc",
+        "coding": "categorical",
+        "levels": (0, 1),
+    },
+}
+
+# --- cohort: conventions and predeclared counts ------------------------------
+
+#: The clinical table ``cohort`` reads, by its name in the data root (a
+#: symlink into ``<root>/Clinical/``).
+COHORT_CLINICAL_FILE = COHORT_RULE["clinical_file"]
+#: The values of sex (``PTGENDER``) as they appear. A value check, not the
+#: group order passed to MOTCO (the analyze change decides that).
+GROUP_VALUES: tuple[str, ...] = ("Female", "Male")
+#: The columns of ``cohort.csv``, in this order: one row per participant of
+#: either platform set, a flag per platform; the intersection is the rows
+#: with every flag true.
+COHORT_COLUMNS: tuple[str, ...] = (
+    SAMPLE_COLUMN,
+    GROUP_COLUMN,
+    STAGE_COLUMN,
+    "dx_bl",
+    "protocol",
+    *ANALYSIS_COVARIATES,
+    "visit",
+    *COHORT_RULE["platforms"],
+)
+
+#: Predeclared by the change ``adni-cohort`` from its spike (``spike.md``,
+#: 2026-10-26) on the clean outputs of ``adni-metabolomics-clean`` and the
+#: inputs of ``RAW_INPUT_SHA256``. Per platform set: the cleaned participants
+#: by the visit set of their raw records (``sample_visits``; p180 per run),
+#: the exclusion cascade (the sample rule first, then the baseline row) and
+#: sex × stage. For the intersection: its cascade, sex × stage, the
+#: composition cells (sex × ``DX.bl`` × phase, observed cells only), the
+#: agreement of ``DX`` on the baseline row with the stage, phase-against-run
+#: disagreements, statin users and missing covariate values. For the union
+#: (the rows of ``cohort.csv``): its size and split. ``cohort`` compares its
+#: observed counts with these and records every difference as a finding; a
+#: difference never stops the step and never changes a rule.
+COHORT_EXPECTED_COUNTS: dict[str, dict] = {
+    "p180": {
+        "sample_visits": {"ADNI1": {"no visit column": 746}, "ADNI2GO": {"bl": 846}},
+        "cascade": {"cleaned": 1592, "excluded_sample_not_bl": 0, "excluded_no_clinical_bl_row": 0, "set": 1592},
+        "sex_stage": {"Female": {"CN": 254, "MCI": 329, "AD": 140}, "Male": {"CN": 230, "MCI": 470, "AD": 169}},
+    },
+    "nmr": {
+        "sample_visits": {"bl": 1503, "sc": 1},
+        "cascade": {"cleaned": 1504, "excluded_sample_not_bl": 1, "excluded_no_clinical_bl_row": 0, "set": 1503},
+        "sex_stage": {"Female": {"CN": 237, "MCI": 310, "AD": 126}, "Male": {"CN": 223, "MCI": 449, "AD": 158}},
+    },
+    "intersection": {
+        "cascade": {"cleaned_on_both": 1502, "set": 1501},
+        "sex_stage": {"Female": {"CN": 237, "MCI": 310, "AD": 125}, "Male": {"CN": 223, "MCI": 448, "AD": 158}},
+        "composition": {
+            "Female": {
+                "CN": {"ADNI1": 94, "ADNI2GO": 89},
+                "SMC": {"ADNI2GO": 54},
+                "EMCI": {"ADNI2GO": 123},
+                "LMCI": {"ADNI1": 117, "ADNI2GO": 70},
+                "AD": {"ADNI1": 72, "ADNI2GO": 53},
+            },
+            "Male": {
+                "CN": {"ADNI1": 98, "ADNI2GO": 83},
+                "SMC": {"ADNI2GO": 42},
+                "EMCI": {"ADNI2GO": 152},
+                "LMCI": {"ADNI1": 221, "ADNI2GO": 75},
+                "AD": {"ADNI1": 82, "ADNI2GO": 76},
+            },
+        },
+        "stage_source": {"agree": 1498, "differ": 2, "missing": 1},
+        "phase_vs_run_disagreements": 0,
+        "statin_users": 704,
+        "missing_covariate_values": 0,
+    },
+    "union": {"participants": 1594, "both": 1501, "p180_only": 91, "nmr_only": 2},
 }

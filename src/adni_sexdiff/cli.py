@@ -2,8 +2,9 @@
 
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
-``report``), each printing ``[command]``-prefixed progress messages. Every
-step is a stub today and raises ``NotImplementedError``.
+``report``), each printing ``[command]``-prefixed progress messages.
+``clean`` and ``cohort`` are implemented; the other steps are stubs that
+raise ``NotImplementedError``.
 """
 
 from __future__ import annotations
@@ -70,8 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "cohort",
-        help="Baseline visit per participant, sex, merged stage, covariates, platform intersection, "
-        "group x stage counts -> results/cohort/",
+        help="One baseline row per participant (sex, merged stage, covariates) for the p180 and NMR sets "
+        "and their intersection, sex x stage counts -> results/cohort/",
     )
     p.add_argument("--cleaned-dir", type=Path, default=None, help=f"Output root of clean (default: {CLEANED_DIR})")
     _add_data_root(p)
