@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adni-sexdiff"
+version = "0.1.0"
+description = "Sex × stage (CN / MCI / AD) trajectory comparison on ADNI serum metabolomics (Biocrates p180, Nightingale NMR) with MOTCO."
+readme = "README.md"
+requires-python = ">=3.12, <3.14"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Tomas Gonzalez Zarzar" }
+]
+dependencies = [
+  "motco",
+  "metabo_adni==0.5.8",
+  "pandas",
+  "numpy",
+]
+
+[project.scripts]
+adni-sexdiff = "adni_sexdiff.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  # Add dev-only tools here if needed, e.g., linters or test frameworks
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/adni_sexdiff"]
+
+[tool.uv.sources]
+motco = { git = "https://github.com/tomszar/MOTCO", rev = "v0.10.0" }

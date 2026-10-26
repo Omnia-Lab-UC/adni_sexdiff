@@ -1,0 +1,39 @@
+schema: spec-driven
+
+# Project context: constraints that guide every OpenSpec artifact. AGENTS.md
+# is the full statement; these are the parts an agent cannot infer from code.
+context: |
+  ADNI is controlled-access (DUA). No participant-level output (raw files,
+  cleaned matrices, the cohort table, MOTCO input blocks, latent_scores.csv,
+  analysis_metadata.csv, any table with an RID) is ever committed, synced off
+  the workstations and the cluster, printed, or quoted in an artifact. Only
+  aggregate outputs are committed; a change that adds a participant-level
+  output extends .gitignore, scripts/sync_results.sh and
+  constants.PARTICIPANT_LEVEL_PATTERNS in the same change.
+  Statistical choices (cohort rule, stage rule, covariate set, permutations,
+  seed, rank floor, metabo_adni QC options, feature rule, diagnostic
+  variables, reading rules) are scientific decisions: the proposal states
+  them before any run, they become named constants in
+  src/adni_sexdiff/constants.py, they are listed under "Flag and ask" in
+  AGENTS.md, and no result changes them.
+  Cleaning goes through metabo_adni (exact version pinned), never
+  reimplemented. MOTCO is a git dependency pinned to a release tag; its
+  scikit-learn pin is never loosened; the analysis is one
+  analyze_trajectories call, never assembled from motco plsr + motco de.
+  Reported runs use n_jobs = 1. Report numbers are pasted from generated
+  files and checked by `adni-sexdiff report --check`, never retyped.
+
+# Per-artifact rules (optional)
+rules:
+  proposal:
+    - State what is out of scope
+    - Name every scientific constant the change introduces, with its value, before any run
+
+# Per-operation guidance (optional)
+# operations:
+#   apply:
+#     guidance:
+#       - Keep test summaries concise
+#   archive:
+#     guidance:
+#       - Summarize the archive outcome before finishing
