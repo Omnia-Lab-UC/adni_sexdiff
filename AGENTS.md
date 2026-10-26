@@ -14,14 +14,15 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 (the SEA-AD astrocyte case study); its conventions apply here unless this
 file says otherwise.
 
-Status (2026-10-26): `clean` is implemented (change
-`adni-metabolomics-clean`) and run on the workstation, whose data root holds
-the raw metabolomics files; the cluster copy and clone do not exist yet.
-Every other step below is a stub whose body raises `NotImplementedError`;
-its docstring in `data.py` states the inputs, the outputs and the output
-contract. One scientific constant is decided, `CLEAN_OPTIONS`; the others
-are undecided (see "Flag and ask"). Each step is implemented by its own
-OpenSpec change, in order.
+Status (2026-10-26): `clean` (change `adni-metabolomics-clean`) and
+`cohort` (change `adni-cohort`) are implemented and run on the workstation,
+whose data root holds the raw metabolomics files and the ADNIMERGE freeze;
+the cluster copy and clone do not exist yet. Every other step below is a
+stub whose body raises `NotImplementedError`; its docstring in `data.py`
+states the inputs, the outputs and the output contract. Four scientific
+constants are decided, `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE` and
+`ANALYSIS_COVARIATES`; the others are undecided (see "Flag and ask"). Each
+step is implemented by its own OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
    pinned release's QC functions called in-process in the order of its
@@ -41,15 +42,25 @@ OpenSpec change, in order.
    `CLEAN_EXPECTED_COUNTS` beside the observed ones, findings, upstream
    behaviours; aggregate, the one file under `results/cleaned/` that is
    committed and synced).
-2. `cohort` – from `results/cleaned/` and the ADNI clinical tables in the
-   data root: the baseline visit per participant, sex, the merged stage
-   (`STAGE_LABELS` = CN / MCI / AD by the undecided `STAGE_RULE`), the
-   covariates (`ANALYSIS_COVARIATES`, undecided; nothing imputed), the
-   platform intersection (`COHORT_RULE`, undecided). Writes
-   `results/cohort/`: `cohort.csv` (one row per participant;
-   participant-level), `stage_counts.csv` (sex × stage counts per platform
-   and for the intersection; aggregate, the only committed table) and
-   `cohort_manifest.json`.
+2. `cohort` – from `results/cleaned/` (`P180.csv`, `p180_runs.csv`,
+   `NMR.csv`, each checked against its `clean_manifest.json` hash) and, in
+   the data root, the ADNIMERGE freeze, the medication table and the visit
+   columns of the raw ADNI-GO/2 p180 and NMR files: each participant's
+   ADNIMERGE `bl` row, the platform sets (every raw sample at `bl`, a `bl`
+   row; `COHORT_RULE`) and their intersection, sex (`PTGENDER`), the merged
+   stage (`STAGE_LABELS` = CN / MCI / AD from `DX.bl` by `STAGE_RULE`), the
+   covariates (`ANALYSIS_COVARIATES`; nothing imputed). A value outside the
+   rules or a missing covariate stops it before anything is written, naming
+   the column and a count. Writes `results/cohort/`: `cohort.csv` (one row
+   per participant of either platform set, the union, with a flag per
+   platform; the intersection is the rows with both flags;
+   participant-level), `stage_counts.csv` (sex × stage per platform set and
+   for the intersection, plus the intersection's sex × stage × `DX.bl` ×
+   phase cells; aggregate, the only committed table) and
+   `cohort_manifest.json` (input hashes, the rules as applied, cascade,
+   stage-source agreement, phase against the p180 run, descriptives, the
+   predeclared `COHORT_EXPECTED_COUNTS` beside the observed ones, output
+   hashes, findings; aggregate, committed and synced).
 3. `export` – from `results/cleaned/` and `results/cohort/` only: the MOTCO
    blocks restricted to the cohort (`EXPORT_FEATURE_RULE`, undecided:
    which cleaned metabolites enter each block and on which scale),
@@ -62,9 +73,10 @@ OpenSpec change, in order.
 4. `analyze` – from `results/motco_input/` only: one
    `motco.analysis.analyze_trajectories` call (MOTCO ≥ 0.10.0; never
    assembled from `motco plsr` + `motco de`), group `sex`, stage `stage` in
-   CN / MCI / AD order, the undecided `ANALYSIS_COVARIATES`,
-   `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_RANK_FLOOR` (passed
-   explicitly, checked against MOTCO's default before any input is read),
+   CN / MCI / AD order, `ANALYSIS_COVARIATES` (with its categorical
+   codings declared), the undecided `ANALYSIS_PERMUTATIONS`,
+   `ANALYSIS_SEED`, `ANALYSIS_RANK_FLOOR` (passed explicitly, checked
+   against MOTCO's default before any input is read),
    MOTCO's other defaults not overridden. Writes `results/motco_analysis/`:
    MOTCO's `result.json`, `latent_scores.csv`, `pls_loadings.csv`,
    `stage_means.csv`, plus `analysis_metadata.csv`, `analysis_manifest.json`
@@ -133,10 +145,12 @@ behavior or defaults change.
   from LONI (dated file names such as `_10Jul2024`, data dictionaries,
   methods documents, the supplement zips with the p180 LOD workbooks
   extracted into `Metabolomics/p180/LOD/`, later layers such as
-  `quant500/`); the flat top level of `<root>` holds the exact names
-  metabo_adni expects as relative symlinks into that archive (the list is
-  under "Data & domain notes"). Replicate a root with `rsync -a` (symlinks
-  preserved); never rename the archive files.
+  `quant500/`); `<root>/Clinical/` holds the clinical tables under their
+  original names (the ADNIMERGE freeze); the flat top level of `<root>`
+  holds the exact names the steps read (metabo_adni's and the cohort's) as
+  relative symlinks into both (the list is under "Data & domain notes").
+  Replicate a root with `rsync -a` (symlinks preserved, `Clinical/`
+  included); never rename the archive files.
 - Only aggregate outputs move between machines, with
   `scripts/sync_results.sh` (rsync of `results/` excluding every
   participant-level file; pull by default, `--push` to reverse). Never copy
@@ -178,9 +192,9 @@ behavior or defaults change.
   feature rule and the diagnostic variables are scientific decisions. Each
   enters only through an OpenSpec proposal that states it before any run,
   lives as a named constant in `src/adni_sexdiff/constants.py`, and is
-  listed under "Flag and ask" below. Decided so far: `CLEAN_OPTIONS`;
-  `constants.py` reserves the others' names in its docstring and defines
-  none of them.
+  listed under "Flag and ask" below. Decided so far: `CLEAN_OPTIONS`,
+  `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`; `constants.py`
+  reserves the others' names in its docstring and defines none of them.
 - Never set, change or default one of them in code, a flag or a script
   without a proposal. Never choose one from a result.
 
@@ -210,15 +224,19 @@ behavior or defaults change.
 - `src/adni_sexdiff/constants.py` – named constants: conventions (paths,
   environment variables, platforms, columns, output names, pins, the
   participant-level patterns, the clean inputs and the raw-file repair
-  registry) defined; scientific constants reserved by name only until a
-  proposal defines them (`CLEAN_OPTIONS` defined, with its predeclared
-  `CLEAN_EXPECTED_COUNTS` and `RAW_INPUT_SHA256`).
-- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`
-  implemented, the others stubs), `resolve_data_root`, the version checks,
-  the raw-input helpers and the manifest / `.tmp` helpers every step reuses.
+  registry, the cohort's file, columns and sex values) defined; scientific
+  constants reserved by name only until a proposal defines them
+  (`CLEAN_OPTIONS` defined, with its predeclared `CLEAN_EXPECTED_COUNTS` and
+  `RAW_INPUT_SHA256`; `COHORT_RULE`, `STAGE_RULE` and `ANALYSIS_COVARIATES`
+  defined, with the predeclared `COHORT_EXPECTED_COUNTS`).
+- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean` and
+  `cohort` implemented, the others stubs), `resolve_data_root`, the version
+  checks, the raw-input helpers and the manifest / `.tmp` helpers every step
+  reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
   and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
-  `spike_raw_inventory.py` (the clean change's read-only spike).
+  `spike_raw_inventory.py` (the clean change's read-only spike),
+  `spike_cohort_inventory.py` (the cohort change's read-only spike).
 - `data/` – raw ADNI files, uploaded by hand; gitignored, never committed.
 - `results/` – pipeline outputs; only the aggregate files named in
   constraint 1 are committed.
@@ -279,28 +297,52 @@ behavior or defaults change.
   must be repaired the same way before it is put in the archive. `clean`
   implements this rule (`constants.KNOWN_RAW_FILE_REPAIRS`): LONI's
   unrepaired hash stops it before anything is written, and any other
-  unknown hash is a finding. The clinical tables the cohort step reads
-  (diagnosis, demographics, covariate sources) are named by the cohort
-  proposal and uploaded the same way.
+  unknown hash is a finding.
+- The cohort step reads, besides the visit columns of
+  `ADMCDUKEP180UPLCADNI2GO.csv` (`VISCODE`), `ADMCDUKEP180FIAADNI2GO.csv`
+  (`VISCODE`) and `ADNINIGHTINGALE2.csv` (`VISCODE2`): the QT-PAD ADNIMERGE
+  freeze `ADNI_adnimerge_20170629_QT-freeze.csv` (sha256
+  `e3eae0464106f0a3df4eb23946e57f1f7fd5f8456eb60af6540654a36a16f7a2`; the
+  file of the 2022 study; in the archive as
+  `Clinical/ADNI_adnimerge_20170629_QT-freeze.csv` with a top-level
+  symlink; columns `RID`, `VISCODE`, `PTGENDER`, `DX.bl`, `DX`, `ORIGPROT`,
+  `AGE`, `PTEDUCAT`, `APOE4`) and the medication table
+  `ADMCPATIENTDRUGCLASSES_20170512.csv` (`RID`, `VISCODE2`,
+  `HMG CoA reductase inhibitors`; classes are filled at `sc`, read with
+  `dtype=str`). Both go through the raw-input checks (`RAW_INPUT_SHA256`
+  holds both hashes). A fresh download is its own change.
 - `RID` is ADNI's participant key (`constants.PARTICIPANT_ID_COLUMN`). Any
   table that holds it is participant-level (constraint 1). The export's
   sample column is `rid`, the group column `sex`, the stage column `stage`
   with `STAGE_LABELS` CN / MCI / AD in trajectory order.
 - Flag and ask before changing, and never set without a proposal
-  (constraint 5); decided so far: `CLEAN_OPTIONS`; the others are
-  undecided:
+  (constraint 5); decided so far: `CLEAN_OPTIONS`, `COHORT_RULE`,
+  `STAGE_RULE`, `ANALYSIS_COVARIATES`; the others are undecided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
     for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
     `merge` on; `log2`, `zscore`, `winsorize`, `remove_moutliers`,
     `residualize_meds` off. Its predeclared counts are
     `CLEAN_EXPECTED_COUNTS`. A change of it is a new proposal.
-  - `COHORT_RULE` – the baseline visit per participant, the platform
-    intersection, exclusions; the predeclared counts the manifest checks.
-  - `STAGE_RULE` – the ADNI diagnosis → CN / MCI / AD mapping and the
-    merging of subtypes.
-  - `ANALYSIS_COVARIATES` – set, order, coding and sources; missing policy
-    `error`, nothing imputed.
+  - `COHORT_RULE` – decided by `adni-cohort`: clinical table the ADNIMERGE
+    freeze `ADNI_adnimerge_20170629_QT-freeze.csv`, one row per
+    participant from its `VISCODE` `bl` row; a cleaned participant enters a
+    platform's set only if every raw record on that platform has visit `bl`
+    (`VISCODE` in the ADNI-GO/2 p180 files, `VISCODE2` in the NMR file; the
+    ADNI-1 p180 run has no visit column and counts as baseline) and it has
+    a `bl` row; the analysis cohort is the intersection of the p180 and NMR
+    sets (n = 1501); no other exclusion. Its predeclared counts are
+    `COHORT_EXPECTED_COUNTS`.
+  - `STAGE_RULE` – decided by `adni-cohort`: `DX.bl` on the `bl` row,
+    `CN` and `SMC` → CN, `EMCI` and `LMCI` → MCI, `AD` → AD.
+  - `ANALYSIS_COVARIATES` – decided by `adni-cohort`, in this order: `age`
+    (`AGE`, numeric), `education` (`PTEDUCAT`, numeric), `apoe4` (`APOE4`,
+    categorical 0/1/2), `phase` (`ORIGPROT`: `ADNI1` → `ADNI1`, `ADNIGO` and
+    `ADNI2` → `ADNI2GO`; categorical), `statin` (medication table,
+    `HMG CoA reductase inhibitors` on the `sc` row, filled 1, empty 0;
+    categorical); missing policy `error`, nothing imputed. Whether the
+    covariates also condition MOTCO's latent space
+    (`covariate_latent_adjustment`) is the analyze proposal's decision.
   - `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` – MOTCO's RRPP
     permutations, seed and rejection rule.
   - `ANALYSIS_RANK_FLOOR` – the latent-rank floor passed to MOTCO.

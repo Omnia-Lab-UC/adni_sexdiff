@@ -1,0 +1,682 @@
+{
+  "counts": {
+    "intersection": {
+      "cascade": {
+        "cleaned_on_both": 1502,
+        "set": 1501
+      },
+      "composition": {
+        "Female": {
+          "AD": {
+            "ADNI1": 72,
+            "ADNI2GO": 53
+          },
+          "CN": {
+            "ADNI1": 94,
+            "ADNI2GO": 89
+          },
+          "EMCI": {
+            "ADNI2GO": 123
+          },
+          "LMCI": {
+            "ADNI1": 117,
+            "ADNI2GO": 70
+          },
+          "SMC": {
+            "ADNI2GO": 54
+          }
+        },
+        "Male": {
+          "AD": {
+            "ADNI1": 82,
+            "ADNI2GO": 76
+          },
+          "CN": {
+            "ADNI1": 98,
+            "ADNI2GO": 83
+          },
+          "EMCI": {
+            "ADNI2GO": 152
+          },
+          "LMCI": {
+            "ADNI1": 221,
+            "ADNI2GO": 75
+          },
+          "SMC": {
+            "ADNI2GO": 42
+          }
+        }
+      },
+      "missing_covariate_values": 0,
+      "phase_vs_run_disagreements": 0,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      },
+      "stage_source": {
+        "agree": 1498,
+        "differ": 2,
+        "missing": 1
+      },
+      "statin_users": 704
+    },
+    "inventory": {
+      "clinical": {
+        "baseline_rows": 1737,
+        "rows": 12749
+      },
+      "medication": {
+        "statin": {
+          "visit": "sc",
+          "visit_rows": 2170
+        }
+      }
+    },
+    "nmr": {
+      "cascade": {
+        "cleaned": 1504,
+        "excluded_no_clinical_bl_row": 0,
+        "excluded_sample_not_bl": 1,
+        "set": 1503
+      },
+      "sample_visits": {
+        "bl": 1503,
+        "sc": 1
+      },
+      "sex_stage": {
+        "Female": {
+          "AD": 126,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 449
+        }
+      }
+    },
+    "p180": {
+      "cascade": {
+        "cleaned": 1592,
+        "excluded_no_clinical_bl_row": 0,
+        "excluded_sample_not_bl": 0,
+        "set": 1592
+      },
+      "sample_visits": {
+        "ADNI1": {
+          "no visit column": 746
+        },
+        "ADNI2GO": {
+          "bl": 846
+        }
+      },
+      "sex_stage": {
+        "Female": {
+          "AD": 140,
+          "CN": 254,
+          "MCI": 329
+        },
+        "Male": {
+          "AD": 169,
+          "CN": 230,
+          "MCI": 470
+        }
+      }
+    },
+    "phase_vs_run": {
+      "intersection": {
+        "disagreements": 0,
+        "table": {
+          "ADNI1": {
+            "ADNI1": 684
+          },
+          "ADNI2GO": {
+            "ADNI2GO": 817
+          }
+        }
+      },
+      "p180": {
+        "disagreements": 0,
+        "table": {
+          "ADNI1": {
+            "ADNI1": 746
+          },
+          "ADNI2GO": {
+            "ADNI2GO": 846
+          }
+        }
+      }
+    },
+    "stage_source_detail": {
+      "AD": {
+        "Dementia": 278,
+        "MCI to Dementia": 5
+      },
+      "CN": {
+        "(missing)": 1,
+        "NL": 363
+      },
+      "EMCI": {
+        "MCI": 274,
+        "MCI to NL": 1
+      },
+      "LMCI": {
+        "Dementia": 1,
+        "Dementia to MCI": 1,
+        "MCI": 481
+      },
+      "SMC": {
+        "NL": 96
+      }
+    },
+    "union": {
+      "both": 1501,
+      "nmr_only": 2,
+      "p180_only": 91,
+      "participants": 1594
+    }
+  },
+  "created_at": "2026-10-26T22:43:46+00:00",
+  "data_root": "/home/tomas/Documents/Repos/adni_sexdiff/data",
+  "descriptives": {
+    "cells": {
+      "Female": {
+        "AD": {
+          "age": {
+            "mean": 73.56240000000001,
+            "sd": 7.8845261276797425
+          },
+          "apoe4": {
+            "0": 46,
+            "1": 58,
+            "2": 21
+          },
+          "education": {
+            "mean": 14.464,
+            "sd": 2.7254594167329045
+          },
+          "n": 125,
+          "phase": {
+            "ADNI1": 72,
+            "ADNI2GO": 53
+          },
+          "statin": {
+            "0": 76,
+            "1": 49
+          }
+        },
+        "CN": {
+          "age": {
+            "mean": 73.47004219409283,
+            "sd": 5.508843929436564
+          },
+          "apoe4": {
+            "0": 168,
+            "1": 66,
+            "2": 3
+          },
+          "education": {
+            "mean": 15.738396624472573,
+            "sd": 2.7057539056526667
+          },
+          "n": 237,
+          "phase": {
+            "ADNI1": 94,
+            "ADNI2GO": 143
+          },
+          "statin": {
+            "0": 145,
+            "1": 92
+          }
+        },
+        "MCI": {
+          "age": {
+            "mean": 71.92774193548388,
+            "sd": 7.814512559023047
+          },
+          "apoe4": {
+            "0": 158,
+            "1": 117,
+            "2": 35
+          },
+          "education": {
+            "mean": 15.45483870967742,
+            "sd": 2.74767789099659
+          },
+          "n": 310,
+          "phase": {
+            "ADNI1": 117,
+            "ADNI2GO": 193
+          },
+          "statin": {
+            "0": 175,
+            "1": 135
+          }
+        }
+      },
+      "Male": {
+        "AD": {
+          "age": {
+            "mean": 75.43924050632911,
+            "sd": 7.738026176036364
+          },
+          "apoe4": {
+            "0": 53,
+            "1": 70,
+            "2": 35
+          },
+          "education": {
+            "mean": 15.79746835443038,
+            "sd": 3.0656500306553496
+          },
+          "n": 158,
+          "phase": {
+            "ADNI1": 82,
+            "ADNI2GO": 76
+          },
+          "statin": {
+            "0": 75,
+            "1": 83
+          }
+        },
+        "CN": {
+          "age": {
+            "mean": 74.81973094170404,
+            "sd": 5.997406790903034
+          },
+          "apoe4": {
+            "0": 163,
+            "1": 53,
+            "2": 7
+          },
+          "education": {
+            "mean": 17.08968609865471,
+            "sd": 2.5873969301201294
+          },
+          "n": 223,
+          "phase": {
+            "ADNI1": 98,
+            "ADNI2GO": 125
+          },
+          "statin": {
+            "0": 113,
+            "1": 110
+          }
+        },
+        "MCI": {
+          "age": {
+            "mean": 73.92566964285713,
+            "sd": 7.391953240175271
+          },
+          "apoe4": {
+            "0": 222,
+            "1": 178,
+            "2": 48
+          },
+          "education": {
+            "mean": 16.229910714285715,
+            "sd": 2.8313201940485695
+          },
+          "n": 448,
+          "phase": {
+            "ADNI1": 221,
+            "ADNI2GO": 227
+          },
+          "statin": {
+            "0": 213,
+            "1": 235
+          }
+        }
+      }
+    },
+    "set": "intersection"
+  },
+  "deviations": [],
+  "expected": {
+    "intersection": {
+      "cascade": {
+        "cleaned_on_both": 1502,
+        "set": 1501
+      },
+      "composition": {
+        "Female": {
+          "AD": {
+            "ADNI1": 72,
+            "ADNI2GO": 53
+          },
+          "CN": {
+            "ADNI1": 94,
+            "ADNI2GO": 89
+          },
+          "EMCI": {
+            "ADNI2GO": 123
+          },
+          "LMCI": {
+            "ADNI1": 117,
+            "ADNI2GO": 70
+          },
+          "SMC": {
+            "ADNI2GO": 54
+          }
+        },
+        "Male": {
+          "AD": {
+            "ADNI1": 82,
+            "ADNI2GO": 76
+          },
+          "CN": {
+            "ADNI1": 98,
+            "ADNI2GO": 83
+          },
+          "EMCI": {
+            "ADNI2GO": 152
+          },
+          "LMCI": {
+            "ADNI1": 221,
+            "ADNI2GO": 75
+          },
+          "SMC": {
+            "ADNI2GO": 42
+          }
+        }
+      },
+      "missing_covariate_values": 0,
+      "phase_vs_run_disagreements": 0,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      },
+      "stage_source": {
+        "agree": 1498,
+        "differ": 2,
+        "missing": 1
+      },
+      "statin_users": 704
+    },
+    "nmr": {
+      "cascade": {
+        "cleaned": 1504,
+        "excluded_no_clinical_bl_row": 0,
+        "excluded_sample_not_bl": 1,
+        "set": 1503
+      },
+      "sample_visits": {
+        "bl": 1503,
+        "sc": 1
+      },
+      "sex_stage": {
+        "Female": {
+          "AD": 126,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 449
+        }
+      }
+    },
+    "p180": {
+      "cascade": {
+        "cleaned": 1592,
+        "excluded_no_clinical_bl_row": 0,
+        "excluded_sample_not_bl": 0,
+        "set": 1592
+      },
+      "sample_visits": {
+        "ADNI1": {
+          "no visit column": 746
+        },
+        "ADNI2GO": {
+          "bl": 846
+        }
+      },
+      "sex_stage": {
+        "Female": {
+          "AD": 140,
+          "CN": 254,
+          "MCI": 329
+        },
+        "Male": {
+          "AD": 169,
+          "CN": 230,
+          "MCI": 470
+        }
+      }
+    },
+    "union": {
+      "both": 1501,
+      "nmr_only": 2,
+      "p180_only": 91,
+      "participants": 1594
+    }
+  },
+  "findings": [],
+  "git_revision": {
+    "commit": "1ab8f6a142301dfed8dd7038c7b8408cdc924558",
+    "dirty": false
+  },
+  "inputs": {
+    "clean": {
+      "nmr": {
+        "manifest": {
+          "name": "nmr/clean_manifest.json",
+          "sha256": "089df72cd5891029a791d1704578d5ef049efe9c25dd99cc41511e1ce64f7657"
+        },
+        "outputs": {
+          "NMR.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "e711d62cf03f9da3f761fb18bfe4acb2d5fdf15fab6695fa5ed3901fa45d3159"
+          }
+        }
+      },
+      "p180": {
+        "manifest": {
+          "name": "p180/clean_manifest.json",
+          "sha256": "6f11a627648d17a5c1294420fd3ed32c1e125c8c0cb53b37d3f3d247fb5f78ce"
+        },
+        "outputs": {
+          "P180.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "33b18bd2187173179aa280ee74fc0a8f37ca2f155cdd37d4f87412631132ff9d"
+          },
+          "p180_runs.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "4c3d7b972428548b94a1f2762ccfa9d460f29929a5f19304fe28a69271d0197d"
+          }
+        }
+      }
+    },
+    "raw": [
+      {
+        "bytes": 8127476,
+        "name": "ADNI_adnimerge_20170629_QT-freeze.csv",
+        "predeclared": true,
+        "repair": null,
+        "sha256": "e3eae0464106f0a3df4eb23946e57f1f7fd5f8456eb60af6540654a36a16f7a2",
+        "target": "Clinical/ADNI_adnimerge_20170629_QT-freeze.csv"
+      },
+      {
+        "bytes": 5295787,
+        "name": "ADMCPATIENTDRUGCLASSES_20170512.csv",
+        "predeclared": true,
+        "repair": null,
+        "sha256": "2f0dd41dfb4c17f679818f19f8a5a41a2de81c30712863286a74e29fdd597343",
+        "target": "Metabolomics/ADMCPATIENTDRUGCLASSES_20170512.csv"
+      },
+      {
+        "bytes": 459273,
+        "name": "ADMCDUKEP180UPLCADNI2GO.csv",
+        "predeclared": true,
+        "repair": {
+          "defect": "LONI's export lacks its final byte, the closing double quote of the last record's update_stamp field, so pandas' C parser fails with 'EOF inside string'",
+          "repair": "a double quote and a newline appended at the end of the archive copy (the last record's timestamp and metabolite values are complete)",
+          "repaired_on": "2026-10-26"
+        },
+        "sha256": "7ad17d63eed26368a3e51254c942e9c2f39890d43decda37f7b1a2ade38de3a6",
+        "target": "Metabolomics/p180/ADMCDUKEP180UPLCADNI2GO_10Jul2024.csv"
+      },
+      {
+        "bytes": 1158894,
+        "name": "ADMCDUKEP180FIAADNI2GO.csv",
+        "predeclared": true,
+        "repair": null,
+        "sha256": "a414de4884d2ccd88a6519d3f5627155677ba5bf08be160191e316f5290459e9",
+        "target": "Metabolomics/p180/ADMCDUKEP180FIAADNI2GO_10Jul2024.csv"
+      },
+      {
+        "bytes": 8660093,
+        "name": "ADNINIGHTINGALE2.csv",
+        "predeclared": true,
+        "repair": null,
+        "sha256": "524bde27672021fe8a9c4cc4b5d0d89a38f6f04129b930c955bd31e04c651ebf",
+        "target": "Metabolomics/NMR/ADNINIGHTINGALE2_11Jul2024.csv"
+      }
+    ]
+  },
+  "outputs": {
+    "cohort.csv": {
+      "bytes": 89800,
+      "participant_level": true,
+      "sha256": "fe70cbf2e38f21ab25c9f32bfb1c503387b8eab2babf96aba7a286ea02b109ce"
+    },
+    "stage_counts.csv": {
+      "bytes": 1633,
+      "participant_level": false,
+      "sha256": "f6b73ea38d7955e511a010903cdcdb195b0062212ddc7317ca8ff3d4b9b0a948"
+    }
+  },
+  "settings": {
+    "ANALYSIS_COVARIATES": {
+      "age": {
+        "coding": "numeric",
+        "column": "AGE",
+        "file": "clinical"
+      },
+      "apoe4": {
+        "coding": "categorical",
+        "column": "APOE4",
+        "file": "clinical",
+        "levels": [
+          0,
+          1,
+          2
+        ]
+      },
+      "education": {
+        "coding": "numeric",
+        "column": "PTEDUCAT",
+        "file": "clinical"
+      },
+      "phase": {
+        "coding": "categorical",
+        "column": "ORIGPROT",
+        "file": "clinical",
+        "levels": [
+          "ADNI1",
+          "ADNI2GO"
+        ],
+        "map": {
+          "ADNI1": "ADNI1",
+          "ADNI2": "ADNI2GO",
+          "ADNIGO": "ADNI2GO"
+        }
+      },
+      "statin": {
+        "coding": "categorical",
+        "column": "HMG CoA reductase inhibitors",
+        "file": "medication",
+        "levels": [
+          0,
+          1
+        ],
+        "visit": "sc"
+      }
+    },
+    "COHORT_COLUMNS": [
+      "rid",
+      "sex",
+      "stage",
+      "dx_bl",
+      "protocol",
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin",
+      "visit",
+      "p180",
+      "nmr"
+    ],
+    "COHORT_RULE": {
+      "baseline_visit": "bl",
+      "clinical_file": "ADNI_adnimerge_20170629_QT-freeze.csv",
+      "platforms": [
+        "p180",
+        "nmr"
+      ],
+      "runs_without_visit": [
+        "ADNI1"
+      ],
+      "sample_visit": "bl",
+      "sample_visit_columns": {
+        "ADMCDUKEP180FIAADNI2GO.csv": "VISCODE",
+        "ADMCDUKEP180UPLCADNI2GO.csv": "VISCODE",
+        "ADNINIGHTINGALE2.csv": "VISCODE2"
+      }
+    },
+    "GROUP_VALUES": [
+      "Female",
+      "Male"
+    ],
+    "STAGE_RULE": {
+      "map": {
+        "AD": "AD",
+        "CN": "CN",
+        "EMCI": "MCI",
+        "LMCI": "MCI",
+        "SMC": "CN"
+      },
+      "source": "DX.bl"
+    },
+    "stage_source_reading": {
+      "column": "DX",
+      "map": {
+        "Dementia": "AD",
+        "MCI": "MCI",
+        "NL": "CN"
+      },
+      "note": "a recorded change 'X to Y' counts as Y; read for the agreement count only"
+    }
+  },
+  "step": "cohort",
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

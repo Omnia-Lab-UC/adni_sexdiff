@@ -1,12 +1,12 @@
 """Pipeline steps of adni_sexdiff.
 
-``clean`` is implemented (change ``adni-metabolomics-clean``). Every other
-step is a stub: its docstring states the inputs it reads, the files it writes
-and the contract of those files, and its body raises ``NotImplementedError``
-until an OpenSpec change implements it. The statistical choices each step
-needs (cohort rule, stage rule, covariate set, permutations, seed, rank
-floor, reading rules) are undecided and enter only through a proposal (see
-``constants``).
+``clean`` (change ``adni-metabolomics-clean``) and ``cohort`` (change
+``adni-cohort``) are implemented. Every other step is a stub: its docstring
+states the inputs it reads, the files it writes and the contract of those
+files, and its body raises ``NotImplementedError`` until an OpenSpec change
+implements it. The statistical choices the remaining steps need (feature
+rule, permutations, seed, rank floor, diagnostic variables, reading rules)
+are undecided and enter only through a proposal (see ``constants``).
 
 The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_known_repairs``) and the manifest and output-directory helpers
@@ -37,22 +37,38 @@ import numpy as np
 import pandas as pd
 
 from .constants import (
+    ANALYSIS_COVARIATES,
     CLEAN_EXPECTED_COUNTS,
     CLEAN_FASTING_FILE,
     CLEAN_INPUT_FILES,
     CLEAN_LOG,
     CLEAN_MANIFEST,
+    CLEAN_MEDICATION_FILE,
     CLEAN_OPTIONS,
     CLEAN_RUNS_TABLE,
     CLEAN_TABLES,
     CLEANED_DIR,
+    COHORT_CLINICAL_FILE,
+    COHORT_COLUMNS,
+    COHORT_COUNTS,
+    COHORT_DIR,
+    COHORT_EXPECTED_COUNTS,
+    COHORT_MANIFEST,
+    COHORT_RULE,
+    COHORT_TABLE,
     DATA_ROOT_ENV,
     DEFAULT_DATA_ROOT,
+    GROUP_COLUMN,
+    GROUP_VALUES,
     KNOWN_RAW_FILE_REPAIRS,
     METABO_ADNI_VERSION,
     PARTICIPANT_ID_COLUMN,
     PLATFORMS,
     RAW_INPUT_SHA256,
+    SAMPLE_COLUMN,
+    STAGE_COLUMN,
+    STAGE_LABELS,
+    STAGE_RULE,
 )
 
 #: metabo_adni's ``RID`` of the p180 QC pool rows (``cross_plate_correction``).
@@ -774,6 +790,115 @@ def _clean_platform(platform: str, *, root: Path, final: Path, force: bool, inpu
     return {"dir": final, "files": final_files, "manifest": manifest}
 
 
+#: The ADNIMERGE columns ``cohort`` reads besides those the scientific
+#: constants name: the visit, sex (values ``GROUP_VALUES``), the protocol
+#: (written beside ``phase``) and the diagnosis at the visit (read for the
+#: stage-source agreement only).
+_CLINICAL_VISIT_COLUMN = "VISCODE"
+_CLINICAL_SEX_COLUMN = "PTGENDER"
+_CLINICAL_PROTOCOL_COLUMN = "ORIGPROT"
+_CLINICAL_DX_COLUMN = "DX"
+#: The medication table's visit column.
+_MEDICATION_VISIT_COLUMN = "VISCODE2"
+#: ``DX`` read as the diagnosis at the visit, onto ``STAGE_LABELS``; a recorded
+#: change "X to Y" counts as Y. Used for the stage-source agreement only.
+_DX_AT_VISIT = {"NL": "CN", "MCI": "MCI", "Dementia": "AD"}
+#: The visit-set label of a p180 run whose raw files carry no visit column.
+_NO_VISIT_COLUMN = "no visit column"
+#: The visit-set label of a cleaned participant without a raw record.
+_NO_RECORD = "no record"
+
+
+def _check_clean_outputs(cleaned: Path) -> dict:
+    """Hash every clean output ``cohort`` reads against its ``clean_manifest.json``.
+
+    Stops (before anything is written) on an absent manifest or output and on
+    a hash that differs from the recorded one, naming ``<platform>/<file>``.
+    """
+    out = {}
+    for platform in COHORT_RULE["platforms"]:
+        manifest_path = cleaned / platform / CLEAN_MANIFEST
+        if not manifest_path.is_file():
+            raise FileNotFoundError(f"{platform}/{CLEAN_MANIFEST} is absent from {cleaned}; run clean first")
+        recorded = json.loads(manifest_path.read_text())["outputs"]
+        entry = {
+            "manifest": {"name": f"{platform}/{CLEAN_MANIFEST}", "sha256": _sha256_file(manifest_path)},
+            "outputs": {},
+        }
+        names = [CLEAN_TABLES[platform], *([CLEAN_RUNS_TABLE] if platform == "p180" else [])]
+        for name in names:
+            label, path = f"{platform}/{name}", cleaned / platform / name
+            if not path.is_file():
+                raise FileNotFoundError(f"{label} is absent from {cleaned}; run clean first")
+            if name not in recorded:
+                raise RuntimeError(f"{label}: {platform}/{CLEAN_MANIFEST} records no hash for it")
+            sha = _sha256_file(path)
+            if sha != recorded[name]["sha256"]:
+                raise RuntimeError(
+                    f"{label}: sha256 {sha} differs from the hash {platform}/{CLEAN_MANIFEST} records "
+                    f"({recorded[name]['sha256']}); the cleaned output changed after clean, rerun clean"
+                )
+            entry["outputs"][name] = {"sha256": sha, "equals_clean_manifest": True}
+        out[platform] = entry
+    return out
+
+
+def _read_columns(path: Path, columns: Iterable[str], **kwargs) -> pd.DataFrame:
+    """Read ``columns`` of a CSV, stopping on an absent column (named) before reading the rows."""
+    columns = list(dict.fromkeys(columns))
+    header = pd.read_csv(path, nrows=0).columns
+    absent = [c for c in columns if c not in header]
+    if absent:
+        raise ValueError(f"{path.name}: column(s) absent: {', '.join(repr(c) for c in absent)}")
+    return pd.read_csv(path, usecols=columns, low_memory=False, **kwargs)
+
+
+def _value_counts_text(values: pd.Series) -> str:
+    """``'value' (n)`` per distinct value, then ``missing (n)``; values are codes, never identifiers."""
+    parts = [f"'{v}' ({int(n)})" for v, n in values.dropna().value_counts().sort_index().items()]
+    n_missing = int(values.isna().sum())
+    if n_missing:
+        parts.append(f"missing ({n_missing})")
+    return ", ".join(parts)
+
+
+def _int_counts(values: pd.Series, order: Iterable | None = None) -> dict[str, int]:
+    vc = values.value_counts()
+    keys = list(order) if order is not None else sorted(vc.index)
+    return {str(k): int(vc.get(k, 0)) for k in keys}
+
+
+def _sex_stage(frame: pd.DataFrame) -> dict[str, dict[str, int]]:
+    return {
+        sex: _int_counts(frame.loc[frame[GROUP_COLUMN] == sex, STAGE_COLUMN], STAGE_LABELS) for sex in GROUP_VALUES
+    }
+
+
+def _crosstab(frame: pd.DataFrame, row: str, col: str) -> dict[str, dict[str, int]]:
+    """Nonzero cells of ``row`` × ``col`` as nested counts."""
+    t = pd.crosstab(frame[row], frame[col])
+    return {str(r): {str(c): int(t.loc[r, c]) for c in t.columns if t.loc[r, c]} for r in t.index}
+
+
+def _stage_counts_table(sets: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """``stage_counts.csv``: sex × stage with margins per set, and the intersection's composition cells."""
+    phases = ANALYSIS_COVARIATES["phase"]["levels"]
+    rows = []
+    for name, frame in sets.items():
+        for sex in (*GROUP_VALUES, "all"):
+            s = frame if sex == "all" else frame[frame[GROUP_COLUMN] == sex]
+            for stage in (*STAGE_LABELS, "all"):
+                st = s if stage == "all" else s[s[STAGE_COLUMN] == stage]
+                if name == "intersection" and "all" not in (sex, stage):
+                    for dx in (d for d, mapped in STAGE_RULE["map"].items() if mapped == stage):
+                        for phase in phases:
+                            n = int(((st["dx_bl"] == dx) & (st["phase"] == phase)).sum())
+                            if n:
+                                rows.append((name, sex, stage, dx, phase, n))
+                rows.append((name, sex, stage, "all", "all", len(st)))
+    return pd.DataFrame(rows, columns=["set", GROUP_COLUMN, STAGE_COLUMN, "dx_bl", "phase", "n"])
+
+
 def run_cohort(
     *,
     cleaned_dir: str | Path | None = None,
@@ -786,39 +911,425 @@ def run_cohort(
     Parameters
     ----------
     cleaned_dir:
-        Output root of ``clean`` (default ``constants.CLEANED_DIR``); every
-        platform directory and its manifest are read.
+        Output root of ``clean`` (default ``constants.CLEANED_DIR``). Read:
+        ``p180/P180.csv``, ``p180/p180_runs.csv`` and ``nmr/NMR.csv`` (the
+        ``RID`` column and the run only), each checked against the sha256 its
+        platform's ``clean_manifest.json`` records.
     data_root:
-        Directory holding the ADNI clinical tables the cohort rule names
-        (diagnosis, demographics, the covariates' sources), uploaded by hand
-        with their original names. Resolved by ``resolve_data_root``.
+        Directory holding, flat at its top level, the five files the cohort
+        reads (symlinks into ``<root>/Clinical/`` and ``<root>/Metabolomics/``):
+        the clinical table ``ADNI_adnimerge_20170629_QT-freeze.csv``
+        (``constants.COHORT_CLINICAL_FILE``), the medication table
+        ``ADMCPATIENTDRUGCLASSES_20170512.csv`` (its statin column) and the
+        visit columns of ``ADMCDUKEP180UPLCADNI2GO.csv``,
+        ``ADMCDUKEP180FIAADNI2GO.csv`` and ``ADNINIGHTINGALE2.csv``
+        (``COHORT_RULE["sample_visit_columns"]``). No other file is read.
+        Resolved by ``resolve_data_root``.
     out_dir:
         Cohort directory (default ``constants.COHORT_DIR``).
     force:
-        Replace an existing cohort directory.
+        Replace an existing cohort directory (after the new one is complete).
 
     Returns
     -------
     dict
-        ``{"dir": Path, "counts": DataFrame, "manifest": dict, "findings": [...]}``.
+        ``{"dir": Path, "counts": DataFrame, "manifest": dict, "findings": [...]}``;
+        ``counts`` is ``stage_counts.csv``.
 
     Notes
     -----
-    Applies the (undecided) constants ``COHORT_RULE`` (the baseline visit per
-    participant, the platform intersection, exclusions), ``STAGE_RULE`` (the
-    ADNI diagnosis → ``STAGE_LABELS`` mapping, with its merging of subtypes)
-    and ``ANALYSIS_COVARIATES`` (sources and coding; nothing imputed, missing
-    values listed in the manifest). Output contract: ``cohort.csv`` (one row
-    per participant: ``rid``, ``sex``, ``stage``, the covariates, the visit
-    used, a presence flag per platform; participant-level and gitignored),
-    ``stage_counts.csv`` (sex × stage counts per platform and for the
-    intersection; aggregate, the only committed table) and
-    ``cohort_manifest.json`` (the rules as applied, input file hashes incl.
-    the clean manifests, counts at every exclusion, software, git revision,
-    findings; no ``RID``). Deviations from the counts the proposal
-    predeclares go to ``findings``, never silently.
+    Applies the constants decided by the change ``adni-cohort``.
+    ``COHORT_RULE``: a cleaned participant enters a platform's set when every
+    raw record of the participant on that platform has visit ``bl`` (the
+    ADNI-1 p180 run, whose files carry no visit column, counts as baseline)
+    and the clinical table has its ``bl`` row; the analysis cohort is the
+    intersection of the two sets. ``STAGE_RULE``: ``DX.bl`` onto CN / MCI /
+    AD (SMC into CN, EMCI and LMCI into MCI). ``ANALYSIS_COVARIATES``: age,
+    education, APOE4 (0/1/2), phase (``ORIGPROT``: ADNI1 vs ADNI-GO/2) from
+    the ``bl`` row and statin use from the medication table's ``sc`` row
+    (filled 1, empty 0). Sex is ``PTGENDER``.
+
+    The only exclusions are the sample rule and a missing ``bl`` row, counted
+    in the cascade. Every other irregularity stops the step before anything
+    is written, naming the file or column and a count, never a participant:
+    a missing data-root file, LONI's unrepaired bytes of a known-defective
+    file, an absent clean manifest or output, a clean output whose hash
+    differs from its manifest, an absent column, more than one ``bl`` row
+    for a participant, more than one ``sc`` medication row for a participant
+    of the platform sets, and among those participants a ``DX.bl`` outside
+    the stage map, a ``PTGENDER`` outside ``GROUP_VALUES``, an ``ORIGPROT``
+    outside the phase map, a value outside a covariate's levels or a missing
+    covariate value (including no ``sc`` medication row). Nothing is
+    imputed.
+
+    Output contract: ``cohort.csv`` (one row per participant of either
+    platform set, sorted by ``rid``, columns ``COHORT_COLUMNS``: ``rid``,
+    ``sex``, ``stage``, ``dx_bl``, ``protocol``, the covariates in declared
+    order, ``visit`` and a flag per platform; the intersection is the rows
+    with both flags; participant-level and gitignored), ``stage_counts.csv``
+    (``set``, ``sex``, ``stage``, ``dx_bl``, ``phase``, ``n``: sex × stage
+    with margins for the p180 set, the NMR set and the intersection, and the
+    intersection's nonzero sex × stage × ``DX.bl`` × phase cells; aggregate,
+    the only committed table) and ``cohort_manifest.json`` (versions, git
+    revision, data root, the data-root inputs with target, size, sha256 and
+    known repair, the clean manifests and outputs with their hashes, the
+    three constants as applied, the counts: visit sets, cascade and sex ×
+    stage per set, composition, stage-source agreement, phase against the
+    p180 run; descriptives by sex × stage, expected and observed counts with
+    deviations, output hashes, findings; aggregate, no ``RID``). Observed
+    counts are compared with ``constants.COHORT_EXPECTED_COUNTS``; each
+    deviation is a finding, printed and recorded, and never stops the step.
+    An unknown input hash and a phase that differs from the p180 run are
+    findings too. The directory is written as ``cohort.tmp/`` and renamed
+    when complete.
     """
-    raise NotImplementedError("run_cohort is a stub; implemented by the cohort change")
+    root = resolve_data_root(data_root)
+    cleaned = Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR)
+    final = Path(out_dir) if out_dir is not None else Path(COHORT_DIR)
+    if final.exists() and not force:
+        raise FileExistsError(f"{final} exists; pass --force to replace it")
+    platforms = COHORT_RULE["platforms"]
+    sample_visit, baseline_visit = COHORT_RULE["sample_visit"], COHORT_RULE["baseline_visit"]
+
+    # --- inputs: data-root names and hashes, then the clean outputs --------
+    names = [COHORT_CLINICAL_FILE, CLEAN_MEDICATION_FILE, *COHORT_RULE["sample_visit_columns"]]
+    require_raw_files(root, names)
+    raw = [hash_raw_file(root / n, root=root) for n in names]
+    findings = check_known_repairs(raw)
+    for rec in raw:
+        state = "predeclared" if rec["predeclared"] else "NOT predeclared"
+        if rec["repair"] is not None:
+            state += f", repaired archive copy ({rec['repair']['repaired_on']})"
+        print(f"[cohort] input {rec['name']}: sha256 {rec['sha256'][:16]}… ({state})")
+    clean_inputs = _check_clean_outputs(cleaned)
+    for platform, entry in clean_inputs.items():
+        for name, rec in entry["outputs"].items():
+            print(f"[cohort] clean {platform}/{name}: sha256 {rec['sha256'][:16]}… equals {entry['manifest']['name']}")
+
+    cleaned_ids = {
+        p: pd.Index(
+            _read_columns(cleaned / p / CLEAN_TABLES[p], [PARTICIPANT_ID_COLUMN])[PARTICIPANT_ID_COLUMN].astype(int)
+        ).sort_values()
+        for p in platforms
+    }
+    for p, ids in cleaned_ids.items():
+        if ids.has_duplicates:
+            raise RuntimeError(f"{p}/{CLEAN_TABLES[p]}: {int(ids.duplicated().sum())} duplicated participant(s)")
+    runs = _read_columns(cleaned / "p180" / CLEAN_RUNS_TABLE, [PARTICIPANT_ID_COLUMN, "run"])
+    runs = runs.set_index(runs[PARTICIPANT_ID_COLUMN].astype(int))["run"]
+    if not runs.index.sort_values().equals(cleaned_ids["p180"]):
+        raise RuntimeError(f"p180/{CLEAN_RUNS_TABLE} and p180/{CLEAN_TABLES['p180']} hold different participants")
+
+    # --- the visit of each platform's sample (raw visit columns) ----------
+    records: dict[str, list[pd.DataFrame]] = {p: [] for p in platforms}
+    for name, col in COHORT_RULE["sample_visit_columns"].items():
+        (platform,) = [p for p in platforms if name in CLEAN_INPUT_FILES[p]]
+        df = _read_columns(root / name, [PARTICIPANT_ID_COLUMN, col])
+        records[platform].append(df.rename(columns={col: "visit"}))
+    sample_ok, sample_visits = {}, {}
+    for p in platforms:
+        ids = cleaned_ids[p]
+        recs = pd.concat(records[p]) if records[p] else pd.DataFrame(columns=[PARTICIPANT_ID_COLUMN, "visit"])
+        labels = recs.groupby(PARTICIPANT_ID_COLUMN)["visit"].agg(lambda s: "+".join(sorted(set(s.astype(str)))))
+        labels = labels.reindex(ids).fillna(_NO_RECORD)
+        if p == "p180":
+            run = runs.reindex(ids)
+            no_visit = run.isin(COHORT_RULE["runs_without_visit"])
+            labels[no_visit] = _NO_VISIT_COLUMN
+            sample_ok[p] = no_visit | (labels == sample_visit)
+            sample_visits[p] = {str(r): _int_counts(labels[run == r]) for r in sorted(run.unique())}
+        else:
+            sample_ok[p] = labels == sample_visit
+            sample_visits[p] = _int_counts(labels)
+
+    # --- the clinical table's baseline rows --------------------------------
+    clinical_columns = [
+        PARTICIPANT_ID_COLUMN,
+        _CLINICAL_VISIT_COLUMN,
+        _CLINICAL_SEX_COLUMN,
+        STAGE_RULE["source"],
+        _CLINICAL_DX_COLUMN,
+        _CLINICAL_PROTOCOL_COLUMN,
+        *(cfg["column"] for cfg in ANALYSIS_COVARIATES.values() if cfg["file"] == "clinical"),
+    ]
+    clinical = _read_columns(root / COHORT_CLINICAL_FILE, clinical_columns)
+    bl = clinical[clinical[_CLINICAL_VISIT_COLUMN] == baseline_visit]
+    n_dup = int(bl.loc[bl[PARTICIPANT_ID_COLUMN].duplicated(keep=False), PARTICIPANT_ID_COLUMN].nunique())
+    if n_dup:
+        raise RuntimeError(
+            f"{COHORT_CLINICAL_FILE}: {n_dup} participant(s) with more than one {_CLINICAL_VISIT_COLUMN} "
+            f"'{baseline_visit}' row"
+        )
+    bl = bl.set_index(PARTICIPANT_ID_COLUMN)
+
+    # --- platform sets: the sample rule, then the baseline row -------------
+    sets_ids, cascade = {}, {}
+    for p in platforms:
+        ids = cleaned_ids[p]
+        at_bl = ids[sample_ok[p].to_numpy()]
+        with_row = at_bl[at_bl.isin(bl.index)]
+        cascade[p] = {
+            "cleaned": len(ids),
+            "excluded_sample_not_bl": len(ids) - len(at_bl),
+            "excluded_no_clinical_bl_row": len(at_bl) - len(with_row),
+            "set": len(with_row),
+        }
+        sets_ids[p] = set(with_row)
+        print(
+            f"[cohort] {p}: {len(ids)} cleaned → {len(at_bl)} with every sample at '{sample_visit}' → "
+            f"{len(with_row)} with a '{baseline_visit}' row in {COHORT_CLINICAL_FILE}"
+        )
+    union = sorted(set().union(*sets_ids.values()))
+    c = bl.loc[union]
+
+    # --- the medication table's rows at each medication covariate's visit --
+    med_covariates = {n: cfg for n, cfg in ANALYSIS_COVARIATES.items() if cfg["file"] == "medication"}
+    medication: dict[str, pd.Series] = {}
+    med_counts: dict[str, dict] = {}
+    if med_covariates:
+        meds = _read_columns(
+            root / CLEAN_MEDICATION_FILE,
+            [PARTICIPANT_ID_COLUMN, _MEDICATION_VISIT_COLUMN, *(cfg["column"] for cfg in med_covariates.values())],
+            dtype=str,
+        )
+        for name, cfg in med_covariates.items():
+            rows = meds[meds[_MEDICATION_VISIT_COLUMN] == cfg["visit"]]
+            rows = rows.set_index(rows[PARTICIPANT_ID_COLUMN].astype(int))
+            in_sets = rows[rows.index.isin(union)]
+            n_dup = int(in_sets.index[in_sets.index.duplicated(keep=False)].nunique())
+            if n_dup:
+                raise RuntimeError(
+                    f"{CLEAN_MEDICATION_FILE}: {n_dup} participant(s) of the platform sets with more than one "
+                    f"{_MEDICATION_VISIT_COLUMN} '{cfg['visit']}' row"
+                )
+            cell = in_sets[cfg["column"]]
+            # A filled cell is use, an empty cell on an existing row no use; no row is missing.
+            medication[name] = (cell.notna() & cell.str.strip().ne("")).astype(int).reindex(union)
+            med_counts[name] = {"visit": cfg["visit"], "visit_rows": len(rows)}
+
+    # --- stage, sex and covariates: stop on any value outside the rules -----
+    problems = []
+    dx_bl = c[STAGE_RULE["source"]]
+    stage = dx_bl.map(STAGE_RULE["map"])
+    if stage.isna().any():
+        problems.append(
+            f"{STAGE_RULE['source']}: values outside STAGE_RULE['map'] among the platform sets' participants: "
+            + _value_counts_text(dx_bl[stage.isna()])
+        )
+    sex = c[_CLINICAL_SEX_COLUMN]
+    if (~sex.isin(GROUP_VALUES)).any():
+        problems.append(
+            f"{_CLINICAL_SEX_COLUMN}: values outside GROUP_VALUES among the platform sets' participants: "
+            + _value_counts_text(sex[~sex.isin(GROUP_VALUES)])
+        )
+    covariates: dict[str, pd.Series] = {}
+    for name, cfg in ANALYSIS_COVARIATES.items():
+        if cfg["file"] == "medication":
+            values = medication[name]
+            source = f"{cfg['column']} at '{cfg['visit']}' in {CLEAN_MEDICATION_FILE}"
+            if values.isna().any():
+                problems.append(
+                    f"{name} ({source}): {int(values.isna().sum())} participant(s) of the platform sets without a "
+                    f"'{cfg['visit']}' row; nothing is imputed (missing policy error)"
+                )
+        else:
+            values = c[cfg["column"]]
+            source = cfg["column"]
+            if values.isna().any():
+                problems.append(
+                    f"{name} ({source}): {int(values.isna().sum())} participant(s) of the platform sets missing; "
+                    "nothing is imputed (missing policy error)"
+                )
+        present = values.dropna()
+        if "map" in cfg:
+            outside = ~present.isin(list(cfg["map"]))
+            if outside.any():
+                problems.append(
+                    f"{name} ({source}): values outside ANALYSIS_COVARIATES['{name}']['map']: "
+                    + _value_counts_text(present[outside])
+                )
+            values = values.map(cfg["map"])
+            present = values.dropna()
+        if cfg["coding"] == "numeric":
+            numeric = pd.to_numeric(present, errors="coerce")
+            if numeric.isna().any():
+                problems.append(f"{name} ({source}): {int(numeric.isna().sum())} non-numeric value(s)")
+        elif (~present.isin(list(cfg["levels"]))).any():
+            problems.append(
+                f"{name} ({source}): values outside the levels {list(cfg['levels'])}: "
+                + _value_counts_text(present[~present.isin(list(cfg["levels"]))])
+            )
+        covariates[name] = values
+    if problems:
+        raise ValueError(
+            "cohort stops before writing anything (a value outside the declared rules needs a proposal, "
+            "not a silent drop): " + "; ".join(problems)
+        )
+    for name, cfg in ANALYSIS_COVARIATES.items():
+        if cfg["coding"] == "numeric":
+            covariates[name] = pd.to_numeric(covariates[name])
+        elif all(isinstance(v, int) for v in cfg["levels"]):
+            covariates[name] = covariates[name].astype(int)
+
+    # --- the participant table ----------------------------------------------
+    cohort = pd.DataFrame(
+        {
+            SAMPLE_COLUMN: union,
+            GROUP_COLUMN: sex.to_numpy(),
+            STAGE_COLUMN: stage.to_numpy(),
+            "dx_bl": dx_bl.to_numpy(),
+            "protocol": c[_CLINICAL_PROTOCOL_COLUMN].to_numpy(),
+            **{name: values.to_numpy() for name, values in covariates.items()},
+            "visit": baseline_visit,
+            **{p: [rid in sets_ids[p] for rid in union] for p in platforms},
+        }
+    )[list(COHORT_COLUMNS)]
+    in_all = cohort[list(platforms)].all(axis=1)
+    sets = {p: cohort[cohort[p]] for p in platforms}
+    sets["intersection"] = inter = cohort[in_all]
+
+    # --- counts ---------------------------------------------------------------
+    counts: dict = {
+        p: {"sample_visits": sample_visits[p], "cascade": cascade[p], "sex_stage": _sex_stage(sets[p])}
+        for p in platforms
+    }
+    composition: dict[str, dict] = {}
+    for sex_ in GROUP_VALUES:
+        for dx_ in STAGE_RULE["map"]:
+            phases = inter.loc[(inter[GROUP_COLUMN] == sex_) & (inter["dx_bl"] == dx_), "phase"].value_counts()
+            cells = {str(ph): int(phases[ph]) for ph in ANALYSIS_COVARIATES["phase"]["levels"] if phases.get(ph, 0)}
+            if cells:
+                composition.setdefault(sex_, {})[dx_] = cells
+    dx = c.loc[inter[SAMPLE_COLUMN], _CLINICAL_DX_COLUMN]
+    at_visit = dx.str.split(" to ").str[-1].map(_DX_AT_VISIT)
+    inter_stage = inter.set_index(SAMPLE_COLUMN)[STAGE_COLUMN]
+    unread = int((dx.notna() & at_visit.isna()).sum())
+    if unread:
+        findings.append(
+            f"{_CLINICAL_DX_COLUMN}: {unread} intersection participant(s) with a value outside "
+            f"{sorted(_DX_AT_VISIT)} (or a change 'X to Y' between them); counted as differing from the stage"
+        )
+    phase_vs_run = {}
+    for name in ("p180", "intersection"):
+        frame = sets[name].set_index(SAMPLE_COLUMN)
+        frame = frame.assign(run=runs.reindex(frame.index))
+        phase_vs_run[name] = {
+            "table": _crosstab(frame, "phase", "run"),
+            "disagreements": int((frame["phase"] != frame["run"]).sum()),
+        }
+    if phase_vs_run["p180"]["disagreements"]:
+        findings.append(
+            f"phase against the p180 run: {phase_vs_run['p180']['disagreements']} participant(s) of the p180 set "
+            f"whose phase ({ANALYSIS_COVARIATES['phase']['column']}) differs from their run in {CLEAN_RUNS_TABLE}"
+        )
+    counts["intersection"] = {
+        "cascade": {
+            "cleaned_on_both": len(set.intersection(*(set(cleaned_ids[p]) for p in platforms))),
+            "set": len(inter),
+        },
+        "sex_stage": _sex_stage(inter),
+        "composition": composition,
+        "stage_source": {
+            "agree": int((at_visit == inter_stage).sum()),
+            "differ": int((dx.notna() & (at_visit != inter_stage)).sum()),
+            "missing": int(dx.isna().sum()),
+        },
+        "phase_vs_run_disagreements": phase_vs_run["intersection"]["disagreements"],
+        "statin_users": int(inter["statin"].sum()),
+        "missing_covariate_values": int(inter[list(ANALYSIS_COVARIATES)].isna().sum().sum()),
+    }
+    counts["union"] = {
+        "participants": len(cohort),
+        "both": int(in_all.sum()),
+        **{
+            f"{p}_only": int((cohort[p] & ~cohort[[q for q in platforms if q != p]].any(axis=1)).sum())
+            for p in platforms
+        },
+    }
+    counts["phase_vs_run"] = phase_vs_run
+    counts["stage_source_detail"] = _crosstab(
+        pd.DataFrame({"dx_bl": inter["dx_bl"].to_numpy(), "dx": dx.fillna("(missing)").to_numpy()}), "dx_bl", "dx"
+    )
+    counts["inventory"] = {
+        "clinical": {"rows": len(clinical), "baseline_rows": len(bl)},
+        "medication": med_counts,
+    }
+
+    descriptives = {}
+    for sex_ in GROUP_VALUES:
+        descriptives[sex_] = {}
+        for st in STAGE_LABELS:
+            cell = inter[(inter[GROUP_COLUMN] == sex_) & (inter[STAGE_COLUMN] == st)]
+            d: dict = {"n": len(cell)}
+            for name, cfg in ANALYSIS_COVARIATES.items():
+                if cfg["coding"] == "numeric":
+                    d[name] = {"mean": float(cell[name].mean()), "sd": float(cell[name].std())}
+                else:
+                    d[name] = _int_counts(cell[name], cfg["levels"])
+            descriptives[sex_][st] = d
+
+    expected = json.loads(json.dumps(COHORT_EXPECTED_COUNTS))
+    deviations = [msg for key in expected for msg in _count_deviations(expected[key], counts.get(key), key)]
+    findings += deviations
+    stage_counts = _stage_counts_table(sets)
+
+    manifest = {
+        "step": "cohort",
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "versions": _software_versions(),
+        "git_revision": _git_revision(),
+        "data_root": str(root.resolve()),
+        "inputs": {"clean": clean_inputs, "raw": raw},
+        "settings": {
+            "COHORT_RULE": COHORT_RULE,
+            "STAGE_RULE": STAGE_RULE,
+            "ANALYSIS_COVARIATES": ANALYSIS_COVARIATES,
+            "GROUP_VALUES": GROUP_VALUES,
+            "COHORT_COLUMNS": COHORT_COLUMNS,
+            "stage_source_reading": {
+                "column": _CLINICAL_DX_COLUMN,
+                "map": _DX_AT_VISIT,
+                "note": "a recorded change 'X to Y' counts as Y; read for the agreement count only",
+            },
+        },
+        "counts": counts,
+        "descriptives": {"set": "intersection", "cells": descriptives},
+        "expected": expected,
+        "deviations": deviations,
+        "findings": findings,
+    }
+
+    # --- outputs ----------------------------------------------------------------
+    with _finalize_output_dir(final, force=force) as tmp:
+        cohort.to_csv(tmp / COHORT_TABLE, index=False)
+        stage_counts.to_csv(tmp / COHORT_COUNTS, index=False)
+        manifest["outputs"] = {
+            name: {
+                "sha256": _sha256_file(tmp / name),
+                "bytes": (tmp / name).stat().st_size,
+                "participant_level": name == COHORT_TABLE,
+            }
+            for name in (COHORT_TABLE, COHORT_COUNTS)
+        }
+        _write_manifest(tmp / COHORT_MANIFEST, manifest)
+
+    sex_stage = counts["intersection"]["sex_stage"]
+    cells = "; ".join(
+        f"{sex_} {'/'.join(STAGE_LABELS)} " + "/".join(str(n) for n in sex_stage[sex_].values())
+        for sex_ in GROUP_VALUES
+    )
+    print(f"[cohort] intersection: {len(inter)} ({cells})")
+    print(
+        f"[cohort] wrote {final}/ ({COHORT_TABLE}: {len(cohort)} participants, {len(inter)} in every platform set; "
+        f"{COHORT_COUNTS}: {len(stage_counts)} rows)"
+    )
+    if deviations:
+        print(f"[cohort] {len(deviations)} count deviation(s) from the predeclared counts")
+    else:
+        print("[cohort] counts reproduce the predeclared ones")
+    for msg in findings:
+        print(f"[cohort] FINDING: {msg}")
+    return {"dir": final, "counts": stage_counts, "manifest": manifest, "findings": findings}
 
 
 def run_export(
@@ -903,8 +1414,9 @@ def run_analysis(
     ``constants.ANALYSIS_MOTCO_MIN_VERSION``, checked by
     ``check_motco_version``; never assembled from ``motco plsr`` +
     ``motco de``) on the exported blocks, group ``sex``, stage ``stage`` in
-    ``STAGE_LABELS`` order, with the (undecided) constants
-    ``ANALYSIS_COVARIATES`` (missing policy ``error``, nothing imputed),
+    ``STAGE_LABELS`` order, with ``ANALYSIS_COVARIATES`` (decided by
+    ``adni-cohort``; its codings declared to MOTCO, missing policy
+    ``error``, nothing imputed) and the (undecided) constants
     ``ANALYSIS_PERMUTATIONS``, ``ANALYSIS_SEED`` and ``ANALYSIS_RANK_FLOOR``
     (passed explicitly and checked against MOTCO's default before any input
     is read); MOTCO's other defaults are not overridden. Output contract:
