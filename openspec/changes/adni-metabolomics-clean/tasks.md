@@ -27,7 +27,7 @@
 
 - [x] 5.1 Update `README.md`: status, the `clean` section (options and their values, the working copy, the outputs and which are participant-level, the manifest, the repair rule, the sbatch); verify `uv run adni-sexdiff clean --help` matches the documented flags
 - [x] 5.2 Update `AGENTS.md`: status paragraph, step 1 (metabo_adni's `main` order, `--merge`, `P180.csv` / `NMR.csv`, `p180_runs.csv`, the log, the manifest exception), constraint 1's ignore list, constraint 3's option list with `--merge`, "Flag and ask" with `CLEAN_OPTIONS` decided by this change and its value, the cluster section naming `scripts/clean.sbatch`; correct "the `clean_files` pipeline" in `AGENTS.md` and the `run_clean` docstring (`clean_files` is metabo_adni's console script for `__main__.main`, not a library function); verify every remaining `grep -n clean_files AGENTS.md src/` hit names the console script and `CLAUDE.md` is unchanged
-- [ ] 5.3 Before committing, run `git status` and `git check-ignore` over every file produced under `results/cleaned/` and list in the commit message the two manifests as the only files added under `results/` with the reason they are aggregate; verify the staged list holds nothing else under `results/`
+- [x] 5.3 Before committing, run `git status` and `git check-ignore` over every file produced under `results/cleaned/` and list in the commit message the two manifests as the only files added under `results/` with the reason they are aggregate; verify the staged list holds nothing else under `results/`
 
 ## 6. Verification runs
 

@@ -1,0 +1,268 @@
+{
+  "counts": {
+    "deviations": [],
+    "expected": {
+      "cells": {
+        "consolidate_replicates": {
+          "NMR": [
+            1645,
+            245
+          ]
+        },
+        "imputation": {
+          "NMR": [
+            1504,
+            245
+          ]
+        },
+        "merge": {
+          "NMR": [
+            1504,
+            245
+          ]
+        },
+        "read_files": {
+          "NMR": [
+            1646,
+            250
+          ]
+        },
+        "remove_bad_qc_tags": {
+          "NMR": [
+            1504,
+            245
+          ]
+        },
+        "remove_missing_metabolites": {
+          "NMR": [
+            1646,
+            245
+          ]
+        },
+        "remove_missing_participants": {
+          "NMR": [
+            1645,
+            245
+          ]
+        },
+        "remove_non_fasters": {
+          "NMR": [
+            1563,
+            245
+          ]
+        }
+      },
+      "duplicated_participants": 0,
+      "final": {
+        "metabolites": 245,
+        "participants": 1504
+      },
+      "imputed_points": {
+        "NMR": 155,
+        "total": 155
+      },
+      "non_baseline_records": 3,
+      "zeros": {
+        "metabolites": 3,
+        "values": 41
+      }
+    },
+    "observed": {
+      "cells": {
+        "consolidate_replicates": {
+          "NMR": [
+            1645,
+            245
+          ]
+        },
+        "imputation": {
+          "NMR": [
+            1504,
+            245
+          ]
+        },
+        "merge": {
+          "NMR": [
+            1504,
+            245
+          ]
+        },
+        "read_files": {
+          "NMR": [
+            1646,
+            250
+          ]
+        },
+        "remove_bad_qc_tags": {
+          "NMR": [
+            1504,
+            245
+          ]
+        },
+        "remove_missing_metabolites": {
+          "NMR": [
+            1646,
+            245
+          ]
+        },
+        "remove_missing_participants": {
+          "NMR": [
+            1645,
+            245
+          ]
+        },
+        "remove_non_fasters": {
+          "NMR": [
+            1563,
+            245
+          ]
+        }
+      },
+      "duplicated_participants": 0,
+      "final": {
+        "metabolites": 245,
+        "participants": 1504
+      },
+      "imputed_points": {
+        "NMR": 155,
+        "total": 155
+      },
+      "non_baseline_records": 3,
+      "zeros": {
+        "metabolites": 3,
+        "values": 41
+      }
+    },
+    "reproduced": true
+  },
+  "created_at": "2026-10-26T21:49:18+00:00",
+  "data_root": "/home/tomas/Documents/Repos/adni_sexdiff/data",
+  "findings": [],
+  "git_revision": {
+    "commit": "13119c9c707bd4537f449194bb91b80c0f1f6e46",
+    "dirty": false
+  },
+  "imputation": {
+    "metabolites": {
+      "NMR": 11
+    },
+    "points_in_merged_metabolites": {
+      "NMR": 155
+    }
+  },
+  "inputs": [
+    {
+      "bytes": 8660093,
+      "name": "ADNINIGHTINGALE2.csv",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "524bde27672021fe8a9c4cc4b5d0d89a38f6f04129b930c955bd31e04c651ebf",
+      "target": "Metabolomics/NMR/ADNINIGHTINGALE2_11Jul2024.csv"
+    },
+    {
+      "bytes": 4310571,
+      "name": "BIOMARK.csv",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "0c7bc024fd3de367395c1edf7ab870bb7af37bc66dffaa11312d66570541671d",
+      "target": "Metabolomics/BIOMARK_11Jul2024.csv"
+    }
+  ],
+  "outputs": {
+    "NMR.csv": {
+      "bytes": 6560851,
+      "participant_level": true,
+      "sha256": "e711d62cf03f9da3f761fb18bfe4acb2d5fdf15fab6695fa5ed3901fa45d3159"
+    },
+    "logs/metabo_adni.log": {
+      "bytes": 1355,
+      "participant_level": true,
+      "sha256": "1831c16034e90b06195a5f02d45e8a4d7ddf92156d517e2ad89ba4e84d30eb3d"
+    }
+  },
+  "platform": "nmr",
+  "raw_inventory": {
+    "NMR": {
+      "non_baseline_records": 3,
+      "participant_records": 1697,
+      "participants": 1646,
+      "participants_with_replicates": 36,
+      "plates": null,
+      "qc_pool_records": 0,
+      "records": 1697,
+      "visit_codes": {
+        "bl": 1694,
+        "f": 1,
+        "nv": 1,
+        "sc": 1
+      },
+      "visit_column": "VISCODE2"
+    }
+  },
+  "settings": {
+    "cli_equivalent": "clean_files -D <work> -P nmr -F BIOMARK.csv --mmc 0.2 --mpc 0.2 --merge",
+    "cli_note": "<work> is a directory holding copies of the inputs listed under 'inputs'; clean_files writes NMR.csv there",
+    "fasting_file": "BIOMARK.csv",
+    "lod_directory": null,
+    "metabo_adni_steps": [
+      "read_files",
+      "remove_missing_metabolites",
+      "remove_missing_participants",
+      "consolidate_replicates",
+      "remove_non_fasters",
+      "remove_bad_qc_tags",
+      "imputation",
+      "merge"
+    ],
+    "options": {
+      "log2": false,
+      "merge": true,
+      "mmc": 0.2,
+      "mpc": 0.2,
+      "remove_moutliers": false,
+      "residualize_meds": false,
+      "winsorize": false,
+      "zscore": false
+    }
+  },
+  "step": "clean",
+  "upstream_behaviours": {
+    "medication_reader_baseline": {
+      "applies": false,
+      "description": "load.read_meds_file keeps the medication table's VISCODE2 == 'bl' rows, where most rows carry no class (classes are filled at 'sc'); --residualize-meds is off and clean does not read the medication table, so it does not apply here"
+    },
+    "replicates_averaged_across_visits": {
+      "description": "participants.consolidate_replicates averages every record of a participant, whatever its visit code; records at visits other than 'bl' per table, as read (None: no visit column)",
+      "non_baseline_records": {
+        "NMR": 3
+      }
+    }
+  },
+  "value_summary": {
+    "below_one": 198009,
+    "median": 0.669124025121573,
+    "metabolites_with_median_below_one": 131,
+    "missing": 0,
+    "negative": 0,
+    "share_below_one": 0.5373670212765957,
+    "smallest_positive": 4.20583255488527e-09,
+    "values": 368480,
+    "zero_metabolites": [
+      "BOHBUTYRATE",
+      "ACETATE",
+      "ACETOACETATE"
+    ],
+    "zeros": 41
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}
