@@ -1,11 +1,17 @@
 """Pipeline steps of adni_sexdiff.
 
-Every step is a stub: its docstring states the inputs it reads, the files it
-writes and the contract of those files, and its body raises
-``NotImplementedError`` until an OpenSpec change implements it. The
-statistical choices each step needs (cohort rule, stage rule, covariate set,
-permutations, seed, rank floor, metabo_adni options, reading rules) are
-undecided and enter only through a proposal (see ``constants``).
+``clean`` is implemented (change ``adni-metabolomics-clean``). Every other
+step is a stub: its docstring states the inputs it reads, the files it writes
+and the contract of those files, and its body raises ``NotImplementedError``
+until an OpenSpec change implements it. The statistical choices each step
+needs (cohort rule, stage rule, covariate set, permutations, seed, rank
+floor, reading rules) are undecided and enter only through a proposal (see
+``constants``).
+
+The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
+``check_known_repairs``) and the manifest and output-directory helpers
+(``_git_revision``, ``_software_versions``, ``_write_manifest``,
+``_finalize_output_dir``) are shared by every step.
 
 ADNI is controlled-access. Every table keyed by ``RID`` is participant-level:
 it stays under the ignored paths of ``constants.PARTICIPANT_LEVEL_PATTERNS``,
@@ -15,10 +21,48 @@ counts and files, never participants.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import json
 import os
+import shutil
+import subprocess
+import sys
+from collections.abc import Generator, Iterable
+from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from .constants import DATA_ROOT_ENV, DEFAULT_DATA_ROOT, PLATFORMS
+import numpy as np
+import pandas as pd
+
+from .constants import (
+    CLEAN_EXPECTED_COUNTS,
+    CLEAN_FASTING_FILE,
+    CLEAN_INPUT_FILES,
+    CLEAN_LOG,
+    CLEAN_MANIFEST,
+    CLEAN_OPTIONS,
+    CLEAN_RUNS_TABLE,
+    CLEAN_TABLES,
+    CLEANED_DIR,
+    DATA_ROOT_ENV,
+    DEFAULT_DATA_ROOT,
+    KNOWN_RAW_FILE_REPAIRS,
+    METABO_ADNI_VERSION,
+    PARTICIPANT_ID_COLUMN,
+    PLATFORMS,
+    RAW_INPUT_SHA256,
+)
+
+#: metabo_adni's ``RID`` of the p180 QC pool rows (``cross_plate_correction``).
+_P180_QC_POOL_RID = 999999
+#: The flags of metabo_adni's command line that ``clean`` leaves off, in the
+#: order its ``main`` applies them (``merge`` sits between ``log2`` and
+#: ``zscore`` there and is on).
+_CLEAN_TRANSFORMS = ("log2", "zscore", "winsorize", "remove_moutliers", "residualize_meds")
+#: Packages whose versions every manifest records.
+_MANIFEST_PACKAGES = ("adni-sexdiff", "metabo_adni", "pandas", "numpy", "scipy", "pingouin", "statsmodels", "openpyxl")
 
 
 def resolve_data_root(data_root: str | Path | None = None) -> Path:
@@ -42,6 +86,124 @@ def resolve_data_root(data_root: str | Path | None = None) -> Path:
     return Path(os.environ.get(DATA_ROOT_ENV, DEFAULT_DATA_ROOT))
 
 
+# --- raw inputs --------------------------------------------------------------
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def require_raw_files(root: str | Path, names: Iterable[str]) -> None:
+    """Check that every raw file a step needs is in the data root.
+
+    Parameters
+    ----------
+    root:
+        The data root.
+    names:
+        The exact names the step reads from the top level of ``root``.
+
+    Raises
+    ------
+    FileNotFoundError
+        One or more names are absent (or are dangling symlinks); the message
+        names every missing one. Called before any file is read or any
+        output directory is created, so a step never relies on a reader's
+        own handling of an absent file (metabo_adni skips an absent
+        concentration file silently).
+    """
+    root = Path(root)
+    missing = [n for n in names if not (root / n).is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"{len(missing)} raw file(s) missing from the data root {root}: "
+            + ", ".join(repr(n) for n in missing)
+        )
+
+
+def hash_raw_file(path: str | Path, *, root: str | Path | None = None) -> dict:
+    """Hash a raw file's content through its symlink and describe it.
+
+    Parameters
+    ----------
+    path:
+        The file under its expected name in the data root.
+    root:
+        The data root the symlink target is reported relative to (default:
+        the file's directory).
+
+    Returns
+    -------
+    dict
+        ``name`` (the expected name), ``target`` (the symlink target relative
+        to the root, or the absolute resolved path when it lies outside the
+        root; ``None`` for a regular file), ``bytes`` and ``sha256`` of the
+        resolved content. The file is only read.
+    """
+    path = Path(path)
+    root = Path(root) if root is not None else path.parent
+    target = None
+    if path.is_symlink():
+        resolved = path.resolve()
+        try:
+            target = resolved.relative_to(root.resolve()).as_posix()
+        except ValueError:
+            target = str(resolved)
+    return {"name": path.name, "target": target, "bytes": path.stat().st_size, "sha256": _sha256_file(path)}
+
+
+def check_known_repairs(hashes: Iterable[dict]) -> list[str]:
+    """Match raw-file hashes against the predeclared hashes and the repair registry.
+
+    Parameters
+    ----------
+    hashes:
+        Records from ``hash_raw_file``. Each is annotated in place with
+        ``predeclared`` (the hash equals ``constants.RAW_INPUT_SHA256``) and
+        ``repair`` (the registry's defect, repair and date when the hash is
+        the repaired one, else ``None``).
+
+    Returns
+    -------
+    list[str]
+        One finding per file whose hash matches neither its predeclared hash
+        nor a registry entry (a fresh LONI download), naming the file and
+        the hash.
+
+    Raises
+    ------
+    RuntimeError
+        A file's hash is LONI's unrepaired bytes of a registry entry
+        (``constants.KNOWN_RAW_FILE_REPAIRS``): the message names the file,
+        the defect and the repair its archive copy must carry. No file is
+        repaired here.
+    """
+    findings = []
+    for rec in hashes:
+        name, sha = rec["name"], rec["sha256"]
+        entry = KNOWN_RAW_FILE_REPAIRS.get(name)
+        if entry is not None and sha == entry["loni_sha256"]:
+            raise RuntimeError(
+                f"{name} in the data root is LONI's unrepaired export (sha256 {sha}): {entry['defect']}. "
+                f"Its archive copy must carry the repair: {entry['repair']}. "
+                "No step edits the archive or a working copy; repair the archive copy by hand and rerun."
+            )
+        rec["predeclared"] = sha == RAW_INPUT_SHA256.get(name)
+        rec["repair"] = None
+        if entry is not None and sha == entry["repaired_sha256"]:
+            rec["repair"] = {k: entry[k] for k in ("defect", "repair", "repaired_on")}
+        elif not rec["predeclared"]:
+            findings.append(
+                f"{name}: sha256 {sha} matches neither the predeclared hash nor a known repair "
+                "(a fresh LONI download?); predeclared counts hold for the predeclared bytes only"
+            )
+    return findings
+
+
 def check_metabo_adni_version() -> str:
     """Return the installed metabo_adni version after checking the pin.
 
@@ -54,9 +216,101 @@ def check_metabo_adni_version() -> str:
     ------
     RuntimeError
         The installed version differs from the pin (the lock and the
-        constant moved apart).
+        constant moved apart), or metabo_adni is not installed.
     """
-    raise NotImplementedError("check_metabo_adni_version is a stub; implemented by the clean change")
+    try:
+        installed = version("metabo_adni")
+    except PackageNotFoundError as e:
+        raise RuntimeError(f"metabo_adni is not installed; the pin is {METABO_ADNI_VERSION}") from e
+    if installed != METABO_ADNI_VERSION:
+        raise RuntimeError(
+            f"metabo_adni {installed} is installed but the pin is {METABO_ADNI_VERSION}; "
+            "a pin move is its own change (AGENTS.md constraint 3)"
+        )
+    return installed
+
+
+# --- manifests and output directories ---------------------------------------
+
+
+def _git_revision() -> dict:
+    here = Path(__file__).resolve().parent
+    try:
+        rev = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=here, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=here, capture_output=True, text=True, check=True,
+        ).stdout.strip() != ""
+        return {"commit": rev, "dirty": dirty}
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None, "dirty": None}
+
+
+def _software_versions(names: Iterable[str] = _MANIFEST_PACKAGES) -> dict:
+    out: dict[str, str | None] = {"python": sys.version.split()[0]}
+    for pkg in names:
+        try:
+            out[pkg] = version(pkg)
+        except PackageNotFoundError:
+            out[pkg] = None
+    return out
+
+
+def _json_default(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, Path):
+        return str(obj)
+    raise TypeError(f"{type(obj).__name__} is not JSON serializable")
+
+
+def _write_manifest(path: str | Path, manifest: dict) -> None:
+    Path(path).write_text(json.dumps(manifest, indent=2, sort_keys=True, default=_json_default) + "\n")
+
+
+@contextlib.contextmanager
+def _finalize_output_dir(final: str | Path, *, force: bool) -> Generator[Path, None, None]:
+    """Stage a step's output in ``<final>.tmp/`` and rename it to ``final`` when complete.
+
+    Parameters
+    ----------
+    final:
+        The output directory the step promises.
+    force:
+        Replace an existing ``final``.
+
+    Yields
+    ------
+    Path
+        The empty staging directory ``<final>.tmp/``.
+
+    Notes
+    -----
+    On entry an existing ``final`` stops the step unless ``force`` is given,
+    and a stale ``<final>.tmp/`` from an earlier run is removed. When the
+    block completes, ``final`` (under ``force``) is replaced by the staging
+    directory; when it raises, ``final`` is untouched and ``<final>.tmp/``
+    keeps whatever was written, for inspection.
+    """
+    final = Path(final)
+    tmp = final.with_name(final.name + ".tmp")
+    if final.exists() and not force:
+        raise FileExistsError(f"{final} exists; pass --force to replace it")
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir(parents=True)
+    yield tmp
+    if final.exists():
+        if not force:
+            raise FileExistsError(f"{final} appeared during the run; {tmp} is kept")
+        shutil.rmtree(final)
+    os.replace(tmp, final)
 
 
 def check_motco_version() -> str:
@@ -87,22 +341,22 @@ def run_clean(
     Parameters
     ----------
     platform:
-        ``"p180"``, ``"nmr"`` or ``"all"`` (``constants.PLATFORMS``).
+        ``"p180"``, ``"nmr"`` or ``"all"`` (``constants.PLATFORMS``, run one
+        after the other, each in its own directory).
     data_root:
-        Directory holding, flat at its top level, the raw ADNI files under
-        the names metabo_adni's ``load.read_files`` expects (symlinks to the
-        dated LONI downloads under ``<root>/Metabolomics/``; p180:
-        ``ADMCDUKEP180UPLC_01_15_16.csv``, ``ADMCDUKEP180FIA_01_15_16.csv``,
-        ``ADMCDUKEP180UPLCADNI2GO.csv``, ``ADMCDUKEP180FIAADNI2GO.csv`` plus
-        the p180 LOD workbooks its ``read_lod_files`` names; NMR:
-        ``ADNINIGHTINGALE2.csv``; both: the fasting file ``BIOMARK.csv``;
-        ``ADMCPATIENTDRUGCLASSES_20170512.csv`` only if ``--residualize-meds``
-        is chosen). Resolved by ``resolve_data_root``.
+        Directory holding, flat at its top level, the raw files of
+        ``constants.CLEAN_INPUT_FILES`` under the names metabo_adni expects
+        (symlinks to the dated LONI downloads under ``<root>/Metabolomics/``;
+        p180: the four concentration files, the four LOD workbooks and the
+        fasting file ``BIOMARK.csv``; NMR: ``ADNINIGHTINGALE2.csv`` and the
+        fasting file). No other file is read. Resolved by
+        ``resolve_data_root``.
     out_dir:
         Cleaned root (default ``constants.CLEANED_DIR``); each platform goes
         to ``<out_dir>/<platform>/``.
     force:
-        Replace an existing platform directory.
+        Replace an existing platform directory (after the new one is
+        complete).
 
     Returns
     -------
@@ -111,27 +365,413 @@ def run_clean(
 
     Notes
     -----
-    Cleaning is metabo_adni's (``metabo_adni==0.5.8``, pinned; the installed
-    version is checked by ``check_metabo_adni_version`` before any file is
-    read) and is never reimplemented here: the step runs metabo_adni's
-    ``clean_files`` pipeline with the options of the (undecided) constant
-    ``CLEAN_OPTIONS`` for the platform, in a working copy, since metabo_adni
-    changes into the data directory and writes its cleaned files there. The
-    manifest records every input file's sha256 and names the known
-    raw-file repairs it recognises by hash (today one: the closing quote
-    LONI's ``ADMCDUKEP180UPLCADNI2GO.csv`` lacks, appended by hand in the
-    archive copy; see ``AGENTS.md``).
-    Output contract per platform: metabo_adni's cleaned files under the
-    names it gives them (``<cohort>-<kit>.csv`` for p180, ``NMR.csv`` for
-    NMR; participant × metabolite, keyed by ``RID``, participant-level and
-    gitignored) and ``clean_manifest.json`` (metabo_adni and software
-    versions, the options used, every input file with its sha256, the
-    participant and metabolite counts before and after each of metabo_adni's
-    steps, git revision, findings). The manifest is aggregate and holds no
-    ``RID``. Each platform is written to ``<platform>.tmp/`` and renamed when
+    Cleaning is metabo_adni's (``metabo_adni==0.5.8``, pinned; checked by
+    ``check_metabo_adni_version`` before any file is read) and is never
+    reimplemented here. metabo_adni has no library entry point: its command
+    line ``clean_files`` (``metabo_adni.__main__.main``) calls its QC
+    functions in a fixed order. This step calls the same functions in the
+    same order, in-process, with ``constants.CLEAN_OPTIONS`` (QC at the
+    default cutoffs, ``--merge``, no transform), so that it can count the
+    participants and metabolites after each; the manifest records the
+    equivalent ``clean_files`` command line. metabo_adni changes into the
+    directory it reads and writes there, so the inputs are copied (through
+    the data root's symlinks) into ``<platform>.tmp/work/``; the data root
+    is never written. Before any copy, every input is hashed: the repaired
+    UPLC ADNI-GO/2 file is recognised, LONI's unrepaired bytes stop the step
+    (``check_known_repairs``), and an unknown hash is a finding.
+    metabo_adni prints participant identifiers; everything it prints goes to
+    the log, never to the terminal.
+
+    Output contract per platform: ``P180.csv`` / ``NMR.csv`` (the merged
+    table under the name metabo_adni's command line gives it, participant ×
+    metabolite, keyed by ``RID``, on the scale the platform delivers;
+    participant-level), for p180 ``p180_runs.csv`` (``RID``, ``run`` ∈
+    {``ADNI1``, ``ADNI2GO``}, from the raw files' participant rows;
+    participant-level), ``logs/metabo_adni.log`` (participant-level) and
+    ``clean_manifest.json`` (versions, git revision, data root, options and
+    ``cli_equivalent``, inputs with target, size, sha256 and known repair,
+    raw inventory, cells after every step, imputed points, value summary,
+    runs, output hashes, expected and observed counts with deviations,
+    findings, upstream behaviours; aggregate, no ``RID``, the only file
+    under ``results/cleaned/`` that is committed and synced). Observed
+    counts are compared with ``constants.CLEAN_EXPECTED_COUNTS``; each
+    deviation is a finding, printed and recorded, and never stops the step.
+    Each platform is written to ``<platform>.tmp/`` and renamed when
     complete.
     """
-    raise NotImplementedError("run_clean is a stub; implemented by the clean change")
+    if platform not in (*PLATFORMS, "all"):
+        raise ValueError(f"platform must be one of {[*PLATFORMS, 'all']}, not {platform!r}")
+    platforms = list(PLATFORMS) if platform == "all" else [platform]
+    installed = check_metabo_adni_version()
+    print(f"[clean] metabo_adni {installed} (pinned)")
+    for p in platforms:
+        _check_clean_options(p)
+    root = resolve_data_root(data_root)
+    out_root = Path(out_dir) if out_dir is not None else Path(CLEANED_DIR)
+    for p in platforms:
+        if (out_root / p).exists() and not force:
+            raise FileExistsError(f"{out_root / p} exists; pass --force to replace it")
+
+    names = list(dict.fromkeys(n for p in platforms for n in CLEAN_INPUT_FILES[p]))
+    require_raw_files(root, names)
+    records = {n: hash_raw_file(root / n, root=root) for n in names}
+    check_known_repairs(records.values())
+    for rec in records.values():
+        state = "predeclared" if rec["predeclared"] else "NOT predeclared"
+        if rec["repair"] is not None:
+            state += f", repaired archive copy ({rec['repair']['repaired_on']})"
+        print(f"[clean] input {rec['name']}: sha256 {rec['sha256'][:16]}… ({state})")
+
+    out = {}
+    for p in platforms:
+        out[p] = _clean_platform(
+            p, root=root, final=out_root / p, force=force, inputs=[dict(records[n]) for n in CLEAN_INPUT_FILES[p]]
+        )
+    return out
+
+
+def _check_clean_options(platform: str) -> None:
+    options = CLEAN_OPTIONS[platform]
+    on = [t for t in _CLEAN_TRANSFORMS if options.get(t)]
+    if not options.get("merge") or on:
+        raise NotImplementedError(
+            f"clean implements CLEAN_OPTIONS[{platform!r}] with --merge on and every transform off; "
+            f"merge={options.get('merge')!r}, transforms on: {on}. Another setting needs its own change."
+        )
+
+
+def _clean_cli_equivalent(platform: str) -> str:
+    options = CLEAN_OPTIONS[platform]
+    parts = ["clean_files", "-D", "<work>", "-P", platform, "-F", CLEAN_FASTING_FILE]
+    if platform == "p180":
+        parts += ["-L", "<work>"]
+    for opt in ("mmc", "mpc", "cv", "icc"):
+        if opt in options:
+            parts += [f"--{opt}", str(options[opt])]
+    for flag in ("log2", "merge", "zscore", "winsorize", "remove_moutliers", "residualize_meds"):
+        if options.get(flag):
+            parts.append("--" + flag.replace("_", "-"))
+    return " ".join(parts)
+
+
+def _cells(files: dict, platform: str) -> dict[str, list[int]]:
+    """Unique participants × metabolites per metabo_adni table (the spike's count)."""
+    from metabo_adni.data import load
+
+    out = {}
+    for key, df in files.items():
+        idx = load._get_data_indices(df, platform)
+        out[key] = [int(df.loc[idx].index.nunique()), len(load._get_metabo_col_names(df, key))]
+    return out
+
+
+def _participant_ids(df: pd.DataFrame, platform: str) -> set[int]:
+    from metabo_adni.data import load
+
+    return {int(r) for r in df.index[load._get_data_indices(df, platform)]}
+
+
+def _raw_inventory(files: dict, platform: str) -> dict:
+    """Records, QC-pool records, participants, replicates, plates and visit codes per table, as read."""
+    from metabo_adni.data import load
+
+    out = {}
+    for key, df in files.items():
+        part = df.loc[load._get_data_indices(df, platform)]
+        per_participant = part.index.value_counts()
+        visit_col = next((c for c in ("VISCODE2", "VISCODE") if c in df.columns), None)
+        visits = None
+        if visit_col is not None:
+            visits = {str(k): int(v) for k, v in part[visit_col].astype(str).value_counts().sort_index().items()}
+        out[key] = {
+            "records": int(len(df)),
+            "qc_pool_records": int((df.index == _P180_QC_POOL_RID).sum()),
+            "participant_records": int(len(part)),
+            "participants": int(part.index.nunique()),
+            "participants_with_replicates": int((per_participant > 1).sum()),
+            "plates": int(part["Plate.Bar.Code"].nunique()) if "Plate.Bar.Code" in df.columns else None,
+            "visit_column": visit_col,
+            "visit_codes": visits,
+            "non_baseline_records": None if visits is None else int(sum(v for k, v in visits.items() if k != "bl")),
+        }
+    return out
+
+
+def _missing_before_imputation(files: dict, platform: str) -> dict:
+    """Missing points per table before imputation, the merge-kept share and the multi-plate count."""
+    from metabo_adni.data import load
+
+    kept_cols: dict[str, set] = {}
+    if platform == "p180":
+        for kit in ("UPLC", "FIA"):
+            a = set(load._get_metabo_col_names(files[f"ADNI1-{kit}"], f"ADNI1-{kit}"))
+            b = set(load._get_metabo_col_names(files[f"ADNI2GO-{kit}"], f"ADNI2GO-{kit}"))
+            kept_cols[f"ADNI1-{kit}"] = kept_cols[f"ADNI2GO-{kit}"] = a & b
+    points, metabolites, points_kept = {}, {}, {}
+    mp_metabolites, mp_points = 0, 0
+    for key, df in files.items():
+        mets = load._get_metabo_col_names(df, key)
+        idx = load._get_data_indices(df, platform)
+        na = df.loc[idx, list(mets)].isna()
+        points[key] = int(na.to_numpy().sum())
+        metabolites[key] = int(na.any().sum())
+        kept = [m for m in mets if m in kept_cols.get(key, set(mets))]
+        points_kept[key] = int(na[kept].to_numpy().sum())
+        if platform == "p180":
+            plates = df.loc[idx, "Plate.Bar.Code"]
+            for m in mets[na.any().to_numpy()]:
+                if plates[na[m].to_numpy()].nunique() > 1:
+                    mp_metabolites += 1
+                    mp_points += int(na[m].sum())
+    return {
+        "points": {**points, "total": int(sum(points.values()))},
+        "metabolites": metabolites,
+        "points_in_merged_metabolites": points_kept,
+        "multi_plate": {"metabolites": mp_metabolites, "points": mp_points},
+    }
+
+
+def _value_summary(table: pd.DataFrame) -> dict:
+    vals = table.to_numpy(dtype=float)
+    finite = vals[~np.isnan(vals)]
+    positive = finite[finite > 0]
+    return {
+        "values": int(vals.size),
+        "missing": int(np.isnan(vals).sum()),
+        "negative": int((finite < 0).sum()),
+        "zeros": int((finite == 0).sum()),
+        "zero_metabolites": [str(c) for c in table.columns[(table == 0).any().to_numpy()]],
+        "below_one": int((finite < 1).sum()),
+        "share_below_one": float((finite < 1).mean()),
+        "smallest_positive": float(positive.min()) if positive.size else None,
+        "median": float(np.median(finite)),
+        "metabolites_with_median_below_one": int((table.median() < 1).sum()),
+    }
+
+
+def _count_deviations(expected, observed, label: str) -> list[str]:
+    if isinstance(expected, dict) and isinstance(observed, dict):
+        out = []
+        for k in [*expected, *(k for k in observed if k not in expected)]:
+            out += _count_deviations(expected.get(k), observed.get(k), f"{label} {k}")
+        return out
+    return [] if expected == observed else [f"{label}: expected {expected}, observed {observed}"]
+
+
+def _clean_platform(platform: str, *, root: Path, final: Path, force: bool, inputs: list[dict]) -> dict:
+    """Run metabo_adni's pipeline for one platform in a working copy and write its directory."""
+    from metabo_adni.data import load
+    from metabo_adni.qc import metabolites, participants, transformations
+
+    options = CLEAN_OPTIONS[platform]
+    findings = check_known_repairs(inputs)
+    prefix = f"[clean] {platform}"
+    with _finalize_output_dir(final, force=force) as tmp:
+        # Absolute: metabo_adni changes into the working copy, and the paths
+        # passed to it later (fasting file, LOD directory) must still resolve.
+        work = tmp.resolve() / "work"
+        work.mkdir()
+        for rec in inputs:
+            shutil.copyfile(root / rec["name"], work / rec["name"])
+            if _sha256_file(work / rec["name"]) != rec["sha256"]:
+                raise RuntimeError(f"{rec['name']}: the working copy differs from the data root (changed during the copy?)")
+        print(f"{prefix}: working copy of {len(inputs)} input(s) in {work}")
+        log_path = tmp / CLEAN_LOG
+        log_path.parent.mkdir(parents=True)
+
+        cells: dict[str, dict[str, list[int]]] = {}
+        cwd = os.getcwd()
+        try:
+            with log_path.open("w", encoding="utf-8") as log:
+
+                def call(step: str, fn, *args):
+                    # metabo_adni prints participant identifiers: stdout and
+                    # stderr (warnings) of every call go to the log only.
+                    log.write(f"\n##### [clean] {platform}: {step} #####\n")
+                    log.flush()
+                    with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+                        result = fn(*args)
+                    log.flush()
+                    cells[step] = _cells(result, platform)
+                    print(f"{prefix}: {step}: " + "; ".join(f"{k} {n} × {m}" for k, (n, m) in cells[step].items()))
+                    return result
+
+                # The order of metabo_adni.__main__.main (clean_files).
+                files = call("read_files", load.read_files, str(work), platform)
+                inventory = _raw_inventory(files, platform)
+                raw_ids = {}
+                if platform == "p180":
+                    raw_ids = {run: set() for run in ("ADNI1", "ADNI2GO")}
+                    for key, df in files.items():
+                        raw_ids[key.split("-")[0]] |= _participant_ids(df, platform)
+                files = call("remove_missing_metabolites", metabolites.remove_missing, files, platform, options["mmc"])
+                if platform == "p180":
+                    files = call("cross_plate_correction", metabolites.cross_plate_correction, files, platform)
+                    files = call("remove_cv", metabolites.remove_cv, files, platform, options["cv"])
+                    files = call("remove_icc", metabolites.remove_icc, files, platform, options["icc"])
+                files = call("remove_missing_participants", participants.remove_missing, files, platform, options["mpc"])
+                files = call("consolidate_replicates", participants.consolidate_replicates, files, platform)
+                files = call("remove_non_fasters", participants.remove_non_fasters, files, str(work / CLEAN_FASTING_FILE))
+                files = call("remove_bad_qc_tags", participants.remove_bad_qc_tags, files, platform)
+                missing = _missing_before_imputation(files, platform)
+                files = call(
+                    "imputation", transformations.imputation, files, platform, str(work) if platform == "p180" else None
+                )
+                merged_ids = {}
+                if platform == "p180":
+                    merged_ids = {
+                        run: _participant_ids(files[f"{run}-FIA"], platform) & _participant_ids(files[f"{run}-UPLC"], platform)
+                        for run in raw_ids
+                    }
+                files = call("merge", transformations.merge, files, platform)
+        finally:
+            os.chdir(cwd)
+
+        # The cleaned table, as metabo_adni's command line writes it.
+        ((key, table),) = files.items()
+        table_name = f"{key}.csv"
+        if table_name != CLEAN_TABLES[platform]:
+            raise RuntimeError(f"metabo_adni returned {table_name}, expected {CLEAN_TABLES[platform]}")
+        n_dup = int(table.index.duplicated().sum())
+        if n_dup:
+            raise RuntimeError(f"{table_name}: {n_dup} duplicated participant identifier(s) after the merge")
+        table.to_csv(tmp / table_name)
+        outputs = [table_name]
+
+        runs = None
+        if platform == "p180":
+            in_both = raw_ids["ADNI1"] & raw_ids["ADNI2GO"]
+            if in_both:
+                findings.append(
+                    f"p180: {len(in_both)} participant(s) appear in both runs' raw files; each is labelled "
+                    "by the run whose tables the merge stacked"
+                )
+
+            def run_of(rid: int) -> str:
+                hits = [r for r in raw_ids if rid in raw_ids[r]]
+                if len(hits) > 1:
+                    hits = [r for r in hits if rid in merged_ids[r]]
+                if len(hits) != 1:
+                    raise RuntimeError("a P180 participant cannot be assigned to exactly one run")
+                return hits[0]
+
+            runs_df = pd.DataFrame(
+                {PARTICIPANT_ID_COLUMN: table.index.astype(int), "run": [run_of(int(r)) for r in table.index]}
+            )
+            runs_df.to_csv(tmp / CLEAN_RUNS_TABLE, index=False)
+            outputs.append(CLEAN_RUNS_TABLE)
+            runs = {r: int((runs_df["run"] == r).sum()) for r in raw_ids}
+        outputs.append(CLEAN_LOG)
+        shutil.rmtree(work)
+
+        values = _value_summary(table)
+        observed = {
+            "cells": cells,
+            "imputed_points": missing["points"],
+            "final": {"participants": int(table.index.nunique()), "metabolites": int(table.shape[1])},
+            "duplicated_participants": n_dup,
+            "zeros": {"values": values["zeros"], "metabolites": len(values["zero_metabolites"])},
+        }
+        if platform == "p180":
+            observed["runs"] = runs
+            observed["multi_plate_lod"] = missing["multi_plate"]
+        else:
+            observed["non_baseline_records"] = inventory["NMR"]["non_baseline_records"]
+        expected = json.loads(json.dumps(CLEAN_EXPECTED_COUNTS[platform]))
+        deviations = _count_deviations(expected, observed, platform)
+        findings += deviations
+
+        upstream = {
+            "medication_reader_baseline": {
+                "description": (
+                    "load.read_meds_file keeps the medication table's VISCODE2 == 'bl' rows, where most rows "
+                    "carry no class (classes are filled at 'sc'); --residualize-meds is off and clean does not "
+                    "read the medication table, so it does not apply here"
+                ),
+                "applies": False,
+            },
+            "replicates_averaged_across_visits": {
+                "description": (
+                    "participants.consolidate_replicates averages every record of a participant, whatever its "
+                    "visit code; records at visits other than 'bl' per table, as read (None: no visit column)"
+                ),
+                "non_baseline_records": {k: v["non_baseline_records"] for k, v in inventory.items()},
+            },
+        }
+        if platform == "p180":
+            upstream["multi_plate_lod_imputation"] = {
+                "description": (
+                    "transformations.imputation loops over the plates of a metabolite's missing values and "
+                    "assigns each plate's LOD/2 to all of them, so every missing value of a metabolite whose "
+                    "missing values span more than one plate receives the last plate's LOD/2; counted over "
+                    "the four p180 tables before imputation"
+                ),
+                **missing["multi_plate"],
+            }
+            upstream["adni2go_uplc_lod_not_halved"] = {
+                "description": (
+                    "transformations.imputation assigns ADNI2GO-UPLC missing values the LOD itself (the "
+                    "workbook's single row), not LOD/2"
+                ),
+                "metabolites": missing["metabolites"]["ADNI2GO-UPLC"],
+                "points": missing["points"]["ADNI2GO-UPLC"],
+                "points_in_merged_metabolites": missing["points_in_merged_metabolites"]["ADNI2GO-UPLC"],
+            }
+
+        manifest = {
+            "step": "clean",
+            "platform": platform,
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "versions": _software_versions(),
+            "git_revision": _git_revision(),
+            "data_root": str(root.resolve()),
+            "inputs": inputs,
+            "settings": {
+                "options": options,
+                "fasting_file": CLEAN_FASTING_FILE,
+                "lod_directory": "<work>" if platform == "p180" else None,
+                "metabo_adni_steps": list(cells),
+                "cli_equivalent": _clean_cli_equivalent(platform),
+                "cli_note": (
+                    "<work> is a directory holding copies of the inputs listed under 'inputs'; clean_files "
+                    f"writes {table_name} there"
+                ),
+            },
+            "raw_inventory": inventory,
+            "imputation": {
+                "points_in_merged_metabolites": missing["points_in_merged_metabolites"],
+                "metabolites": missing["metabolites"],
+            },
+            "value_summary": values,
+            "outputs": {
+                name: {"sha256": _sha256_file(tmp / name), "bytes": (tmp / name).stat().st_size, "participant_level": True}
+                for name in outputs
+            },
+            "counts": {
+                "expected": expected,
+                "observed": observed,
+                "deviations": deviations,
+                "reproduced": not deviations,
+            },
+            "findings": findings,
+            "upstream_behaviours": upstream,
+        }
+        _write_manifest(tmp / CLEAN_MANIFEST, manifest)
+
+    final_files = {name: final / name for name in [*outputs, CLEAN_MANIFEST]}
+    print(
+        f"{prefix}: wrote {final}/ ({table_name}: {observed['final']['participants']} participants × "
+        f"{observed['final']['metabolites']} metabolites"
+        + (f"; runs {runs}" if runs else "")
+        + f"; {missing['points']['total']} points imputed)"
+    )
+    if deviations:
+        print(f"{prefix}: {len(deviations)} count deviation(s) from the predeclared counts")
+    else:
+        print(f"{prefix}: counts reproduce the predeclared ones")
+    for msg in findings:
+        print(f"{prefix}: FINDING: {msg}")
+    return {"dir": final, "files": final_files, "manifest": manifest}
 
 
 def run_cohort(
@@ -382,6 +1022,9 @@ def run_report(
 __all__ = [
     "PLATFORMS",
     "resolve_data_root",
+    "require_raw_files",
+    "hash_raw_file",
+    "check_known_repairs",
     "check_metabo_adni_version",
     "check_motco_version",
     "run_clean",

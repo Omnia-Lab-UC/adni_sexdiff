@@ -1,0 +1,682 @@
+{
+  "counts": {
+    "deviations": [],
+    "expected": {
+      "cells": {
+        "consolidate_replicates": {
+          "ADNI1-FIA": [
+            806,
+            110
+          ],
+          "ADNI1-UPLC": [
+            807,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            31
+          ]
+        },
+        "cross_plate_correction": {
+          "ADNI1-FIA": [
+            807,
+            117
+          ],
+          "ADNI1-UPLC": [
+            807,
+            32
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            126
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            32
+          ]
+        },
+        "imputation": {
+          "ADNI1-FIA": [
+            746,
+            110
+          ],
+          "ADNI1-UPLC": [
+            747,
+            27
+          ],
+          "ADNI2GO-FIA": [
+            846,
+            120
+          ],
+          "ADNI2GO-UPLC": [
+            846,
+            31
+          ]
+        },
+        "merge": {
+          "P180": [
+            1592,
+            133
+          ]
+        },
+        "read_files": {
+          "ADNI1-FIA": [
+            807,
+            141
+          ],
+          "ADNI1-UPLC": [
+            807,
+            41
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            141
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            41
+          ]
+        },
+        "remove_bad_qc_tags": {
+          "ADNI1-FIA": [
+            746,
+            110
+          ],
+          "ADNI1-UPLC": [
+            747,
+            27
+          ],
+          "ADNI2GO-FIA": [
+            846,
+            120
+          ],
+          "ADNI2GO-UPLC": [
+            846,
+            31
+          ]
+        },
+        "remove_cv": {
+          "ADNI1-FIA": [
+            807,
+            116
+          ],
+          "ADNI1-UPLC": [
+            807,
+            31
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            124
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            32
+          ]
+        },
+        "remove_icc": {
+          "ADNI1-FIA": [
+            807,
+            110
+          ],
+          "ADNI1-UPLC": [
+            807,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            31
+          ]
+        },
+        "remove_missing_metabolites": {
+          "ADNI1-FIA": [
+            807,
+            117
+          ],
+          "ADNI1-UPLC": [
+            807,
+            32
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            126
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            32
+          ]
+        },
+        "remove_missing_participants": {
+          "ADNI1-FIA": [
+            806,
+            110
+          ],
+          "ADNI1-UPLC": [
+            807,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            31
+          ]
+        },
+        "remove_non_fasters": {
+          "ADNI1-FIA": [
+            746,
+            110
+          ],
+          "ADNI1-UPLC": [
+            747,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            846,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            846,
+            31
+          ]
+        }
+      },
+      "duplicated_participants": 0,
+      "final": {
+        "metabolites": 133,
+        "participants": 1592
+      },
+      "imputed_points": {
+        "ADNI1-FIA": 730,
+        "ADNI1-UPLC": 16,
+        "ADNI2GO-FIA": 643,
+        "ADNI2GO-UPLC": 262,
+        "total": 1651
+      },
+      "multi_plate_lod": {
+        "metabolites": 34,
+        "points": 1608
+      },
+      "runs": {
+        "ADNI1": 746,
+        "ADNI2GO": 846
+      },
+      "zeros": {
+        "metabolites": 0,
+        "values": 0
+      }
+    },
+    "observed": {
+      "cells": {
+        "consolidate_replicates": {
+          "ADNI1-FIA": [
+            806,
+            110
+          ],
+          "ADNI1-UPLC": [
+            807,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            31
+          ]
+        },
+        "cross_plate_correction": {
+          "ADNI1-FIA": [
+            807,
+            117
+          ],
+          "ADNI1-UPLC": [
+            807,
+            32
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            126
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            32
+          ]
+        },
+        "imputation": {
+          "ADNI1-FIA": [
+            746,
+            110
+          ],
+          "ADNI1-UPLC": [
+            747,
+            27
+          ],
+          "ADNI2GO-FIA": [
+            846,
+            120
+          ],
+          "ADNI2GO-UPLC": [
+            846,
+            31
+          ]
+        },
+        "merge": {
+          "P180": [
+            1592,
+            133
+          ]
+        },
+        "read_files": {
+          "ADNI1-FIA": [
+            807,
+            141
+          ],
+          "ADNI1-UPLC": [
+            807,
+            41
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            141
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            41
+          ]
+        },
+        "remove_bad_qc_tags": {
+          "ADNI1-FIA": [
+            746,
+            110
+          ],
+          "ADNI1-UPLC": [
+            747,
+            27
+          ],
+          "ADNI2GO-FIA": [
+            846,
+            120
+          ],
+          "ADNI2GO-UPLC": [
+            846,
+            31
+          ]
+        },
+        "remove_cv": {
+          "ADNI1-FIA": [
+            807,
+            116
+          ],
+          "ADNI1-UPLC": [
+            807,
+            31
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            124
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            32
+          ]
+        },
+        "remove_icc": {
+          "ADNI1-FIA": [
+            807,
+            110
+          ],
+          "ADNI1-UPLC": [
+            807,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            31
+          ]
+        },
+        "remove_missing_metabolites": {
+          "ADNI1-FIA": [
+            807,
+            117
+          ],
+          "ADNI1-UPLC": [
+            807,
+            32
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            126
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            32
+          ]
+        },
+        "remove_missing_participants": {
+          "ADNI1-FIA": [
+            806,
+            110
+          ],
+          "ADNI1-UPLC": [
+            807,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            874,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            874,
+            31
+          ]
+        },
+        "remove_non_fasters": {
+          "ADNI1-FIA": [
+            746,
+            110
+          ],
+          "ADNI1-UPLC": [
+            747,
+            28
+          ],
+          "ADNI2GO-FIA": [
+            846,
+            121
+          ],
+          "ADNI2GO-UPLC": [
+            846,
+            31
+          ]
+        }
+      },
+      "duplicated_participants": 0,
+      "final": {
+        "metabolites": 133,
+        "participants": 1592
+      },
+      "imputed_points": {
+        "ADNI1-FIA": 730,
+        "ADNI1-UPLC": 16,
+        "ADNI2GO-FIA": 643,
+        "ADNI2GO-UPLC": 262,
+        "total": 1651
+      },
+      "multi_plate_lod": {
+        "metabolites": 34,
+        "points": 1608
+      },
+      "runs": {
+        "ADNI1": 746,
+        "ADNI2GO": 846
+      },
+      "zeros": {
+        "metabolites": 0,
+        "values": 0
+      }
+    },
+    "reproduced": true
+  },
+  "created_at": "2026-10-26T21:49:16+00:00",
+  "data_root": "/home/tomas/Documents/Repos/adni_sexdiff/data",
+  "findings": [],
+  "git_revision": {
+    "commit": "13119c9c707bd4537f449194bb91b80c0f1f6e46",
+    "dirty": false
+  },
+  "imputation": {
+    "metabolites": {
+      "ADNI1-FIA": 25,
+      "ADNI1-UPLC": 5,
+      "ADNI2GO-FIA": 17,
+      "ADNI2GO-UPLC": 5
+    },
+    "points_in_merged_metabolites": {
+      "ADNI1-FIA": 585,
+      "ADNI1-UPLC": 16,
+      "ADNI2GO-FIA": 278,
+      "ADNI2GO-UPLC": 43
+    }
+  },
+  "inputs": [
+    {
+      "bytes": 317635,
+      "name": "ADMCDUKEP180UPLC_01_15_16.csv",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "b99835be2d07460f5c1089fd72276454099d3ec7c14e662c740b496de0dad4fb",
+      "target": "Metabolomics/p180/ADMCDUKEP180UPLC_01_15_16_10Jul2024.csv"
+    },
+    {
+      "bytes": 957984,
+      "name": "ADMCDUKEP180FIA_01_15_16.csv",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "0c765d0048f05fdc89f0eaa575b31f655fcefa2faf9fb0da92263836959f7290",
+      "target": "Metabolomics/p180/ADMCDUKEP180FIA_01_15_16_10Jul2024.csv"
+    },
+    {
+      "bytes": 459273,
+      "name": "ADMCDUKEP180UPLCADNI2GO.csv",
+      "predeclared": true,
+      "repair": {
+        "defect": "LONI's export lacks its final byte, the closing double quote of the last record's update_stamp field, so pandas' C parser fails with 'EOF inside string'",
+        "repair": "a double quote and a newline appended at the end of the archive copy (the last record's timestamp and metabolite values are complete)",
+        "repaired_on": "2026-10-26"
+      },
+      "sha256": "7ad17d63eed26368a3e51254c942e9c2f39890d43decda37f7b1a2ade38de3a6",
+      "target": "Metabolomics/p180/ADMCDUKEP180UPLCADNI2GO_10Jul2024.csv"
+    },
+    {
+      "bytes": 1158894,
+      "name": "ADMCDUKEP180FIAADNI2GO.csv",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "a414de4884d2ccd88a6519d3f5627155677ba5bf08be160191e316f5290459e9",
+      "target": "Metabolomics/p180/ADMCDUKEP180FIAADNI2GO_10Jul2024.csv"
+    },
+    {
+      "bytes": 1321580,
+      "name": "4097_UPLC_p180_Data.xlsx",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "84648d2e896d23154d8483e7ec4bae87868562df80fb77cf85a4843d096698cb",
+      "target": "Metabolomics/p180/LOD/4097_UPLC_p180_Data.xlsx"
+    },
+    {
+      "bytes": 4467097,
+      "name": "4097_FIA_p180_Data.xlsx",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "57f0d41e992b2009ed595e2c76ebb0a3f2d1bd294f1ac8e9b6ca5f1e33fa1b45",
+      "target": "Metabolomics/p180/LOD/4097_FIA_p180_Data.xlsx"
+    },
+    {
+      "bytes": 714796,
+      "name": "4610 UPLC p180 Data.xlsx",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "f118ccc5c9112c413aeeb47c1f329afde3e858606bf64b68865f7c366d87eada",
+      "target": "Metabolomics/p180/LOD/4610 UPLC p180 Data.xlsx"
+    },
+    {
+      "bytes": 2420391,
+      "name": "4610 FIA p180 Data.xlsx",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "ddbf46eda9aab32c2fe1d9251efdff7ce93701124d8281c4c7b4f3c18c60c617",
+      "target": "Metabolomics/p180/LOD/4610 FIA p180 Data.xlsx"
+    },
+    {
+      "bytes": 4310571,
+      "name": "BIOMARK.csv",
+      "predeclared": true,
+      "repair": null,
+      "sha256": "0c7bc024fd3de367395c1edf7ab870bb7af37bc66dffaa11312d66570541671d",
+      "target": "Metabolomics/BIOMARK_11Jul2024.csv"
+    }
+  ],
+  "outputs": {
+    "P180.csv": {
+      "bytes": 3967206,
+      "participant_level": true,
+      "sha256": "33b18bd2187173179aa280ee74fc0a8f37ca2f155cdd37d4f87412631132ff9d"
+    },
+    "logs/metabo_adni.log": {
+      "bytes": 5963,
+      "participant_level": true,
+      "sha256": "34f59094ee63a7a1eca5d6989c00bc820224e1532f65c7904b5ff8c18b025d65"
+    },
+    "p180_runs.csv": {
+      "bytes": 18631,
+      "participant_level": true,
+      "sha256": "4c3d7b972428548b94a1f2762ccfa9d460f29929a5f19304fe28a69271d0197d"
+    }
+  },
+  "platform": "p180",
+  "raw_inventory": {
+    "ADNI1-FIA": {
+      "non_baseline_records": null,
+      "participant_records": 827,
+      "participants": 807,
+      "participants_with_replicates": 20,
+      "plates": 11,
+      "qc_pool_records": 22,
+      "records": 849,
+      "visit_codes": null,
+      "visit_column": null
+    },
+    "ADNI1-UPLC": {
+      "non_baseline_records": null,
+      "participant_records": 827,
+      "participants": 807,
+      "participants_with_replicates": 20,
+      "plates": 11,
+      "qc_pool_records": 22,
+      "records": 849,
+      "visit_codes": null,
+      "visit_column": null
+    },
+    "ADNI2GO-FIA": {
+      "non_baseline_records": 0,
+      "participant_records": 905,
+      "participants": 874,
+      "participants_with_replicates": 16,
+      "plates": 12,
+      "qc_pool_records": 36,
+      "records": 941,
+      "visit_codes": {
+        "bl": 905
+      },
+      "visit_column": "VISCODE"
+    },
+    "ADNI2GO-UPLC": {
+      "non_baseline_records": 0,
+      "participant_records": 905,
+      "participants": 874,
+      "participants_with_replicates": 16,
+      "plates": 12,
+      "qc_pool_records": 36,
+      "records": 941,
+      "visit_codes": {
+        "bl": 905
+      },
+      "visit_column": "VISCODE"
+    }
+  },
+  "settings": {
+    "cli_equivalent": "clean_files -D <work> -P p180 -F BIOMARK.csv -L <work> --mmc 0.2 --mpc 0.2 --cv 0.2 --icc 0.65 --merge",
+    "cli_note": "<work> is a directory holding copies of the inputs listed under 'inputs'; clean_files writes P180.csv there",
+    "fasting_file": "BIOMARK.csv",
+    "lod_directory": "<work>",
+    "metabo_adni_steps": [
+      "read_files",
+      "remove_missing_metabolites",
+      "cross_plate_correction",
+      "remove_cv",
+      "remove_icc",
+      "remove_missing_participants",
+      "consolidate_replicates",
+      "remove_non_fasters",
+      "remove_bad_qc_tags",
+      "imputation",
+      "merge"
+    ],
+    "options": {
+      "cv": 0.2,
+      "icc": 0.65,
+      "log2": false,
+      "merge": true,
+      "mmc": 0.2,
+      "mpc": 0.2,
+      "remove_moutliers": false,
+      "residualize_meds": false,
+      "winsorize": false,
+      "zscore": false
+    }
+  },
+  "step": "clean",
+  "upstream_behaviours": {
+    "adni2go_uplc_lod_not_halved": {
+      "description": "transformations.imputation assigns ADNI2GO-UPLC missing values the LOD itself (the workbook's single row), not LOD/2",
+      "metabolites": 5,
+      "points": 262,
+      "points_in_merged_metabolites": 43
+    },
+    "medication_reader_baseline": {
+      "applies": false,
+      "description": "load.read_meds_file keeps the medication table's VISCODE2 == 'bl' rows, where most rows carry no class (classes are filled at 'sc'); --residualize-meds is off and clean does not read the medication table, so it does not apply here"
+    },
+    "multi_plate_lod_imputation": {
+      "description": "transformations.imputation loops over the plates of a metabolite's missing values and assigns each plate's LOD/2 to all of them, so every missing value of a metabolite whose missing values span more than one plate receives the last plate's LOD/2; counted over the four p180 tables before imputation",
+      "metabolites": 34,
+      "points": 1608
+    },
+    "replicates_averaged_across_visits": {
+      "description": "participants.consolidate_replicates averages every record of a participant, whatever its visit code; records at visits other than 'bl' per table, as read (None: no visit column)",
+      "non_baseline_records": {
+        "ADNI1-FIA": null,
+        "ADNI1-UPLC": null,
+        "ADNI2GO-FIA": 0,
+        "ADNI2GO-UPLC": 0
+      }
+    }
+  },
+  "value_summary": {
+    "below_one": 74720,
+    "median": 3.2001782652708144,
+    "metabolites_with_median_below_one": 46,
+    "missing": 0,
+    "negative": 0,
+    "share_below_one": 0.3528922809536404,
+    "smallest_positive": 0.0005,
+    "values": 211736,
+    "zero_metabolites": [],
+    "zeros": 0
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

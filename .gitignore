@@ -213,8 +213,13 @@ __marimo__/
 
 # Raw ADNI files, uploaded by hand (ADNI_DATA_ROOT, default data/).
 data/
-# Cleaned matrices written by metabo_adni: participant × metabolite, keyed by RID.
-results/cleaned/
+# Cleaned matrices written by metabo_adni (participant × metabolite, keyed by
+# RID), the p180 run table and metabo_adni's log. Only each platform's
+# clean_manifest.json stays: git cannot re-include a file inside an excluded
+# directory, so the platform directories are re-included first.
+results/cleaned/**
+!results/cleaned/*/
+!results/cleaned/*/clean_manifest.json
 # Cohort table: one row per participant. Only the counts and the manifest stay.
 results/cohort/*.csv
 !results/cohort/stage_counts.csv
