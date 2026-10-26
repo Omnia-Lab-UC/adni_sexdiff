@@ -21,7 +21,7 @@ Project layout:
 
 ```
 .
-├── data/            # raw ADNI files, uploaded by hand (gitignored, never committed)
+├── data/            # raw ADNI files, uploaded by hand: LONI archive under Metabolomics/, metabo_adni names as symlinks (gitignored)
 ├── reports/         # committed case-study reports (numbers pasted from results/, checked by script)
 ├── results/         # pipeline outputs; only aggregate files are committed (see .gitignore)
 ├── scripts/         # sync_results.sh (aggregate outputs between workstation and cluster)

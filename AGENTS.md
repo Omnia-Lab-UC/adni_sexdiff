@@ -109,10 +109,18 @@ behavior or defaults change.
 - Data lives on the workstations and on `cluster.ing.uc.cl` only: never in a
   cloud service, never in a public bucket, never in a chat or an artifact.
 - There is no download step: LONI needs a login, so the raw ADNI files are
-  uploaded by hand into the data root with their original names. The
-  canonical copy is `/home1/tgonza/adni_sexdiff/data` on the cluster; the
-  data root is an explicit flag (`--data-root`) → `ADNI_DATA_ROOT` →
-  `data/`. Machines differ only by this value.
+  uploaded by hand into the data root. The canonical copy is
+  `/home1/tgonza/adni_sexdiff/data` on the cluster; the data root is an
+  explicit flag (`--data-root`) → `ADNI_DATA_ROOT` → `data/`. Machines
+  differ only by this value.
+- Data root layout: `<root>/Metabolomics/` is the archive as downloaded
+  from LONI (dated file names such as `_10Jul2024`, data dictionaries,
+  methods documents, the supplement zips with the p180 LOD workbooks
+  extracted into `Metabolomics/p180/LOD/`, later layers such as
+  `quant500/`); the flat top level of `<root>` holds the exact names
+  metabo_adni expects as relative symlinks into that archive (the list is
+  under "Data & domain notes"). Replicate a root with `rsync -a` (symlinks
+  preserved); never rename the archive files.
 - Only aggregate outputs move between machines, with
   `scripts/sync_results.sh` (rsync of `results/` excluding every
   participant-level file; pull by default, `--push` to reverse). Never copy
@@ -227,7 +235,27 @@ behavior or defaults change.
   `4610 UPLC p180 Data.xlsx`, `4610 FIA p180 Data.xlsx`;
   `read_lod_files`); `ADNINIGHTINGALE2.csv`; the fasting file `BIOMARK.csv`
   (`RID`, `VISCODE2`, `BIFAST`; baseline rows); for `--residualize-meds`
-  only, `ADMCPATIENTDRUGCLASSES_20170512.csv`. Do not rename them. The clinical tables the cohort step reads
+  only, `ADMCPATIENTDRUGCLASSES_20170512.csv`. Do not rename them. In the data
+  root these are symlinks to the dated LONI downloads under
+  `Metabolomics/` (the LOD workbooks come from
+  `ADMCDUKEP180SUPP_20170410.zip` and `ADMC_supplement.zip`).
+  metabo_adni skips an absent concentration file silently but reads all
+  four LOD workbooks unconditionally.
+- Known raw-file defect (LONI's own export, confirmed 2026-10-26):
+  LONI's `ADMCDUKEP180UPLCADNI2GO.csv` lacks its final byte, the closing
+  double quote of the last record's `update_stamp` field, so pandas' C
+  parser (which metabo_adni uses) fails with "EOF inside string". The
+  timestamp and every metabolite value of that record are complete. The
+  archive copy under `Metabolomics/p180/` carries the repair, applied by
+  hand on 2026-10-26 (a `"` and a newline appended; it parses as 941 × 67
+  like its FIA sibling). Hashes: LONI's bytes
+  `f28ede9aa70e02d2c8bf4ef2b3f4873a217675e424cd2498e4dd3f43d03df326`,
+  the repaired file
+  `7ad17d63eed26368a3e51254c942e9c2f39890d43decda37f7b1a2ade38de3a6`.
+  `clean` records the file's sha256 in `clean_manifest.json` and names
+  this repair when the hash is the repaired one; a fresh LONI download
+  must be repaired the same way before it is put in the archive. The
+  clean proposal states this rule. The clinical tables the cohort step reads
   (diagnosis, demographics, covariate sources) are named by the cohort
   proposal and uploaded the same way.
 - `RID` is ADNI's participant key (`constants.PARTICIPANT_ID_COLUMN`). Any

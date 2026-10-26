@@ -89,8 +89,9 @@ def run_clean(
     platform:
         ``"p180"``, ``"nmr"`` or ``"all"`` (``constants.PLATFORMS``).
     data_root:
-        Directory holding the raw ADNI files under their original LONI
-        names, as metabo_adni's ``load.read_files`` expects them (p180:
+        Directory holding, flat at its top level, the raw ADNI files under
+        the names metabo_adni's ``load.read_files`` expects (symlinks to the
+        dated LONI downloads under ``<root>/Metabolomics/``; p180:
         ``ADMCDUKEP180UPLC_01_15_16.csv``, ``ADMCDUKEP180FIA_01_15_16.csv``,
         ``ADMCDUKEP180UPLCADNI2GO.csv``, ``ADMCDUKEP180FIAADNI2GO.csv`` plus
         the p180 LOD workbooks its ``read_lod_files`` names; NMR:
@@ -115,7 +116,11 @@ def run_clean(
     read) and is never reimplemented here: the step runs metabo_adni's
     ``clean_files`` pipeline with the options of the (undecided) constant
     ``CLEAN_OPTIONS`` for the platform, in a working copy, since metabo_adni
-    changes into the data directory and writes its cleaned files there.
+    changes into the data directory and writes its cleaned files there. The
+    manifest records every input file's sha256 and names the known
+    raw-file repairs it recognises by hash (today one: the closing quote
+    LONI's ``ADMCDUKEP180UPLCADNI2GO.csv`` lacks, appended by hand in the
+    archive copy; see ``AGENTS.md``).
     Output contract per platform: metabo_adni's cleaned files under the
     names it gives them (``<cohort>-<kit>.csv`` for p180, ``NMR.csv`` for
     NMR; participant × metabolite, keyed by ``RID``, participant-level and
