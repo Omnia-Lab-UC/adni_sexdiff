@@ -26,11 +26,12 @@ Scientific constants
     predeclared as a sensitivity arm of the change
     ``adni-latent-sensitivity``) and ``READING_RULES`` (the binding reading
     rules every reader of the result carries), by the change
-    ``adni-analyze``. The others are undecided and not defined; the names
-    reserved for them (a proposal may rename them) are:
-
-    - ``DIAGNOSTIC_VARIABLES``, ``DIAGNOSTIC_CORRELATION_THRESHOLD`` – the
-      axis diagnostics' variables and reporting flag.
+    ``adni-analyze``; ``DIAGNOSTIC_VARIABLES`` (the eight variables the axis
+    diagnostics correlate the latent and block axes with, their sources and
+    codings) and ``DIAGNOSTIC_CORRELATION_THRESHOLD`` (the reporting flag on
+    |rho|, never an adoption rule), by the change ``adni-axis-diagnostics``.
+    Every scientific constant the six steps need is decided; a later variant
+    or arm introduces its own by proposal.
 """
 
 from __future__ import annotations
@@ -96,6 +97,7 @@ ANALYSIS_SUMMARY = "summary.md"
 DIAGNOSTICS_AXIS_CORRELATIONS = "axis_correlations.csv"
 DIAGNOSTICS_BLOCK_PCS = "block_pcs.csv"
 DIAGNOSTICS_GEOMETRY_SHARES = "geometry_shares.csv"
+DIAGNOSTICS_COMPONENTS = "components.csv"
 DIAGNOSTICS_SUMMARY = "diagnostics.md"
 DIAGNOSTICS_MANIFEST = "diagnostics_manifest.json"
 #: ``report``: ``<REPORTS_DIR>/motco-adni-<date>.md``.
@@ -659,3 +661,142 @@ ANALYSIS_EXPECTED_COUNTS: dict[str, dict | int | str | tuple] = {
     "min_components": ANALYSIS_RANK_FLOOR,
     "permutations": ANALYSIS_PERMUTATIONS,
 }
+
+
+# --- axis-diagnostics: scientific constants ----------------------------------
+
+#: Decided by the change ``adni-axis-diagnostics`` (2026-10-27, before any
+#: run) and never chosen or extended from a result. The variables every
+#: latent component and block principal component is correlated with, each
+#: with its source among the kept outputs (``file``), the column read and the
+#: derivation. A variable's value is the column as is when the entry has no
+#: ``levels`` (``age``, ``education``: years) and the 0-based index of the
+#: value in ``levels`` when it has (``apoe4`` and ``statin`` keep their
+#: integers; ``phase``, ``stage``, ``male`` and ``dx_bl`` become ordinals); a
+#: value outside ``levels`` stops the step naming the column and a count.
+#: The five covariates are read as the analysis codes them (``covariates.csv``);
+#: ``stage`` and ``male`` are the design (``metadata.csv``); ``dx_bl`` is the
+#: enrollment category ``STAGE_RULE`` merged (``cohort.csv``), read so that
+#: the tables show whether a component separates SMC from CN or EMCI from
+#: LMCI, which the stage does not, and because SMC and EMCI exist only in
+#: ADNI-GO/2 (a phase axis is also a ``dx_bl`` axis). The tables keep this
+#: order. Never changed by a flag, a result or a count.
+DIAGNOSTIC_VARIABLES: dict[str, dict] = {
+    "age": {"file": EXPORT_COVARIATES, "column": "age", "derivation": "as exported (years)"},
+    "education": {"file": EXPORT_COVARIATES, "column": "education", "derivation": "as exported (years)"},
+    "apoe4": {
+        "file": EXPORT_COVARIATES,
+        "column": "apoe4",
+        "levels": (0, 1, 2),
+        "derivation": "APOE e4 allele count 0 / 1 / 2, read as ordinal",
+    },
+    "phase": {
+        "file": EXPORT_COVARIATES,
+        "column": "phase",
+        "levels": ("ADNI1", "ADNI2GO"),
+        "derivation": "1 for ADNI2GO, 0 for ADNI1 (the p180 run; the design column phase[ADNI2GO])",
+    },
+    "statin": {
+        "file": EXPORT_COVARIATES,
+        "column": "statin",
+        "levels": (0, 1),
+        "derivation": "1 for a statin user at sc, 0 otherwise",
+    },
+    "stage": {
+        "file": EXPORT_METADATA,
+        "column": STAGE_COLUMN,
+        "levels": STAGE_LABELS,
+        "derivation": "ordinal CN 0, MCI 1, AD 2",
+    },
+    "male": {
+        "file": EXPORT_METADATA,
+        "column": GROUP_COLUMN,
+        "levels": GROUP_VALUES,
+        "derivation": "1 for Male, 0 for Female",
+    },
+    "dx_bl": {
+        "file": COHORT_TABLE,
+        "column": "dx_bl",
+        "levels": ("CN", "SMC", "EMCI", "LMCI", "AD"),
+        "derivation": "ordinal CN 0, SMC 1, EMCI 2, LMCI 3, AD 4 (ADNI's enrollment gradient)",
+    },
+}
+#: Decided by the change ``adni-axis-diagnostics``: a reporting flag on
+#: |Spearman rho|, raw and partial, for latent components and block PCs
+#: alike. It reads magnitude, not significance (no p-value is attached to any
+#: correlation; at n = 1501 the sampling SD of rho under independence is
+#: about 0.026), and it is not an adoption rule: nothing is chosen from a
+#: flagged row. Never changed by a flag, a result or a count.
+DIAGNOSTIC_CORRELATION_THRESHOLD = 0.3
+
+# --- axis-diagnostics: conventions and predeclared counts ---------------------
+
+#: Principal components correlated per z-scored block (the export recorded
+#: PC1 and PC2 against phase; three keeps the next one).
+DIAGNOSTIC_N_BLOCK_PCS = 3
+#: The conditioning set of the partial correlations: the six design columns
+#: of the record, exactly the covariate design of the stage-means model
+#: (numeric covariates as is, drop-first indicators ``<name>[<level>]`` for
+#: the categorical ones), so a partial reads as what the model's adjustment
+#: leaves. Built from ``covariates.csv`` with the codings the export manifest
+#: records and checked, by name and by column mean, against the record.
+DIAGNOSTIC_CONDITIONING_COLUMNS: tuple[str, ...] = tuple(ANALYSIS_EXPECTED_COUNTS["design_columns"])
+#: Every analysis file ``axis-diagnostics`` reads, by name in the analysis
+#: directory. No other file is read there.
+DIAGNOSTICS_ANALYSIS_FILES: tuple[str, ...] = (
+    ANALYSIS_RESULT,
+    ANALYSIS_LATENT_SCORES,
+    ANALYSIS_STAGE_MEANS,
+    ANALYSIS_PLS_LOADINGS,
+    ANALYSIS_MANIFEST,
+)
+#: The trajectory-geometry quantities of ``geometry_shares.csv``, from
+#: ``stage_means.csv``, with their definitions (groups in ``GROUP_VALUES``
+#: order, stages in ``STAGE_LABELS`` order).
+DIAGNOSTICS_GEOMETRY_QUANTITIES: dict[str, str] = {
+    "net_displacement": "a sex's net displacement (last stage mean minus first stage mean; what angle reads)",
+    "sex_difference_by_stage": (
+        "the per-stage sex-difference vectors (first group minus second, Female minus Male), squares summed over stages"
+    ),
+    "sex_difference_centred": (
+        "the per-stage sex-difference vectors minus their mean over stages, squares summed over stages"
+    ),
+}
+
+#: Predeclared by the change ``adni-axis-diagnostics`` from the committed
+#: export, cohort and analysis manifests (none from a diagnostic run): the
+#: exported participants and their sex × stage cells, the variable names in
+#: declared order, the conditioning columns under the record's names, the
+#: blocks with their features and PCs, and, for the primary analysis only,
+#: its CV-selected rank, selection mode, latent adjustment and ``n_jobs`` and
+#: the rows the four tables hold at that rank (8 × 8, 2 × 3 × 8, 4 × 8, 8).
+#: ``axis-diagnostics`` compares its observed counts with these and records
+#: every difference as a finding; a difference never stops the step and never
+#: changes a constant. On an arm (``--analysis-dir``, or a recorded latent
+#: adjustment) the ``primary`` and ``rows`` keys are not expected.
+DIAGNOSTICS_EXPECTED_COUNTS: dict[str, dict | int | tuple] = {
+    "participants": 1501,
+    "sex_stage": {"Female": {"CN": 237, "MCI": 310, "AD": 125}, "Male": {"CN": 223, "MCI": 448, "AD": 158}},
+    "variables": tuple(DIAGNOSTIC_VARIABLES),
+    "conditioning_columns": DIAGNOSTIC_CONDITIONING_COLUMNS,
+    "blocks": {
+        "p180": {"features": 133, "pcs": DIAGNOSTIC_N_BLOCK_PCS},
+        "nmr": {"features": 165, "pcs": DIAGNOSTIC_N_BLOCK_PCS},
+    },
+    "primary": {
+        "selected_rank": 8,
+        "component_selection": "cv",
+        "latent_adjustment": ANALYSIS_LATENT_ADJUSTMENT,
+        "n_jobs": REPORTED_N_JOBS,
+    },
+    "rows": {"axis_correlations": 64, "block_pcs": 48, "geometry_shares": 32, "components": 8},
+}
+#: The keys of ``DIAGNOSTICS_EXPECTED_COUNTS`` that do not depend on the
+#: analysis read being the primary; the others are skipped on an arm.
+DIAGNOSTICS_RANK_INDEPENDENT_KEYS: tuple[str, ...] = (
+    "participants",
+    "sex_stage",
+    "variables",
+    "conditioning_columns",
+    "blocks",
+)

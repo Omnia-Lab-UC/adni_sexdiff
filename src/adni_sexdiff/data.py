@@ -1,13 +1,14 @@
 """Pipeline steps of adni_sexdiff.
 
 ``clean`` (change ``adni-metabolomics-clean``), ``cohort`` (change
-``adni-cohort``), ``export`` (change ``adni-export``) and ``analyze``
-(change ``adni-analyze``) are implemented. Every other step is a stub: its
+``adni-cohort``), ``export`` (change ``adni-export``), ``analyze`` (change
+``adni-analyze``) and ``axis-diagnostics`` (change
+``adni-axis-diagnostics``) are implemented. ``report`` is a stub: its
 docstring states the inputs it reads, the files it writes and the contract
 of those files, and its body raises ``NotImplementedError`` until an
-OpenSpec change implements it. The statistical choices the remaining steps
-need (the diagnostic variables and threshold) are undecided and enter only
-through a proposal (see ``constants``).
+OpenSpec change implements it. Every scientific constant the steps need is
+decided and lives in ``constants``; a variant or arm enters only through a
+proposal.
 
 The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_known_repairs``), the version gates (``check_metabo_adni_version``,
@@ -53,10 +54,13 @@ from .constants import (
     ANALYSIS_MISSING_COVARIATES,
     ANALYSIS_MOTCO_MIN_VERSION,
     ANALYSIS_PERMUTATIONS,
+    ANALYSIS_PLS_LOADINGS,
     ANALYSIS_PREDECLARED_LATENT_SENSITIVITY,
     ANALYSIS_RANK_FLOOR,
     ANALYSIS_REJECTION_RULE,
+    ANALYSIS_RESULT,
     ANALYSIS_SEED,
+    ANALYSIS_STAGE_MEANS,
     ANALYSIS_STATISTICS,
     ANALYSIS_SUMMARY,
     CLEAN_EXPECTED_COUNTS,
@@ -79,6 +83,21 @@ from .constants import (
     COHORT_TABLE,
     DATA_ROOT_ENV,
     DEFAULT_DATA_ROOT,
+    DIAGNOSTIC_CONDITIONING_COLUMNS,
+    DIAGNOSTIC_CORRELATION_THRESHOLD,
+    DIAGNOSTIC_N_BLOCK_PCS,
+    DIAGNOSTIC_VARIABLES,
+    DIAGNOSTICS_ANALYSIS_FILES,
+    DIAGNOSTICS_AXIS_CORRELATIONS,
+    DIAGNOSTICS_BLOCK_PCS,
+    DIAGNOSTICS_COMPONENTS,
+    DIAGNOSTICS_DIR,
+    DIAGNOSTICS_EXPECTED_COUNTS,
+    DIAGNOSTICS_GEOMETRY_QUANTITIES,
+    DIAGNOSTICS_GEOMETRY_SHARES,
+    DIAGNOSTICS_MANIFEST,
+    DIAGNOSTICS_RANK_INDEPENDENT_KEYS,
+    DIAGNOSTICS_SUMMARY,
     EXPORT_BLOCKS,
     EXPORT_COVARIATE_COLUMNS,
     EXPORT_COVARIATES,
@@ -1909,7 +1928,7 @@ def check_motco_rank_floor() -> int:
     return ANALYSIS_RANK_FLOOR
 
 
-def _load_analysis_inputs(input_dir: Path) -> dict:
+def _load_analysis_inputs(input_dir: Path, *, step: str = "analyze") -> dict:
     """Read the export outputs, check them against the export manifest and build the model's metadata table.
 
     Returns ``blocks`` (platform → participants × features, indexed by
@@ -1925,6 +1944,8 @@ def _load_analysis_inputs(input_dir: Path) -> dict:
     ``sex`` outside ``GROUP_VALUES``, a ``stage`` outside ``STAGE_LABELS``, a
     categorical covariate outside its levels, a non-finite numeric covariate,
     a missing covariate value, a non-numeric or non-finite block cell.
+    ``step`` names the calling step in those messages (``analyze``, or
+    ``axis-diagnostics``, which reads the same export).
     """
     if not input_dir.is_dir():
         raise FileNotFoundError(f"{input_dir} does not exist; run `adni-sexdiff export` first")
@@ -1997,7 +2018,7 @@ def _load_analysis_inputs(input_dir: Path) -> dict:
                 f"{EXPORT_MANIFEST} records for {platform}"
             )
     if problems:
-        raise ValueError("analyze stops before writing anything: " + "; ".join(problems))
+        raise ValueError(f"{step} stops before writing anything: " + "; ".join(problems))
 
     ids = {
         EXPORT_METADATA: meta[SAMPLE_COLUMN].tolist(),
@@ -2009,7 +2030,7 @@ def _load_analysis_inputs(input_dir: Path) -> dict:
         if n_dup:
             problems.append(f"{name}: {n_dup} duplicated {SAMPLE_COLUMN} value(s)")
     if problems:
-        raise ValueError("analyze stops before writing anything: " + "; ".join(problems))
+        raise ValueError(f"{step} stops before writing anything: " + "; ".join(problems))
     reference = ids[EXPORT_METADATA]
     reference_set = set(reference)
     for name, values in ids.items():
@@ -2025,7 +2046,7 @@ def _load_analysis_inputs(input_dir: Path) -> dict:
         else:
             problems.append(f"{EXPORT_METADATA} and {name} list the same participants in a different order")
     if problems:
-        raise ValueError("analyze stops before writing anything: " + "; ".join(problems))
+        raise ValueError(f"{step} stops before writing anything: " + "; ".join(problems))
 
     for column, allowed in ((GROUP_COLUMN, GROUP_VALUES), (STAGE_COLUMN, STAGE_LABELS)):
         outside = ~meta[column].isin(allowed)
@@ -2062,7 +2083,7 @@ def _load_analysis_inputs(input_dir: Path) -> dict:
         if n_bad:
             problems.append(f"{platform}.csv: {n_bad} missing or non-finite cell(s); nothing is imputed")
     if problems:
-        raise ValueError("analyze stops before writing anything: " + "; ".join(problems))
+        raise ValueError(f"{step} stops before writing anything: " + "; ".join(problems))
 
     merged = meta.merge(cov, on=SAMPLE_COLUMN, how="inner", validate="one_to_one")
     merged = merged[[SAMPLE_COLUMN, GROUP_COLUMN, STAGE_COLUMN, *ANALYSIS_COVARIATES]]
@@ -2627,6 +2648,801 @@ def run_analysis(
     return {"dir": final, "record": record, "manifest": manifest, "findings": findings}
 
 
+# --- axis-diagnostics -----------------------------------------------------------
+
+#: The columns of the four diagnostic tables, in order.
+_DIAGNOSTICS_AXIS_COLUMNS: tuple[str, ...] = (
+    "component", "component_sd", "variable", "source", "n", "spearman", "n_partial", "partial_spearman",
+    "flag_raw", "flag_partial",
+)
+_DIAGNOSTICS_PC_COLUMNS: tuple[str, ...] = (
+    "block", "component", "variance_share", "variable", "source", "n", "spearman", "n_partial",
+    "partial_spearman", "flag_raw", "flag_partial",
+)
+_DIAGNOSTICS_GEOMETRY_COLUMNS: tuple[str, ...] = ("quantity", "component", "value", "along", "total", "share")
+_DIAGNOSTICS_COMPONENT_COLUMNS: tuple[str, ...] = (
+    "component", "sd", *(f"loading_share_{p}" for p in EXPORT_BLOCKS), "n_flagged_raw", "n_flagged_partial",
+    "top_variable", "top_spearman",
+)
+#: The definition of every statistic the diagnostic writes, recorded in its manifest.
+_DIAGNOSTICS_DEFINITIONS: dict[str, str | dict] = {
+    "spearman": "scipy.stats.spearmanr over the participants with both values finite (n recorded); undefined "
+    "(empty) with fewer than three such rows or a constant",
+    "partial_spearman": "Spearman correlation of the OLS residuals of the component and the variable on an intercept "
+    f"and the {len(DIAGNOSTIC_CONDITIONING_COLUMNS)} design columns of the record, over the participants complete in "
+    "all; undefined (empty) for a variable in the span of the conditioning set, as each analysis covariate is",
+    "component_sd": "sample SD (ddof 1) of the component's latent scores over the exported participants",
+    "flag": f"|rho| >= DIAGNOSTIC_CORRELATION_THRESHOLD ({DIAGNOSTIC_CORRELATION_THRESHOLD}), raw and partial "
+    "separately; a reporting threshold, not an adoption rule; no p-value",
+    "block_pcs": f"SVD of the block z-scored with the population SD; the first {DIAGNOSTIC_N_BLOCK_PCS} components' "
+    "scores U S, each sign fixed so that its largest-magnitude loading is positive; variance_share = s^2 / sum s^2 "
+    "over all components",
+    "pc1_phase": "Spearman correlation of each block's pc1 with the phase variable, recorded beside the export "
+    "manifest's abs_corr_pc1_phase (Pearson, first left-singular vector against the ADNI1 indicator) as a "
+    "cross-check with no agreement threshold",
+    "geometry": DIAGNOSTICS_GEOMETRY_QUANTITIES,
+    "geometry_share": "squared length along the component over the squared length over all components, from "
+    "stage_means.csv",
+    "loading_share": "per component, the sum of the squared pls_loadings.csv entries (MOTCO's x_rotations_ on the "
+    "z-scored joint features) over a block's rows, over the sum over all rows; the blocks enter MOTCO unweighted",
+}
+
+
+def spearman(x, y) -> tuple[float, int]:
+    """Spearman correlation over the pairwise-complete values.
+
+    Parameters
+    ----------
+    x, y:
+        The two variables, one value per participant.
+
+    Returns
+    -------
+    (float, int)
+        The correlation and the number of rows finite in both; NaN with
+        fewer than three such rows or a constant.
+    """
+    import warnings
+
+    from scipy.stats import spearmanr
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    n = int(ok.sum())
+    if n < 3 or np.ptp(x[ok]) == 0 or np.ptp(y[ok]) == 0:
+        return float("nan"), n
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        rho = spearmanr(x[ok], y[ok]).statistic
+    return float(rho), n
+
+
+def partial_spearman(x, y, z) -> tuple[float, int]:
+    """Spearman correlation of the OLS residuals of ``x`` and ``y`` on an intercept and ``z``.
+
+    Parameters
+    ----------
+    x, y:
+        The two variables.
+    z:
+        Conditioning variables, participants × columns.
+
+    Returns
+    -------
+    (float, int)
+        The partial correlation and the number of rows complete in all
+        three; NaN when fewer than ``z.shape[1] + 3`` rows are complete or
+        when a variable lies in the span of the conditioning set (its
+        residual is numerically zero, as for an analysis covariate itself).
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    z = np.asarray(z, dtype=float)
+    if z.ndim == 1:
+        z = z[:, None]
+    ok = np.isfinite(x) & np.isfinite(y) & np.all(np.isfinite(z), axis=1)
+    n = int(ok.sum())
+    if n < z.shape[1] + 3:
+        return float("nan"), n
+    design = np.column_stack([np.ones(n), z[ok]])
+    residuals = []
+    for v in (x[ok], y[ok]):
+        beta = np.linalg.lstsq(design, v, rcond=None)[0]
+        r = v - design @ beta
+        if np.std(r) <= 1e-8 * max(np.std(v), np.finfo(float).tiny):
+            return float("nan"), n
+        residuals.append(r)
+    return spearman(residuals[0], residuals[1])[0], n
+
+
+def block_principal_components(values: pd.DataFrame, *, n_components: int = DIAGNOSTIC_N_BLOCK_PCS) -> dict:
+    """Principal components of a z-scored block (population SD).
+
+    Parameters
+    ----------
+    values:
+        Participants × features (one exported block).
+    n_components:
+        Components returned.
+
+    Returns
+    -------
+    dict
+        ``scores`` (participants × ``pc1..``, the SVD scores ``U S``),
+        ``loadings`` (features × ``pc1..``, the right-singular vectors),
+        ``variance_share`` per component (``s² / Σ s²`` over all
+        components) and ``n_features``. Each component's sign is fixed so
+        that its largest-magnitude loading is positive. A constant feature
+        is left at zero.
+    """
+    x = np.asarray(values, dtype=float)
+    mu = x.mean(axis=0)
+    sd = x.std(axis=0, ddof=0)
+    sd = np.where(sd > 0, sd, 1.0)
+    zed = (x - mu) / sd
+    u, s, vt = np.linalg.svd(zed, full_matrices=False)
+    k = min(n_components, s.size)
+    scores = u[:, :k] * s[:k]
+    loadings = vt[:k].T.copy()
+    for j in range(k):
+        lead = np.argmax(np.abs(loadings[:, j]))
+        if loadings[lead, j] < 0:
+            scores[:, j] = -scores[:, j]
+            loadings[:, j] = -loadings[:, j]
+    share = (s**2) / float((s**2).sum()) if s.size else np.array([])
+    cols = [f"pc{j + 1}" for j in range(k)]
+    return {
+        "scores": pd.DataFrame(scores, index=values.index, columns=cols),
+        "loadings": pd.DataFrame(loadings, index=values.columns, columns=cols),
+        "variance_share": {c: float(share[j]) for j, c in enumerate(cols)},
+        "n_features": int(x.shape[1]),
+    }
+
+
+def _pls_columns(frame: pd.DataFrame) -> list[str]:
+    """The ``pls_k`` columns of a MOTCO table, in component order."""
+    comps = [str(c) for c in frame.columns if re.fullmatch(r"pls_\d+", str(c))]
+    return sorted(comps, key=lambda c: int(c.split("_")[1]))
+
+
+def geometry_shares(stage_means: pd.DataFrame, *, groups: Iterable[str], stages: Iterable[str]) -> list[dict]:
+    """Share of each trajectory-geometry vector's squared length along each latent component.
+
+    Parameters
+    ----------
+    stage_means:
+        MOTCO's ``stage_means.csv`` (``group``, ``stage``, ``pls_k`` columns).
+    groups, stages:
+        The group and stage levels in order (the record's ``design``).
+
+    Returns
+    -------
+    list[dict]
+        One row per quantity and component (``DIAGNOSTICS_GEOMETRY_QUANTITIES``:
+        ``net_displacement_<group>`` per group, ``sex_difference_by_stage``,
+        ``sex_difference_centred``): ``quantity``, ``component``, ``value``
+        (the signed component of a single vector; NaN for the summed
+        quantities), ``along`` (the squared length along the component),
+        ``total`` (the squared length over all components) and ``share`` =
+        ``along / total``. The shares of one quantity sum to 1.
+    """
+    groups, stages = [str(g) for g in groups], [str(s) for s in stages]
+    comps = _pls_columns(stage_means)
+    sm = stage_means.copy()
+    sm["group"] = sm["group"].astype(str)
+    sm["stage"] = sm["stage"].astype(str)
+    means = {}
+    for g in groups:
+        for st in stages:
+            rows = sm.loc[(sm["group"] == g) & (sm["stage"] == st), comps]
+            if len(rows) != 1:
+                raise ValueError(f"{ANALYSIS_STAGE_MEANS}: {len(rows)} row(s) for group {g!r}, stage {st!r}, expected 1")
+            means[(g, st)] = rows.to_numpy(dtype=float).ravel()
+    quantities: dict[str, list[np.ndarray]] = {}
+    for g in groups:
+        quantities[f"net_displacement_{g}"] = [means[(g, stages[-1])] - means[(g, stages[0])]]
+    diffs = [means[(groups[0], st)] - means[(groups[1], st)] for st in stages]
+    quantities["sex_difference_by_stage"] = diffs
+    centre = np.mean(diffs, axis=0)
+    quantities["sex_difference_centred"] = [d - centre for d in diffs]
+    rows = []
+    for name, vectors in quantities.items():
+        total = float(sum((v**2).sum() for v in vectors))
+        for j, c in enumerate(comps):
+            along = float(sum(v[j] ** 2 for v in vectors))
+            rows.append({
+                "quantity": name,
+                "component": c,
+                "value": float(vectors[0][j]) if len(vectors) == 1 else float("nan"),
+                "along": along,
+                "total": total,
+                "share": along / total if total > 0 else float("nan"),
+            })
+    return rows
+
+
+def block_loading_shares(loadings: pd.DataFrame, blocks: Iterable[str]) -> dict[str, dict[str, float]]:
+    """Share of each component's squared ``pls_loadings.csv`` entries held by each block.
+
+    Parameters
+    ----------
+    loadings:
+        MOTCO's ``pls_loadings.csv`` (``block``, ``feature``, ``pls_k``
+        columns: ``x_rotations_`` on the z-scored joint features).
+    blocks:
+        The block names in order.
+
+    Returns
+    -------
+    dict
+        ``pls_k`` → ``{block: share}``, the sum of the squared entries over
+        the block's rows over the sum over all rows; the shares of one
+        component sum to 1.
+    """
+    comps = _pls_columns(loadings)
+    sq = loadings[comps].to_numpy(dtype=float) ** 2
+    which = loadings["block"].astype(str).to_numpy()
+    totals = sq.sum(axis=0)
+    return {
+        c: {
+            b: float(sq[which == b, j].sum() / totals[j]) if totals[j] > 0 else float("nan")
+            for b in blocks
+        }
+        for j, c in enumerate(comps)
+    }
+
+
+def _diagnostic_variables(frame: pd.DataFrame, spec: dict[str, dict] = DIAGNOSTIC_VARIABLES) -> pd.DataFrame:
+    """The participants × variables table under ``DIAGNOSTIC_VARIABLES``.
+
+    ``frame`` holds one row per exported participant in export order with
+    every source column the variables name (the loader's merged frame joined
+    with ``dx_bl``). A variable is its column as is (numeric) when the entry
+    has no ``levels``, and the 0-based index of the value in ``levels`` when
+    it has. A value outside the levels, or an absent column, stops the step
+    naming the column and a count, never a participant.
+    """
+    problems: list[str] = []
+    out: dict[str, np.ndarray] = {}
+    for name, entry in spec.items():
+        column = entry["column"]
+        if column not in frame.columns:
+            problems.append(f"{entry['file']}: column {column!r} absent (variable {name})")
+            continue
+        values = frame[column]
+        if "levels" in entry:
+            levels = [str(level) for level in entry["levels"]]
+            text = values.astype(str).where(values.notna(), other=None)
+            outside = ~text.isin(levels)
+            if outside.any():
+                problems.append(
+                    f"{entry['file']} {column}: {int(outside.sum())} value(s) outside its levels {levels}: "
+                    + _value_counts_text(values[outside])
+                )
+                continue
+            out[name] = text.map({level: float(i) for i, level in enumerate(levels)}).to_numpy(dtype=float)
+        else:
+            out[name] = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
+    if problems:
+        raise ValueError("axis-diagnostics stops before writing anything: " + "; ".join(problems))
+    return pd.DataFrame(out, columns=list(spec))
+
+
+def _conditioning_design(
+    frame: pd.DataFrame,
+    codings: dict[str, dict],
+    *,
+    expected_columns: Iterable[str] = DIAGNOSTIC_CONDITIONING_COLUMNS,
+    record_columns: Iterable[str] | None = None,
+    reference_row: dict[str, float] | None = None,
+    tolerance: float = 1e-9,
+) -> pd.DataFrame:
+    """The design columns of the stage-means model, built from the covariate columns of ``frame``.
+
+    A numeric covariate enters as is; a categorical one as drop-first
+    indicators in level order, named ``<name>[<level>]``, the first level
+    the reference (MOTCO's coding); the covariates are taken in the order
+    of ``codings`` (the caller passes them in ``ANALYSIS_COVARIATES``
+    order: the export manifest records them with sorted keys). The column
+    names must equal
+    ``expected_columns`` (``DIAGNOSTIC_CONDITIONING_COLUMNS``) and, when
+    given, ``record_columns`` (the record's ``design_columns``); each
+    column's mean must equal ``reference_row``'s entry (the record's pooled
+    mean) within ``tolerance``. Either difference stops the step naming the
+    column: the conditioning set is then the model's design, not a
+    reimplementation of it.
+    """
+    columns: dict[str, np.ndarray] = {}
+    for name, spec in codings.items():
+        values = frame[name]
+        if spec["coding"] == "categorical":
+            levels = [str(level) for level in spec["levels"]]
+            text = values.astype(str)
+            for level in levels[1:]:
+                columns[f"{name}[{level}]"] = (text == level).to_numpy(dtype=float)
+        else:
+            columns[name] = pd.to_numeric(values).to_numpy(dtype=float)
+    design = pd.DataFrame(columns)
+    names = list(design.columns)
+    for label, expected in (("DIAGNOSTIC_CONDITIONING_COLUMNS", expected_columns), ("the record's design_columns", record_columns)):
+        if expected is not None and names != [str(c) for c in expected]:
+            raise RuntimeError(
+                f"the conditioning design's columns {names} differ from {label} {[str(c) for c in expected]}; "
+                "the partial correlations condition on the model's design, so a differing design is a stop"
+            )
+    if reference_row is not None:
+        for col in names:
+            ref = reference_row.get(col)
+            mean = float(design[col].mean())
+            if ref is None or not np.isfinite(ref) or abs(mean - float(ref)) > tolerance:
+                raise RuntimeError(
+                    f"conditioning column {col}: mean {mean!r} differs from the record's reference_row entry {ref!r} "
+                    f"by more than {tolerance}; the design built from {EXPORT_COVARIATES} is not the model's"
+                )
+    return design
+
+
+def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) -> dict:
+    """Read the analysis directory and chain it to the export the loader read.
+
+    Parameters
+    ----------
+    input_dir, analysis_dir:
+        The export and analysis directories.
+    loaded:
+        ``_load_analysis_inputs(input_dir)``: the export files' observed
+        hashes, the merged metadata frame and the export manifest.
+
+    Returns
+    -------
+    dict
+        ``dir``, ``record`` (``result.json``), ``manifest``
+        (``analysis_manifest.json``), ``files`` (sha256 and bytes of each
+        ``DIAGNOSTICS_ANALYSIS_FILES`` entry), ``chain`` (export file →
+        ``True``), ``export_manifest_equals`` (``True``), ``rank``,
+        ``components`` (``pls_0`` … in order), ``scores`` (participants ×
+        components, indexed by ``rid`` as text, in export order),
+        ``stage_means`` and ``loadings`` as read.
+
+    Notes
+    -----
+    Stops, before anything is written and naming the file and both hashes or
+    both counts, never a participant: an absent directory or file (naming
+    ``adni-sexdiff analyze``); an input hash the analysis manifest records
+    that differs from the export file's sha256 now, or an export-manifest
+    hash that differs (the export was regenerated after the analysis); a
+    ``pls_`` column count in ``latent_scores.csv``, ``stage_means.csv`` or
+    ``pls_loadings.csv`` that differs from the record's selected rank; a
+    ``stage_means.csv`` without exactly one row per group × stage of the
+    record's design; a ``pls_loadings.csv`` whose (block, feature) rows are
+    not the export manifest's ``block_columns``, each once; a
+    ``latent_scores.csv`` whose ``rid`` set differs from the export's.
+    """
+    if not analysis_dir.is_dir():
+        raise FileNotFoundError(f"{analysis_dir} does not exist; run `adni-sexdiff analyze` first")
+    absent = [n for n in DIAGNOSTICS_ANALYSIS_FILES if not (analysis_dir / n).is_file()]
+    if absent:
+        raise FileNotFoundError(
+            f"{len(absent)} analysis file(s) absent from {analysis_dir}: " + ", ".join(repr(n) for n in absent)
+            + "; run `adni-sexdiff analyze` first"
+        )
+    manifest = json.loads((analysis_dir / ANALYSIS_MANIFEST).read_text())
+    record = json.loads((analysis_dir / ANALYSIS_RESULT).read_text())
+    recorded = manifest.get("inputs", {}).get("files", {})
+    chain: dict[str, bool] = {}
+    for name, entry in loaded["inputs"].items():
+        if name == EXPORT_MANIFEST:
+            continue
+        rec = recorded.get(name, {}).get("sha256")
+        if rec is None:
+            raise RuntimeError(f"{name}: {ANALYSIS_MANIFEST} records no input hash for it; rerun `adni-sexdiff analyze`")
+        if rec != entry["sha256"]:
+            raise RuntimeError(
+                f"{name}: sha256 {entry['sha256']} now differs from the hash {ANALYSIS_MANIFEST} records ({rec}); the "
+                "export was regenerated after the analysis, rerun `adni-sexdiff analyze`"
+            )
+        chain[name] = True
+    rec_manifest = manifest.get("inputs", {}).get("export_manifest", {}).get("sha256")
+    now_manifest = loaded["inputs"][EXPORT_MANIFEST]["sha256"]
+    if rec_manifest != now_manifest:
+        raise RuntimeError(
+            f"{EXPORT_MANIFEST}: sha256 {now_manifest} now differs from the hash {ANALYSIS_MANIFEST} records "
+            f"({rec_manifest}); the export was regenerated after the analysis, rerun `adni-sexdiff analyze`"
+        )
+
+    rank = int(record["latent"]["selected_lv"])
+    scores = pd.read_csv(analysis_dir / ANALYSIS_LATENT_SCORES)
+    stage_means = pd.read_csv(analysis_dir / ANALYSIS_STAGE_MEANS)
+    loadings = pd.read_csv(analysis_dir / ANALYSIS_PLS_LOADINGS)
+    problems: list[str] = []
+    components = [f"pls_{k}" for k in range(rank)]
+    for name, table in ((ANALYSIS_LATENT_SCORES, scores), (ANALYSIS_STAGE_MEANS, stage_means), (ANALYSIS_PLS_LOADINGS, loadings)):
+        comps = _pls_columns(table)
+        if comps != components:
+            problems.append(f"{name}: {len(comps)} pls_ column(s) but {ANALYSIS_RESULT} records selected rank {rank}")
+    design = record["design"]
+    groups = [str(g) for g in design["group_levels"]]
+    stages = [str(st) for st in design["stage_levels"]]
+    expected_rows = {(g, st) for g in groups for st in stages}
+    if {"group", "stage"} <= set(stage_means.columns):
+        seen_rows = list(zip(stage_means["group"].astype(str), stage_means["stage"].astype(str)))
+        n_missing = len(expected_rows - set(seen_rows))
+        if len(seen_rows) != len(expected_rows) or n_missing:
+            problems.append(
+                f"{ANALYSIS_STAGE_MEANS}: {len(seen_rows)} row(s), expected {len(expected_rows)} (one per group × stage of "
+                f"the record's design), {n_missing} cell(s) missing"
+            )
+    else:
+        problems.append(f"{ANALYSIS_STAGE_MEANS}: columns group and stage absent")
+    block_columns = loaded["export_manifest"].get("settings", {}).get("block_columns", {})
+    expected_feats = [(p, str(f)) for p in EXPORT_BLOCKS for f in block_columns.get(p, [])]
+    if {"block", "feature"} <= set(loadings.columns):
+        seen_feats = list(zip(loadings["block"].astype(str), loadings["feature"].astype(str)))
+        n_dup = len(seen_feats) - len(set(seen_feats))
+        only_loadings = len(set(seen_feats) - set(expected_feats))
+        only_export = len(set(expected_feats) - set(seen_feats))
+        if n_dup or only_loadings or only_export:
+            problems.append(
+                f"{ANALYSIS_PLS_LOADINGS}: {len(seen_feats)} (block, feature) row(s) differ from the {len(expected_feats)} "
+                f"block_columns {EXPORT_MANIFEST} records ({only_export} only in the export, {only_loadings} only in "
+                f"{ANALYSIS_PLS_LOADINGS}, {n_dup} duplicated)"
+            )
+    else:
+        problems.append(f"{ANALYSIS_PLS_LOADINGS}: columns block and feature absent")
+    rids = [str(r) for r in loaded["metadata"][SAMPLE_COLUMN]]
+    if SAMPLE_COLUMN in scores.columns:
+        seen_rids = [str(r) for r in scores[SAMPLE_COLUMN]]
+        n_dup = len(seen_rids) - len(set(seen_rids))
+        only_scores = len(set(seen_rids) - set(rids))
+        only_export = len(set(rids) - set(seen_rids))
+        if n_dup or only_scores or only_export:
+            problems.append(
+                f"{ANALYSIS_LATENT_SCORES}: {len(seen_rids)} participant(s) differ from the {len(rids)} of "
+                f"{EXPORT_METADATA} ({only_export} only in the export, {only_scores} only in {ANALYSIS_LATENT_SCORES}, "
+                f"{n_dup} duplicated)"
+            )
+    else:
+        problems.append(f"{ANALYSIS_LATENT_SCORES}: column {SAMPLE_COLUMN!r} absent")
+    if problems:
+        raise RuntimeError(
+            "axis-diagnostics stops before writing anything: " + "; ".join(problems)
+            + "; the analysis directory is not the one `adni-sexdiff analyze` wrote for this export, rerun it"
+        )
+    scores = scores.set_index(scores[SAMPLE_COLUMN].astype(str))[components].loc[rids]
+    files = {
+        name: {"sha256": _sha256_file(analysis_dir / name), "bytes": (analysis_dir / name).stat().st_size}
+        for name in DIAGNOSTICS_ANALYSIS_FILES
+    }
+    return {
+        "dir": analysis_dir,
+        "record": record,
+        "manifest": manifest,
+        "files": files,
+        "chain": chain,
+        "export_manifest_equals": True,
+        "rank": rank,
+        "components": components,
+        "scores": scores,
+        "stage_means": stage_means,
+        "loadings": loadings,
+    }
+
+
+def _check_cohort_chain(cohort_dir: Path, export_manifest: dict, rids: list[str]) -> dict:
+    """Check ``cohort.csv`` against its manifest, the manifest against the export's record, and the rows against the export.
+
+    Returns ``cohort`` (the rows with every platform flag, in file order),
+    ``manifest`` (the cohort manifest) and ``files`` (``cohort.csv`` with its
+    sha256 and ``equals_cohort_manifest``, ``cohort_manifest.json`` with its
+    sha256 and ``equals_export_manifest``). Stops, before anything is
+    written, on a ``cohort.csv`` whose hash differs from its manifest's
+    record (``_check_cohort_outputs``), a ``cohort_manifest.json`` whose
+    sha256 differs from the one the export manifest records (the cohort was
+    rerun after the export; names ``export``), and both-flag rows that are
+    not the exported participants in export order (counts only).
+    """
+    cohort_manifest, inputs, _ = _check_cohort_outputs(cohort_dir, {})
+    recorded = export_manifest.get("inputs", {}).get("cohort", {}).get("manifest", {}).get("sha256")
+    now = inputs["manifest"]["sha256"]
+    if recorded is None:
+        raise RuntimeError(f"{EXPORT_MANIFEST} records no hash for {COHORT_MANIFEST}; rerun `adni-sexdiff export`")
+    if recorded != now:
+        raise RuntimeError(
+            f"{COHORT_MANIFEST}: sha256 {now} now differs from the hash {EXPORT_MANIFEST} records ({recorded}); the "
+            "cohort was rerun after the export, rerun `adni-sexdiff export` (then analyze)"
+        )
+    cohort = pd.read_csv(cohort_dir / COHORT_TABLE)
+    absent = [c for c in (SAMPLE_COLUMN, *EXPORT_BLOCKS) if c not in cohort.columns]
+    if absent:
+        raise ValueError(f"{COHORT_TABLE}: column(s) absent: {', '.join(repr(c) for c in absent)}")
+    both = cohort[cohort[list(EXPORT_BLOCKS)].astype(bool).all(axis=1)].reset_index(drop=True)
+    seen = [str(r) for r in both[SAMPLE_COLUMN]]
+    if seen != rids:
+        only_cohort = len(set(seen) - set(rids))
+        only_export = len(set(rids) - set(seen))
+        detail = (
+            "the same participants in another order" if not only_cohort and not only_export and len(seen) == len(rids)
+            else f"{only_export} only in the export, {only_cohort} only in the cohort"
+        )
+        raise RuntimeError(
+            f"{COHORT_TABLE}: the {len(seen)} row(s) with every platform flag differ from the {len(rids)} exported "
+            f"participants of {EXPORT_METADATA} ({detail}); rerun `adni-sexdiff export` (then analyze)"
+        )
+    files = {
+        COHORT_TABLE: inputs["outputs"][COHORT_TABLE],
+        COHORT_MANIFEST: {"sha256": now, "equals_export_manifest": True},
+    }
+    return {"cohort": both, "manifest": cohort_manifest, "files": files}
+
+
+def _correlation_rows(scores: pd.DataFrame, variables: pd.DataFrame, z: np.ndarray, *, threshold: float) -> list[dict]:
+    """Raw and partial Spearman rows of every score column against every variable (declared order)."""
+    rows = []
+    for comp in scores.columns:
+        s = scores[comp].to_numpy(dtype=float)
+        sd = float(np.std(s, ddof=1)) if s.size > 1 else float("nan")
+        for var in variables.columns:
+            v = variables[var].to_numpy(dtype=float)
+            rho, n = spearman(s, v)
+            prho, n_partial = partial_spearman(s, v, z)
+            rows.append({
+                "component": str(comp),
+                "component_sd": sd,
+                "variable": str(var),
+                "n": n,
+                "spearman": rho,
+                "n_partial": n_partial,
+                "partial_spearman": prho,
+                "flag_raw": bool(np.isfinite(rho) and abs(rho) >= threshold),
+                "flag_partial": bool(np.isfinite(prho) and abs(prho) >= threshold),
+            })
+    return rows
+
+
+def _fmt_nan(value, spec: str = ".6g") -> str:
+    """``_fmt`` that also renders NaN as ``n/a``."""
+    if value is None or (isinstance(value, float) and not np.isfinite(value)):
+        return "n/a"
+    return format(value, spec)
+
+
+def _finite_or_none(value) -> float | None:
+    """A float for the manifest; ``None`` for NaN or infinity (JSON holds no NaN)."""
+    if value is None:
+        return None
+    value = float(value)
+    return value if np.isfinite(value) else None
+
+
+def render_axis_diagnostics(
+    tables: dict[str, pd.DataFrame],
+    *,
+    analysis: dict,
+    variables: dict[str, dict],
+    blocks: dict[str, dict],
+    findings: list[str],
+    threshold: float = DIAGNOSTIC_CORRELATION_THRESHOLD,
+) -> str:
+    """Render ``diagnostics.md`` from the four diagnostic tables.
+
+    Parameters
+    ----------
+    tables:
+        ``axis``, ``block_pcs``, ``geometry``, ``components`` as written to
+        the CSVs.
+    analysis:
+        The analysis read: ``dir``, ``rank``, ``selection``,
+        ``latent_adjustment``, ``n_jobs``, ``is_primary``, ``participants``.
+    variables:
+        ``DIAGNOSTIC_VARIABLES`` (name → ``file``, ``derivation``), in table
+        order.
+    blocks:
+        Per block (``EXPORT_BLOCKS`` order): ``features``,
+        ``variance_shares`` (per PC) and ``pc1_phase`` (``spearman`` here,
+        ``export_abs_corr_pearson`` as the export manifest recorded it).
+    findings:
+        The run's findings, listed before the reading rules.
+    threshold:
+        ``DIAGNOSTIC_CORRELATION_THRESHOLD``, named in the header.
+
+    Returns
+    -------
+    str
+        Markdown: a header stating what the tables are and are not; the
+        flagged correlations first (latent components, then block PCs, each
+        by |rho| descending); the component summary; the variable ×
+        component table with ``*`` on the flagged cells; one block-PC table
+        per block with the export's recorded PC1 phase correlation beside
+        the diagnostic's in the heading; the geometry shares; the analysis
+        read; the findings; ``READING_RULES`` verbatim. Correlations and
+        shares carry three decimals, SDs four significant digits.
+    """
+    axis, pcs, geo, comps_table = tables["axis"], tables["block_pcs"], tables["geometry"], tables["components"]
+    comps = _pls_columns(pd.DataFrame(columns=list(dict.fromkeys(axis["component"])))) if len(axis) else []
+    var_order = list(variables)
+    n_pcs = max((len(b.get("variance_shares", {})) for b in blocks.values()), default=0)
+    which = "the primary" if analysis["is_primary"] else "an arm (not the primary)"
+    lines = [
+        "# MOTCO axis diagnostics: ADNI serum metabolomics, sex × stage",
+        "",
+        f"Descriptive measurement-space diagnostics of {which} covariate-adjusted trajectory analysis "
+        f"(`{analysis['dir']}`, {analysis['selection']}-selected rank {analysis['rank']}, n = {analysis['participants']}): "
+        f"Spearman correlations of every latent component with the {len(var_order)} predeclared variables "
+        "(`DIAGNOSTIC_VARIABLES`: the five analysis covariates as the model codes them, the design's stage and sex, "
+        "and the enrollment category `dx_bl` the stage rule merged), the partial Spearman correlations given the "
+        f"{len(DIAGNOSTIC_CONDITIONING_COLUMNS)} design columns of the record (the Spearman correlation of the OLS "
+        "residuals of both on an intercept and the design; undefined for a covariate itself), the same for the first "
+        f"{n_pcs} principal components of each z-scored block, the share of the sex × stage geometry along each "
+        f"component and the block composition of each component. Rows with |rho| ≥ {threshold} are flagged and "
+        "listed first; the flag is a reporting threshold, not an adoption rule. No p-value is attached to any "
+        "correlation and the tables support no inferential claim. Nothing here chooses a variant or an arm: an axis "
+        "correlated with a variable is a finding about the measurement space of the primary analysis, not a "
+        "reinterpretation of its statistics or p-values (`delta`, `angle` and `shape` keep their recorded status), and "
+        "the primary analysis stays primary under the reading rules below.",
+        "",
+        "## Flagged correlations",
+        "",
+        "Each flagged row is a measurement-space finding about the analysis read, not a change of its statistics.",
+        "",
+        "Latent components (by |rho|):",
+        "",
+    ]
+
+    def flag_text(r) -> str:
+        return "+".join(f for f, on in (("raw", r.flag_raw), ("partial", r.flag_partial)) if on)
+
+    flagged = axis[axis["flag_raw"] | axis["flag_partial"]].copy()
+    if len(flagged):
+        flagged["abs"] = flagged["spearman"].abs().fillna(flagged["partial_spearman"].abs())
+        flagged["c"] = flagged["component"].map({c: i for i, c in enumerate(comps)})
+        flagged["v"] = flagged["variable"].map({v: i for i, v in enumerate(var_order)})
+        flagged = flagged.sort_values(["abs", "c", "v"], ascending=[False, True, True])
+        lines += [
+            "| component | sd | variable | source | n | rho | rho \\| design | flag |",
+            "|---|---:|---|---|---:|---:|---:|---|",
+        ]
+        for r in flagged.itertuples(index=False):
+            lines.append(
+                f"| {r.component} | {_fmt(r.component_sd, '.4g')} | `{r.variable}` | {r.source} | {r.n} | "
+                f"{_fmt_nan(r.spearman, '.3f')} | {_fmt_nan(r.partial_spearman, '.3f')} | {flag_text(r)} |"
+            )
+    else:
+        lines.append(f"No latent-component correlation reaches |rho| ≥ {threshold}.")
+    lines += ["", "Block principal components (by |rho|):", ""]
+    pflag = pcs[pcs["flag_raw"] | pcs["flag_partial"]].copy()
+    if len(pflag):
+        pflag["abs"] = pflag["spearman"].abs().fillna(pflag["partial_spearman"].abs())
+        pflag["b"] = pflag["block"].map({b: i for i, b in enumerate(blocks)})
+        pflag["v"] = pflag["variable"].map({v: i for i, v in enumerate(var_order)})
+        pflag = pflag.sort_values(["abs", "b", "component", "v"], ascending=[False, True, True, True])
+        lines += [
+            "| block | component | variance share | variable | source | n | rho | rho \\| design | flag |",
+            "|---|---|---:|---|---|---:|---:|---:|---|",
+        ]
+        for r in pflag.itertuples(index=False):
+            lines.append(
+                f"| {r.block} | {r.component} | {_fmt(r.variance_share, '.3f')} | `{r.variable}` | {r.source} | {r.n} | "
+                f"{_fmt_nan(r.spearman, '.3f')} | {_fmt_nan(r.partial_spearman, '.3f')} | {flag_text(r)} |"
+            )
+    else:
+        lines.append(f"No block principal component correlation reaches |rho| ≥ {threshold}.")
+
+    # Components
+    share_cols = [c for c in comps_table.columns if c.startswith("loading_share_")]
+    lines += [
+        "",
+        "## Components",
+        "",
+        "Per latent component: the score SD, the share of its squared `pls_loadings.csv` entries (MOTCO's rotation "
+        "weights on the z-scored joint features; the blocks enter unweighted) held by each block, the variables "
+        "flagged on the raw and on the partial correlation, and the variable with the largest |rho|.",
+        "",
+        "| component | sd | " + " | ".join(f"share {c.removeprefix('loading_share_')}" for c in share_cols)
+        + " | flagged raw | flagged partial | top variable | top rho |",
+        "|---|---:|" + "---:|" * len(share_cols) + "---:|---:|---|---:|",
+    ]
+    for r in comps_table.to_dict("records"):
+        lines.append(
+            f"| {r['component']} | {_fmt(r['sd'], '.4g')} | " + " | ".join(_fmt_nan(r[c], ".3f") for c in share_cols)
+            + f" | {r['n_flagged_raw']} | {r['n_flagged_partial']} | "
+            + (f"`{r['top_variable']}`" if isinstance(r["top_variable"], str) else "n/a")
+            + f" | {_fmt_nan(r['top_spearman'], '.3f')} |"
+        )
+
+    # Variables × components
+    lines += [
+        "",
+        "## Correlations of the latent components",
+        "",
+        "Component score SD: " + ", ".join(
+            f"{c} {_fmt(axis.loc[axis['component'] == c, 'component_sd'].iloc[0], '.4g')}" for c in comps
+        ) + ". Columns per component: Spearman rho, then rho given the design columns (n/a for a covariate itself). "
+        "Variables in declared order; `n` is the pairwise-complete count.",
+        "",
+        "| variable | source | n | " + " | ".join(f"{c} rho | {c} rho \\| design" for c in comps) + " |",
+        "|---|---|---:|" + "---:|---:|" * len(comps),
+    ]
+    for var in var_order:
+        sub = axis[axis["variable"] == var].set_index("component")
+        cells = []
+        for c in comps:
+            r = sub.loc[c]
+            cells.append(f"{_fmt_nan(r['spearman'], '.3f')}{'*' if r['flag_raw'] else ''}")
+            cells.append(f"{_fmt_nan(r['partial_spearman'], '.3f')}{'*' if r['flag_partial'] else ''}")
+        lines.append(f"| `{var}` | {variables[var]['file']} | {int(sub['n'].iloc[0])} | " + " | ".join(cells) + " |")
+    lines += ["", f"`*` marks |rho| ≥ {threshold}."]
+
+    # Block principal components
+    lines += ["", "## Block principal components", ""]
+    for block, info in blocks.items():
+        sub = pcs[pcs["block"] == block]
+        bcomps = list(info.get("variance_shares", {}))
+        shares = ", ".join(f"{c} {_fmt(info['variance_shares'][c], '.3f')}" for c in bcomps)
+        pc1 = info.get("pc1_phase", {})
+        lines += [
+            f"### {block} ({info.get('features')} features; variance share {shares}; pc1 against `phase`: Spearman "
+            f"{_fmt_nan(pc1.get('spearman'), '.3f')} here, |Pearson| {_fmt_nan(pc1.get('export_abs_corr_pearson'), '.3f')} "
+            "recorded by export)",
+            "",
+            "| variable | n | " + " | ".join(f"{c} rho | {c} rho \\| design" for c in bcomps) + " |",
+            "|---|---:|" + "---:|---:|" * len(bcomps),
+        ]
+        for var in var_order:
+            vs = sub[sub["variable"] == var].set_index("component")
+            cells = []
+            for c in bcomps:
+                r = vs.loc[c]
+                cells.append(f"{_fmt_nan(r['spearman'], '.3f')}{'*' if r['flag_raw'] else ''}")
+                cells.append(f"{_fmt_nan(r['partial_spearman'], '.3f')}{'*' if r['flag_partial'] else ''}")
+            lines.append(f"| `{var}` | {int(vs['n'].iloc[0])} | " + " | ".join(cells) + " |")
+        lines.append("")
+
+    # Geometry shares
+    lines += [
+        "## Geometry shares",
+        "",
+        "Share of the squared length of each vector of the trajectory geometry (from `stage_means.csv`) that lies "
+        "along each component: each sex's net displacement (last stage minus first, what `angle` reads), the "
+        "per-stage sex-difference vectors (Female minus Male) and the stage-centred ones. `value` is the signed "
+        "component of a single vector (the net displacements), empty for the summed quantities.",
+        "",
+        "| quantity | component | value | along | total | share |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    for r in geo.itertuples(index=False):
+        lines.append(
+            f"| {r.quantity} | {r.component} | {_fmt_nan(r.value, '.4g')} | {_fmt(r.along, '.4g')} | "
+            f"{_fmt(r.total, '.4g')} | {_fmt_nan(r.share, '.3f')} |"
+        )
+
+    # Analysis read
+    n_jobs = analysis.get("n_jobs")
+    lines += [
+        "",
+        "## Analysis read",
+        "",
+        f"- directory: `{analysis['dir']}`",
+        f"- rank: {analysis['rank']} (`{analysis['selection']}`)",
+        f"- latent adjustment: {analysis['latent_adjustment'] if analysis['latent_adjustment'] is not None else 'none'}",
+        f"- n_jobs: {n_jobs}" + ("" if n_jobs == REPORTED_N_JOBS else f" (not a reported run: reported runs use n_jobs = {REPORTED_N_JOBS})"),
+        f"- primary: {'yes' if analysis['is_primary'] else 'no (the primary rank and row counts are not expected)'}",
+        "",
+        "## Findings",
+        "",
+    ]
+    lines += [f"- {msg}" for msg in findings] or ["None."]
+    lines += [
+        "",
+        "## Reading rules",
+        "",
+        "Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):",
+        "",
+    ]
+    lines += [f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)]
+    return "\n".join(lines) + "\n"
+
+
 def run_axis_diagnostics(
     *,
     input_dir: str | Path | None = None,
@@ -2635,46 +3451,410 @@ def run_axis_diagnostics(
     out_dir: str | Path | None = None,
     force: bool = False,
 ) -> dict:
-    """Measure what the MOTCO latent axes and the block axes correlate with.
+    """Measure what the MOTCO latent components and the block axes correlate with.
 
     Parameters
     ----------
     input_dir:
-        Output directory of ``export``; the blocks, metadata, covariates and
-        manifest are read.
+        Output directory of ``export`` (default ``constants.MOTCO_INPUT_DIR``).
+        Read: ``p180.csv``, ``nmr.csv``, ``metadata.csv``, ``covariates.csv``
+        (each checked against the sha256 ``manifest.json`` records) and
+        ``manifest.json`` (block columns, covariate codings, the recorded
+        phase offset).
     analysis_dir:
-        Output directory of ``analyze``; read and checked (its manifest's
-        input hashes against the export files), never written.
+        Output directory of ``analyze`` (default
+        ``constants.MOTCO_ANALYSIS_DIR``); ``DIAGNOSTICS_ANALYSIS_FILES``
+        (``result.json``, ``latent_scores.csv``, ``stage_means.csv``,
+        ``pls_loadings.csv``, ``analysis_manifest.json``) are read and
+        checked, never written. Another directory is an arm: the manifest
+        records it as not the primary (see Notes).
     cohort_dir:
-        Output directory of ``cohort``; the source of the predeclared
-        diagnostic variables that are not export columns.
+        Output directory of ``cohort`` (default ``constants.COHORT_DIR``);
+        ``cohort.csv`` (checked against ``cohort_manifest.json``) is the
+        source of ``dx_bl``.
     out_dir:
         Diagnostics directory (default ``constants.DIAGNOSTICS_DIR``).
     force:
-        Replace an existing diagnostics directory.
+        Replace an existing diagnostics directory (after the new one is
+        complete).
 
     Returns
     -------
     dict
-        ``{"dir": Path, "tables": {name: DataFrame}, "manifest": dict, "findings": [...]}``.
+        ``{"dir": Path, "tables": {"axis", "block_pcs", "geometry", "components"}, "manifest": dict, "findings": [...]}``.
 
     Notes
     -----
-    For every latent component of the analysis: the Spearman and
-    covariate-partial Spearman correlations with the (undecided)
-    ``DIAGNOSTIC_VARIABLES``, the same for the first PCs of each z-scored
-    block, and the geometry shares along each component from
-    ``stage_means.csv``; rows at or above ``DIAGNOSTIC_CORRELATION_THRESHOLD``
-    are flagged, with no p-value. The diagnostic reads sex and stage, so it
-    is never a filter: its outputs are read by no ``export`` or ``analyze``
-    run, and no variant is derived from a diagnostic value. Output contract:
-    ``axis_correlations.csv``, ``block_pcs.csv``, ``geometry_shares.csv``
-    (per component × variable; aggregate), ``diagnostics.md`` (flagged rows
-    first) and ``diagnostics_manifest.json`` (input hashes, variables and
-    their sources, threshold, software, git revision, findings). Nothing
-    participant-level is written.
+    Checks, in this order, before anything is written: an existing output
+    directory without ``force``; the export (``_load_analysis_inputs``: the
+    five files, each CSV against the export manifest's hash, the column
+    sets, the ``rid`` alignment, the value and missing checks); the analysis
+    (``_check_analysis_inputs``: the five files, every input hash the
+    analysis manifest records against the export file now, the export
+    manifest's hash, the ``pls_`` column count of the three tables against
+    the record's selected rank, one ``stage_means.csv`` row per group ×
+    stage, the ``pls_loadings.csv`` rows against the export's
+    ``block_columns``, the ``rid`` set of ``latent_scores.csv``); the cohort
+    (``_check_cohort_chain``: ``cohort.csv`` against its manifest, the
+    cohort manifest's hash against the export manifest's record, the rows
+    with both platform flags against the exported participants in order);
+    the variable table (``_diagnostic_variables``: a value outside its
+    levels) and the conditioning design (``_conditioning_design``: the six
+    design columns by name and by column mean against the record). A
+    failure stops the step naming the file or column and a count or both
+    hashes, never a participant, and nothing is written.
+
+    The variables are ``DIAGNOSTIC_VARIABLES`` (``age``, ``education``,
+    ``apoe4``, ``phase``, ``statin`` from ``covariates.csv`` as the model
+    codes them; ``stage`` and ``male`` from ``metadata.csv``; ``dx_bl`` from
+    ``cohort.csv``), each as is or as the 0-based index in its levels. The
+    statistics: ``spearman`` (pairwise-complete), ``partial_spearman`` given
+    the record's six design columns (``DIAGNOSTIC_CONDITIONING_COLUMNS``,
+    built from ``covariates.csv`` with the export's codings; undefined for
+    a covariate itself), ``block_principal_components`` (the first
+    ``DIAGNOSTIC_N_BLOCK_PCS`` PCs of each z-scored block, population SD,
+    signs fixed by the largest loading, with their variance shares and
+    pc1's Spearman with ``phase`` beside the export's recorded Pearson
+    value), ``geometry_shares`` (from ``stage_means.csv``,
+    ``DIAGNOSTICS_GEOMETRY_QUANTITIES``) and ``block_loading_shares`` (the
+    share of each component's squared ``pls_loadings.csv`` entries per
+    block). A correlation is flagged when |rho| is at least
+    ``DIAGNOSTIC_CORRELATION_THRESHOLD``; no p-value is attached.
+
+    Output contract (``results/motco_diagnostics/``, written as
+    ``motco_diagnostics.tmp/`` and renamed when complete), every file
+    per component, per block or per variable, no ``rid``, all committed:
+    ``axis_correlations.csv`` (``component``, ``component_sd``,
+    ``variable``, ``source``, ``n``, ``spearman``, ``n_partial``,
+    ``partial_spearman``, ``flag_raw``, ``flag_partial``; rows by
+    component, then variable order), ``block_pcs.csv`` (``block``,
+    ``component``, ``variance_share``, then the same columns; rows by
+    block, PC, variable), ``geometry_shares.csv`` (``quantity``,
+    ``component``, ``value``, ``along``, ``total``, ``share``),
+    ``components.csv`` (``component``, ``sd``, ``loading_share_<block>``
+    per block, ``n_flagged_raw``, ``n_flagged_partial``, ``top_variable``,
+    ``top_spearman``), ``diagnostics.md`` (``render_axis_diagnostics``:
+    the flagged rows first, the tables, the analysis read, the findings and
+    ``READING_RULES`` verbatim) and ``diagnostics_manifest.json``
+    (versions, git revision, the twelve inputs with sha256 and the chain
+    checks, the analysis read with ``is_primary``, the variables with
+    sources and derivations, the threshold, the conditioning columns, the
+    definition of every statistic, the counts, the predeclared
+    ``DIAGNOSTICS_EXPECTED_COUNTS`` beside them with deviations, output
+    hashes, findings).
+
+    Findings, recorded and printed, never a stop: a deviation from the
+    predeclared counts; an analysis read whose ``n_jobs`` is not
+    ``REPORTED_N_JOBS``; an analysis that is not the primary (a non-default
+    ``analysis_dir`` or a recorded latent adjustment: the ``primary`` and
+    ``rows`` expectations are then skipped and the manifest says so, the
+    arm path of ``adni-latent-sensitivity``); a variable that is constant
+    or has fewer than three complete rows; per component, the flagged
+    variables as counts and names. The diagnostic reads sex and stage, so
+    it is never a filter: no ``export`` or ``analyze`` run reads its
+    outputs, and arms and variants are predeclared in a proposal, never
+    derived from a diagnostic value.
     """
-    raise NotImplementedError("run_axis_diagnostics is a stub; implemented by the axis-diagnostics change")
+    log = "axis-diagnostics"
+    threshold = DIAGNOSTIC_CORRELATION_THRESHOLD
+    input_dir = Path(input_dir) if input_dir is not None else Path(MOTCO_INPUT_DIR)
+    analysis_path = Path(analysis_dir) if analysis_dir is not None else Path(MOTCO_ANALYSIS_DIR)
+    cohort_path = Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR)
+    final = Path(out_dir) if out_dir is not None else Path(DIAGNOSTICS_DIR)
+    if final.exists() and not force:
+        raise FileExistsError(f"{final} exists; pass --force to replace it")
+
+    # --- the export ---------------------------------------------------------------
+    loaded = _load_analysis_inputs(input_dir, step=log)
+    findings: list[str] = list(loaded["findings"])
+    blocks, frame, export_manifest = loaded["blocks"], loaded["metadata"], loaded["export_manifest"]
+    rids = [str(r) for r in frame[SAMPLE_COLUMN]]
+    for name, rec in loaded["inputs"].items():
+        print(f"[{log}] {input_dir / name}: sha256 {rec['sha256'][:16]}…" + (f" equals {EXPORT_MANIFEST}" if "recorded" in rec else ""))
+
+    # --- the analysis, chained to the export ----------------------------------------
+    analysis = _check_analysis_inputs(input_dir, analysis_path, loaded)
+    record, a_manifest = analysis["record"], analysis["manifest"]
+    rank, components, scores = analysis["rank"], analysis["components"], analysis["scores"]
+    a_settings = a_manifest.get("settings", {})
+    latent_adjustment = a_settings.get("latent_adjustment")
+    n_jobs = a_settings.get("n_jobs")
+    selection = record["latent"]["component_selection"]
+    is_primary = analysis_path.resolve() == Path(MOTCO_ANALYSIS_DIR).resolve() and latent_adjustment is None
+    print(
+        f"[{log}] {analysis_path}: {len(analysis['files'])} files read; the recorded hashes of {len(analysis['chain'])} "
+        f"export files and of {EXPORT_MANIFEST} equal the files now; rank {rank} ({selection}), latent adjustment "
+        f"{latent_adjustment}, n_jobs {n_jobs}, primary {is_primary}"
+    )
+
+    # --- the cohort, chained to the export ------------------------------------------
+    cohort = _check_cohort_chain(cohort_path, export_manifest, rids)
+    print(
+        f"[{log}] {cohort_path / COHORT_TABLE}: equals {COHORT_MANIFEST}, which equals the export's record; "
+        f"{len(cohort['cohort'])} rows with every platform flag are the exported participants in order"
+    )
+
+    # --- the variables and the conditioning design -----------------------------------
+    extra = cohort["cohort"][[SAMPLE_COLUMN, "dx_bl"]].copy() if "dx_bl" in cohort["cohort"].columns else cohort["cohort"][[SAMPLE_COLUMN]].copy()
+    extra["_rid"] = extra[SAMPLE_COLUMN].astype(str)
+    merged = frame.copy()
+    merged["_rid"] = rids
+    merged = merged.merge(extra.drop(columns=[SAMPLE_COLUMN]), on="_rid", how="left", validate="one_to_one").drop(columns=["_rid"])
+    variables = _diagnostic_variables(merged)
+    # The export manifest is written with sorted keys: take its codings in the model's (ANALYSIS_COVARIATES) order.
+    recorded_codings = export_manifest["settings"]["covariates"]
+    codings = {name: recorded_codings.get(name, spec) for name, spec in ANALYSIS_COVARIATES.items()}
+    cov_record = record.get("covariates") or {}
+    design = _conditioning_design(
+        frame, codings, record_columns=cov_record.get("design_columns"), reference_row=cov_record.get("reference_row")
+    )
+    z = design.to_numpy(dtype=float)
+    sources = {name: entry["file"] for name, entry in DIAGNOSTIC_VARIABLES.items()}
+    n_missing: dict[str, int] = {}
+    for name in variables.columns:
+        v = variables[name].to_numpy(dtype=float)
+        ok = np.isfinite(v)
+        if (~ok).any():
+            n_missing[name] = int((~ok).sum())
+        if ok.sum() < 3:
+            findings.append(f"variable {name}: {int(ok.sum())} complete row(s), fewer than three; its correlations are undefined")
+        elif np.ptp(v[ok]) == 0:
+            findings.append(f"variable {name}: constant over the complete rows; its correlations are undefined")
+    if n_missing:
+        findings.append(f"variables with missing values (pairwise-complete correlations): {n_missing}")
+    sex_stage = _sex_stage(frame)
+    cells = "; ".join(
+        f"{sex_} {'/'.join(STAGE_LABELS)} " + "/".join(str(n) for n in sex_stage[sex_].values()) for sex_ in GROUP_VALUES
+    )
+    print(
+        f"[{log}] participants: {len(frame)} ({cells}); {len(variables.columns)} variables ("
+        + ", ".join(variables.columns) + f"); conditioning on {len(design.columns)} design columns ("
+        + ", ".join(design.columns) + "), means equal to the record's reference row"
+    )
+
+    # --- axis correlations ------------------------------------------------------------
+    axis_rows = [{**row, "source": sources[row["variable"]]} for row in _correlation_rows(scores, variables, z, threshold=threshold)]
+    axis = pd.DataFrame(axis_rows, columns=list(_DIAGNOSTICS_AXIS_COLUMNS))
+
+    # --- block principal components ------------------------------------------------
+    export_offsets = export_manifest.get("counts", {}).get("phase_offset", {})
+    phase_values = variables["phase"].to_numpy(dtype=float) if "phase" in variables.columns else None
+    pc_rows: list[dict] = []
+    block_info: dict[str, dict] = {}
+    for platform in EXPORT_BLOCKS:
+        pcs = block_principal_components(blocks[platform])
+        pc1_phase = spearman(pcs["scores"]["pc1"], phase_values)[0] if phase_values is not None else float("nan")
+        block_info[platform] = {
+            "features": pcs["n_features"],
+            "pcs": len(pcs["variance_share"]),
+            "variance_shares": pcs["variance_share"],
+            "pc1_phase": {
+                "spearman": _finite_or_none(pc1_phase),
+                "export_abs_corr_pearson": export_offsets.get(platform, {}).get("abs_corr_pc1_phase"),
+            },
+        }
+        for row in _correlation_rows(pcs["scores"], variables, z, threshold=threshold):
+            pc_rows.append({
+                "block": platform,
+                **{k: v for k, v in row.items() if k != "component_sd"},
+                "variance_share": pcs["variance_share"][row["component"]],
+                "source": sources[row["variable"]],
+            })
+        print(
+            f"[{log}] {platform}: {pcs['n_features']} features; PC variance shares "
+            + ", ".join(f"{k} {v:.3f}" for k, v in pcs["variance_share"].items())
+            + f"; pc1 against phase: Spearman {_fmt_nan(pc1_phase, '.3f')} (export recorded |Pearson| "
+            f"{_fmt_nan(export_offsets.get(platform, {}).get('abs_corr_pc1_phase'), '.3f')})"
+        )
+    block_pcs = pd.DataFrame(pc_rows, columns=list(_DIAGNOSTICS_PC_COLUMNS))
+
+    # --- geometry shares and block composition ----------------------------------------
+    groups = [str(g) for g in record["design"]["group_levels"]]
+    stages = [str(st) for st in record["design"]["stage_levels"]]
+    geometry = pd.DataFrame(geometry_shares(analysis["stage_means"], groups=groups, stages=stages), columns=list(_DIAGNOSTICS_GEOMETRY_COLUMNS))
+    loading_shares = block_loading_shares(analysis["loadings"], EXPORT_BLOCKS)
+    comp_rows: list[dict] = []
+    per_component: dict[str, dict] = {}
+    for c in components:
+        sub = axis[axis["component"] == c]
+        finite = sub[sub["spearman"].notna()]
+        top = finite.loc[finite["spearman"].abs().idxmax()] if len(finite) else None
+        flagged = sub[sub["flag_raw"] | sub["flag_partial"]]
+        row = {
+            "component": c,
+            "sd": float(sub["component_sd"].iloc[0]),
+            **{f"loading_share_{p}": loading_shares[c][p] for p in EXPORT_BLOCKS},
+            "n_flagged_raw": int(sub["flag_raw"].sum()),
+            "n_flagged_partial": int(sub["flag_partial"].sum()),
+            "top_variable": None if top is None else str(top["variable"]),
+            "top_spearman": float("nan") if top is None else float(top["spearman"]),
+        }
+        comp_rows.append(row)
+        per_component[c] = {
+            **{k: (_finite_or_none(v) if isinstance(v, float) else v) for k, v in row.items() if k != "component"},
+            "flagged_variables": flagged["variable"].tolist(),
+        }
+        if len(flagged):
+            ordered = flagged.assign(_abs=flagged["spearman"].abs().fillna(flagged["partial_spearman"].abs())).sort_values("_abs", ascending=False)
+            findings.append(
+                f"{c}: {len(flagged)} of {len(variables.columns)} variables flagged at |rho| >= {threshold} (raw or "
+                "partial): " + ", ".join(
+                    f"{r.variable} ({_fmt_nan(r.spearman, '.2f')}; partial {_fmt_nan(r.partial_spearman, '.2f')})"
+                    for r in ordered.itertuples(index=False)
+                )
+            )
+    comps_table = pd.DataFrame(comp_rows, columns=list(_DIAGNOSTICS_COMPONENT_COLUMNS))
+    print(
+        f"[{log}] components: " + "; ".join(
+            f"{r['component']} sd {r['sd']:.4g}, " + "/".join(f"{r[f'loading_share_{p}']:.2f}" for p in EXPORT_BLOCKS)
+            + f" {'/'.join(EXPORT_BLOCKS)}, {r['n_flagged_raw']} flagged" for r in comp_rows
+        )
+    )
+
+    # --- counts, expected, findings -----------------------------------------------------
+    counts: dict = {
+        "participants": int(len(frame)),
+        "sex_stage": sex_stage,
+        "components": rank,
+        "variables": list(variables.columns),
+        "conditioning_columns": list(design.columns),
+        "blocks": block_info,
+        "primary": {"selected_rank": rank, "component_selection": selection, "latent_adjustment": latent_adjustment, "n_jobs": n_jobs},
+        "rows": {
+            "axis_correlations": int(len(axis)),
+            "block_pcs": int(len(block_pcs)),
+            "geometry_shares": int(len(geometry)),
+            "components": int(len(comps_table)),
+        },
+        "flagged": {
+            "axis_raw": int(axis["flag_raw"].sum()),
+            "axis_partial": int(axis["flag_partial"].sum()),
+            "block_pcs_raw": int(block_pcs["flag_raw"].sum()),
+            "block_pcs_partial": int(block_pcs["flag_partial"].sum()),
+        },
+        "per_component": per_component,
+        "variables_missing": n_missing,
+    }
+    expected_full = json.loads(json.dumps(DIAGNOSTICS_EXPECTED_COUNTS))
+    expected = expected_full if is_primary else {k: expected_full[k] for k in DIAGNOSTICS_RANK_INDEPENDENT_KEYS}
+    observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
+    deviations = [msg for key in expected for msg in _count_deviations(expected[key], observed.get(key), key)]
+    findings += deviations
+    if n_jobs != REPORTED_N_JOBS:
+        findings.append(
+            f"the analysis read ran with n_jobs = {n_jobs}: its permutation draws are not the reported ones "
+            f"(REPORTED_N_JOBS = {REPORTED_N_JOBS}); the latent scores, stage means and loadings read here do not "
+            "depend on n_jobs"
+        )
+    if not is_primary:
+        findings.append(
+            f"the analysis read is not the primary (directory {analysis_path}, latent adjustment {latent_adjustment!r}): "
+            "the primary's rank and the row counts are not expected; the rank-independent counts are"
+        )
+
+    versions = _software_versions((*_MANIFEST_PACKAGES, "motco", "scikit-learn"))
+    manifest = {
+        "step": log,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "versions": versions,
+        "git_revision": _git_revision(),
+        "inputs": {
+            "export": {
+                "dir": str(input_dir),
+                "files": loaded["inputs"],
+                "export_manifest": {"name": EXPORT_MANIFEST, "sha256": loaded["inputs"][EXPORT_MANIFEST]["sha256"]},
+                "export_git_revision": export_manifest.get("git_revision"),
+                "export_created_at": export_manifest.get("created_at"),
+            },
+            "analysis": {
+                "dir": str(analysis_path),
+                "files": analysis["files"],
+                "chain": analysis["chain"],
+                "export_manifest_equals": analysis["export_manifest_equals"],
+                "analysis_manifest": {"name": ANALYSIS_MANIFEST, "sha256": analysis["files"][ANALYSIS_MANIFEST]["sha256"]},
+                "latent_adjustment": latent_adjustment,
+                "n_jobs": n_jobs,
+                "selected_rank": rank,
+                "component_selection": selection,
+                "is_primary": is_primary,
+                "analysis_git_revision": a_manifest.get("git_revision"),
+                "analysis_created_at": a_manifest.get("created_at"),
+                "analysis_findings": a_manifest.get("findings", []),
+            },
+            "cohort": {"dir": str(cohort_path), "files": cohort["files"]},
+        },
+        "settings": {
+            "DIAGNOSTIC_VARIABLES": [
+                {
+                    "name": name,
+                    "file": entry["file"],
+                    "column": entry["column"],
+                    "derivation": entry["derivation"],
+                    "levels": list(entry["levels"]) if "levels" in entry else None,
+                }
+                for name, entry in DIAGNOSTIC_VARIABLES.items()
+            ],
+            "DIAGNOSTIC_CORRELATION_THRESHOLD": threshold,
+            "threshold_note": "a reporting flag on |rho|, raw and partial, not an adoption rule; no p-value is attached to any correlation",
+            "DIAGNOSTIC_N_BLOCK_PCS": DIAGNOSTIC_N_BLOCK_PCS,
+            "conditioning_columns": list(design.columns),
+            "conditioning_source": (
+                f"the ANALYSIS_COVARIATES columns of {EXPORT_COVARIATES} under the codings the export manifest records "
+                "(numeric as is, drop-first indicators for the categorical ones), checked by name against "
+                "DIAGNOSTIC_CONDITIONING_COLUMNS and the record's design_columns and by column mean against the "
+                "record's reference_row"
+            ),
+            "definitions": _DIAGNOSTICS_DEFINITIONS,
+            "downstream": "read by no export or analyze run; arms and variants are predeclared in a change proposal, never derived from a diagnostic value",
+            "predeclared_sensitivity": ANALYSIS_PREDECLARED_LATENT_SENSITIVITY,
+        },
+        "counts": counts,
+        "expected": expected,
+        "primary_expectations_checked": is_primary,
+        "deviations": deviations,
+        "findings": findings,
+    }
+
+    # --- outputs ----------------------------------------------------------------------------
+    tables = {"axis": axis, "block_pcs": block_pcs, "geometry": geometry, "components": comps_table}
+    names = {
+        "axis": DIAGNOSTICS_AXIS_CORRELATIONS,
+        "block_pcs": DIAGNOSTICS_BLOCK_PCS,
+        "geometry": DIAGNOSTICS_GEOMETRY_SHARES,
+        "components": DIAGNOSTICS_COMPONENTS,
+    }
+    analysis_info = {
+        "dir": str(analysis_path), "rank": rank, "selection": selection, "latent_adjustment": latent_adjustment,
+        "n_jobs": n_jobs, "is_primary": is_primary, "participants": int(len(frame)),
+    }
+    with _finalize_output_dir(final, force=force) as tmp:
+        for key, name in names.items():
+            tables[key].to_csv(tmp / name, index=False)
+        (tmp / DIAGNOSTICS_SUMMARY).write_text(
+            render_axis_diagnostics(
+                tables, analysis=analysis_info, variables=DIAGNOSTIC_VARIABLES, blocks=block_info,
+                findings=findings, threshold=threshold,
+            )
+        )
+        written = [*names.values(), DIAGNOSTICS_SUMMARY]
+        manifest["outputs"] = {
+            name: {"sha256": _sha256_file(tmp / name), "bytes": (tmp / name).stat().st_size, "participant_level": False}
+            for name in written
+        }
+        _write_manifest(tmp / DIAGNOSTICS_MANIFEST, manifest)
+
+    print(f"[{log}] wrote {final}/ (" + ", ".join([*written, DIAGNOSTICS_MANIFEST]) + ")")
+    print(
+        f"[{log}] rows: " + ", ".join(f"{k} {v}" for k, v in counts["rows"].items()) + "; flagged: "
+        + ", ".join(f"{k} {v}" for k, v in counts["flagged"].items())
+    )
+    if deviations:
+        print(f"[{log}] {len(deviations)} count deviation(s) from the predeclared counts")
+    else:
+        print(f"[{log}] counts reproduce the predeclared ones" + ("" if is_primary else " (rank-independent keys only: not the primary)"))
+    for msg in findings:
+        print(f"[{log}] FINDING: {msg}")
+    return {"dir": final, "tables": tables, "manifest": manifest, "findings": findings}
 
 
 def run_report(
@@ -2731,6 +3911,12 @@ __all__ = [
     "check_motco_version",
     "check_motco_rank_floor",
     "render_analysis_summary",
+    "render_axis_diagnostics",
+    "spearman",
+    "partial_spearman",
+    "block_principal_components",
+    "geometry_shares",
+    "block_loading_shares",
     "run_clean",
     "run_cohort",
     "run_export",

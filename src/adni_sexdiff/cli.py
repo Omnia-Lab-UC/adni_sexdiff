@@ -3,8 +3,8 @@
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
 ``report``), each printing ``[command]``-prefixed progress messages.
-``clean``, ``cohort``, ``export`` and ``analyze`` are implemented; the other
-steps are stubs that raise ``NotImplementedError``.
+``clean``, ``cohort``, ``export``, ``analyze`` and ``axis-diagnostics`` are
+implemented; ``report`` is a stub that raises ``NotImplementedError``.
 """
 
 from __future__ import annotations
@@ -104,7 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_force(p)
 
-    p = sub.add_parser("axis-diagnostics", help="Correlations of the latent and block axes with predeclared variables -> results/motco_diagnostics/")
+    p = sub.add_parser(
+        "axis-diagnostics",
+        help="Spearman and design-partial correlations of the latent components and the block PCs with the predeclared "
+        "variables, the geometry shares and the block composition per component, from the kept outputs only "
+        "-> results/motco_diagnostics/",
+    )
     p.add_argument("--input-dir", type=Path, default=None, help=f"Output directory of export (default: {MOTCO_INPUT_DIR})")
     p.add_argument("--analysis-dir", type=Path, default=None, help=f"Output directory of analyze (default: {MOTCO_ANALYSIS_DIR})")
     p.add_argument("--cohort-dir", type=Path, default=None, help=f"Output directory of cohort (default: {COHORT_DIR})")
