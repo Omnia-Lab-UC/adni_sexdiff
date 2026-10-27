@@ -14,14 +14,15 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 (the SEA-AD astrocyte case study); its conventions apply here unless this
 file says otherwise.
 
-Status (2026-10-26): `clean` (change `adni-metabolomics-clean`) and
-`cohort` (change `adni-cohort`) are implemented and run on the workstation,
-whose data root holds the raw metabolomics files and the ADNIMERGE freeze;
-the cluster copy and clone do not exist yet. Every other step below is a
-stub whose body raises `NotImplementedError`; its docstring in `data.py`
-states the inputs, the outputs and the output contract. Four scientific
-constants are decided, `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE` and
-`ANALYSIS_COVARIATES`; the others are undecided (see "Flag and ask"). Each
+Status (2026-10-27): `clean` (change `adni-metabolomics-clean`), `cohort`
+(change `adni-cohort`) and `export` (change `adni-export`) are implemented
+and run on the workstation, whose data root holds the raw metabolomics
+files and the ADNIMERGE freeze; the cluster copy and clone do not exist
+yet. Every other step below is a stub whose body raises
+`NotImplementedError`; its docstring in `data.py` states the inputs, the
+outputs and the output contract. Five scientific constants are decided,
+`CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES` and
+`EXPORT_FEATURE_RULE`; the others are undecided (see "Flag and ask"). Each
 step is implemented by its own OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
@@ -61,15 +62,36 @@ step is implemented by its own OpenSpec change, in order.
    stage-source agreement, phase against the p180 run, descriptives, the
    predeclared `COHORT_EXPECTED_COUNTS` beside the observed ones, output
    hashes, findings; aggregate, committed and synced).
-3. `export` – from `results/cleaned/` and `results/cohort/` only: the MOTCO
-   blocks restricted to the cohort (`EXPORT_FEATURE_RULE`, undecided:
-   which cleaned metabolites enter each block and on which scale),
-   covariates exported, not applied. Writes `results/motco_input/`:
-   `p180.csv`, `nmr.csv`, `metadata.csv` (`rid`, `sex`, `stage`),
-   `covariates.csv` (participant-level), `features_<platform>.csv`
-   (feature statuses; gitignored with the other CSVs) and `manifest.json`
-   (hashes, n per sex × stage cell, feature counts; the only committed file).
-   No step before `analyze` uses sex or stage to select features.
+3. `export` – from `results/cleaned/` (`P180.csv`, `NMR.csv`, each checked
+   against its `clean_manifest.json` hash) and `results/cohort/`
+   (`cohort.csv`, checked against `cohort_manifest.json`, whose recorded
+   clean hashes must equal the clean manifests', the chain check; a
+   mismatch stops it naming the file and `cohort`) only, no data-root
+   file: the rows of `cohort.csv` with both platform flags in file order
+   (n = 1501), the MOTCO blocks under `EXPORT_FEATURE_RULE` (membership by
+   family, `log2(x + floor)` with the per-metabolite 5 % quantile floor),
+   covariates exported, not applied. Stops before writing on an absent
+   column, a duplicated `rid`, a value outside `GROUP_VALUES` or
+   `STAGE_LABELS`, a missing covariate, a participant absent from a
+   cleaned table, a non-positive floor or a non-finite cell. Writes
+   `results/motco_input/`: `p180.csv`, `nmr.csv` (`rid`, then the kept
+   metabolites under their cleaned names, on the rule's scale),
+   `metadata.csv` (`rid`, `sex`, `stage`), `covariates.csv` (`rid` plus
+   `age`, `education`, `apoe4`, `phase`, `statin`, copied unchanged; all
+   four participant-level), `features_<platform>.csv` (one row per cleaned
+   column: family, status `kept` / `derived`, zero cells, median, floor,
+   floor over median, skew raw and transformed, largest |z| transformed,
+   phase `d`; aggregate per feature, gitignored with the other CSVs,
+   regenerable) and `manifest.json` (input hashes and the chain check, the
+   rule as applied, block order and columns, the covariate codings copied
+   from the cohort manifest, `covariates_applied` false, counts: n per
+   sex × stage cell, features per status and family, zero cells, floors not
+   positive, non-finite cells, block shares, per block the shape counts,
+   the spectrum and the phase offset; the predeclared
+   `EXPORT_EXPECTED_COUNTS` beside the observed ones, output hashes,
+   findings; aggregate, the only committed file). No step before `analyze`
+   uses sex or stage to select features; the blocks and feature tables are
+   byte-identical under permuted labels.
 4. `analyze` – from `results/motco_input/` only: one
    `motco.analysis.analyze_trajectories` call (MOTCO ≥ 0.10.0; never
    assembled from `motco plsr` + `motco de`), group `sex`, stage `stage` in
@@ -193,8 +215,9 @@ behavior or defaults change.
   enters only through an OpenSpec proposal that states it before any run,
   lives as a named constant in `src/adni_sexdiff/constants.py`, and is
   listed under "Flag and ask" below. Decided so far: `CLEAN_OPTIONS`,
-  `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`; `constants.py`
-  reserves the others' names in its docstring and defines none of them.
+  `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`;
+  `constants.py` reserves the others' names in its docstring and defines
+  none of them.
 - Never set, change or default one of them in code, a flag or a script
   without a proposal. Never choose one from a result.
 
@@ -224,19 +247,25 @@ behavior or defaults change.
 - `src/adni_sexdiff/constants.py` – named constants: conventions (paths,
   environment variables, platforms, columns, output names, pins, the
   participant-level patterns, the clean inputs and the raw-file repair
-  registry, the cohort's file, columns and sex values) defined; scientific
+  registry, the cohort's file, columns and sex values, the export's block
+  order, feature statuses and covariate columns) defined; scientific
   constants reserved by name only until a proposal defines them
   (`CLEAN_OPTIONS` defined, with its predeclared `CLEAN_EXPECTED_COUNTS` and
   `RAW_INPUT_SHA256`; `COHORT_RULE`, `STAGE_RULE` and `ANALYSIS_COVARIATES`
-  defined, with the predeclared `COHORT_EXPECTED_COUNTS`).
-- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean` and
-  `cohort` implemented, the others stubs), `resolve_data_root`, the version
-  checks, the raw-input helpers and the manifest / `.tmp` helpers every step
-  reuses.
+  defined, with the predeclared `COHORT_EXPECTED_COUNTS`;
+  `EXPORT_FEATURE_RULE` defined, with the predeclared
+  `EXPORT_EXPECTED_COUNTS`).
+- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`
+  and `export` implemented, the others stubs), `resolve_data_root`, the
+  version checks, the raw-input helpers and the manifest / `.tmp` helpers
+  every step reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
   and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
   `spike_raw_inventory.py` (the clean change's read-only spike),
-  `spike_cohort_inventory.py` (the cohort change's read-only spike).
+  `spike_cohort_inventory.py` (the cohort change's read-only spike),
+  `spike_export_inventory.py` (the export change's read-only spike; it
+  reads the Nightingale dictionary for the name-mark cross-check, which
+  `export` does not).
 - `data/` – raw ADNI files, uploaded by hand; gitignored, never committed.
 - `results/` – pipeline outputs; only the aggregate files named in
   constraint 1 are committed.
@@ -315,9 +344,27 @@ behavior or defaults change.
   table that holds it is participant-level (constraint 1). The export's
   sample column is `rid`, the group column `sex`, the stage column `stage`
   with `STAGE_LABELS` CN / MCI / AD in trajectory order.
+- Known property of the p180 block (recorded by `export`, confirmed
+  2026-10-27): the p180 run (ADNI-1 against ADNI-GO/2, which equals the
+  `phase` covariate for every cohort participant) is the block's first
+  axis. On the rule's scale and the 1501 exported participants, the
+  standardized mean difference between phases has median |d| 1.12 over the
+  133 p180 metabolites (80 above 1) and the block's first principal
+  component correlates 0.73 with phase; the NMR block, assayed in one
+  batch, has 0.21, 0 and 0.13. `export` records the offset per block
+  (`manifest.json`, `counts.phase_offset`) and per metabolite
+  (`features_<platform>.csv`, `phase_d`) and does not correct it: the runs
+  differ in stage composition (EMCI and SMC exist only in ADNI-GO/2), so
+  per-run centering would move stage signal between runs. The analyze
+  proposal decides how `phase` enters MOTCO (as a covariate of the stage
+  means, and whether `covariate_latent_adjustment = "stage"` runs as a
+  sensitivity); the axis-diagnostics proposal puts `phase` among
+  `DIAGNOSTIC_VARIABLES`. The blocks enter MOTCO 0.10.0 unweighted: p180
+  holds 133 / 298 of the joint features; the manifest records the shares.
 - Flag and ask before changing, and never set without a proposal
   (constraint 5); decided so far: `CLEAN_OPTIONS`, `COHORT_RULE`,
-  `STAGE_RULE`, `ANALYSIS_COVARIATES`; the others are undecided:
+  `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`; the others
+  are undecided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
     for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
@@ -343,11 +390,25 @@ behavior or defaults change.
     categorical); missing policy `error`, nothing imputed. Whether the
     covariates also condition MOTCO's latent space
     (`covariate_latent_adjustment`) is the analyze proposal's decision.
+  - `EXPORT_FEATURE_RULE` – decided by `adni-export`. Membership: a block
+    holds the measured concentrations of its platform, each once; every
+    cleaned p180 metabolite enters (133); a cleaned NMR column enters unless
+    its name carries a derived mark, the percentages (`_PCT`, 72), the
+    ratios (`_BY_`, 4), the degree of unsaturation (`UNSATURATION`, 1) and
+    the particle sizes (`_SIZE`, 3), which are excluded with status
+    `derived` (165 kept of 245; the change's spike checked the marks
+    against the Nightingale dictionary's units). Scale: `log2(x + floor)`
+    for both blocks, the floor of a metabolite its 5 % quantile (linear
+    interpolation) over the exported participants, computed without sex,
+    stage or a covariate and recorded per feature; MOTCO's transform
+    `identity`, MOTCO's own z-scoring. Nothing imputed, replaced,
+    winsorized, removed or centred per run. Its predeclared counts are
+    `EXPORT_EXPECTED_COUNTS`. The sensitivity variants (all 245 NMR
+    columns, the raw scale, `log2(x + 1)`, the generalized log) are a
+    later change, registered after the primary analysis.
   - `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` – MOTCO's RRPP
     permutations, seed and rejection rule.
   - `ANALYSIS_RANK_FLOOR` – the latent-rank floor passed to MOTCO.
-  - `EXPORT_FEATURE_RULE` – which cleaned metabolites enter each block and
-    on which scale.
   - `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD` – the axis
     diagnostics' variables and reporting flag.
   - `READING_RULES` – the binding reading rules of the report, carried from

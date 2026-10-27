@@ -1,12 +1,13 @@
 """Pipeline steps of adni_sexdiff.
 
-``clean`` (change ``adni-metabolomics-clean``) and ``cohort`` (change
-``adni-cohort``) are implemented. Every other step is a stub: its docstring
-states the inputs it reads, the files it writes and the contract of those
-files, and its body raises ``NotImplementedError`` until an OpenSpec change
-implements it. The statistical choices the remaining steps need (feature
-rule, permutations, seed, rank floor, diagnostic variables, reading rules)
-are undecided and enter only through a proposal (see ``constants``).
+``clean`` (change ``adni-metabolomics-clean``), ``cohort`` (change
+``adni-cohort``) and ``export`` (change ``adni-export``) are implemented.
+Every other step is a stub: its docstring states the inputs it reads, the
+files it writes and the contract of those files, and its body raises
+``NotImplementedError`` until an OpenSpec change implements it. The
+statistical choices the remaining steps need (permutations, seed, rank
+floor, diagnostic variables, reading rules) are undecided and enter only
+through a proposal (see ``constants``).
 
 The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_known_repairs``) and the manifest and output-directory helpers
@@ -58,10 +59,19 @@ from .constants import (
     COHORT_TABLE,
     DATA_ROOT_ENV,
     DEFAULT_DATA_ROOT,
+    EXPORT_BLOCKS,
+    EXPORT_COVARIATE_COLUMNS,
+    EXPORT_COVARIATES,
+    EXPORT_EXPECTED_COUNTS,
+    EXPORT_FEATURE_RULE,
+    EXPORT_FEATURES,
+    EXPORT_MANIFEST,
+    EXPORT_METADATA,
     GROUP_COLUMN,
     GROUP_VALUES,
     KNOWN_RAW_FILE_REPAIRS,
     METABO_ADNI_VERSION,
+    MOTCO_INPUT_DIR,
     PARTICIPANT_ID_COLUMN,
     PLATFORMS,
     RAW_INPUT_SHA256,
@@ -809,14 +819,16 @@ _NO_VISIT_COLUMN = "no visit column"
 _NO_RECORD = "no record"
 
 
-def _check_clean_outputs(cleaned: Path) -> dict:
-    """Hash every clean output ``cohort`` reads against its ``clean_manifest.json``.
+def _check_clean_outputs(cleaned: Path, *, platforms: Iterable[str] = COHORT_RULE["platforms"], runs: bool = True) -> dict:
+    """Hash every clean output a step reads against its ``clean_manifest.json``.
 
-    Stops (before anything is written) on an absent manifest or output and on
-    a hash that differs from the recorded one, naming ``<platform>/<file>``.
+    ``platforms`` names the cleaned tables read; ``runs`` adds the p180 run
+    table (``cohort`` reads it, ``export`` does not). Stops (before anything
+    is written) on an absent manifest or output and on a hash that differs
+    from the recorded one, naming ``<platform>/<file>``.
     """
     out = {}
-    for platform in COHORT_RULE["platforms"]:
+    for platform in platforms:
         manifest_path = cleaned / platform / CLEAN_MANIFEST
         if not manifest_path.is_file():
             raise FileNotFoundError(f"{platform}/{CLEAN_MANIFEST} is absent from {cleaned}; run clean first")
@@ -825,7 +837,7 @@ def _check_clean_outputs(cleaned: Path) -> dict:
             "manifest": {"name": f"{platform}/{CLEAN_MANIFEST}", "sha256": _sha256_file(manifest_path)},
             "outputs": {},
         }
-        names = [CLEAN_TABLES[platform], *([CLEAN_RUNS_TABLE] if platform == "p180" else [])]
+        names = [CLEAN_TABLES[platform], *([CLEAN_RUNS_TABLE] if platform == "p180" and runs else [])]
         for name in names:
             label, path = f"{platform}/{name}", cleaned / platform / name
             if not path.is_file():
@@ -1332,6 +1344,144 @@ def run_cohort(
     return {"dir": final, "counts": stage_counts, "manifest": manifest, "findings": findings}
 
 
+#: How a name mark of ``EXPORT_FEATURE_RULE["membership"][<platform>]["derived"]``
+#: is tested against a cleaned column name.
+_NAME_MARK_TESTS = {
+    "endswith": lambda column, mark: column.endswith(mark),
+    "contains": lambda column, mark: mark in column,
+    "equals": lambda column, mark: column == mark,
+}
+#: The family of a kept column (a measured concentration).
+_KEPT_FAMILY = "concentration"
+#: The derived families of the rule, over every platform, in the rule's order.
+_DERIVED_FAMILIES: tuple[str, ...] = tuple(
+    dict.fromkeys(f for m in EXPORT_FEATURE_RULE["membership"].values() for f in m["derived"])
+)
+#: The columns of ``features_<platform>.csv``; the last five are on the
+#: transformed scale and stay empty for derived rows.
+_FEATURE_COLUMNS = (
+    "feature", "family", "status", "zero_cells", "median", "floor", "floor_over_median",
+    "skew_raw", "skew_transformed", "max_abs_z_transformed", "phase_d",
+)
+#: Singular values below this fraction of the largest count as zero in the
+#: numerical rank of a standardized block.
+_RANK_TOLERANCE = 1e-8
+
+
+def _feature_family(column: str, derived: dict[str, tuple[str, str]]) -> str | None:
+    """The derived family of a cleaned column under the name marks (first match), or ``None`` when kept."""
+    for family, (test, mark) in derived.items():
+        if _NAME_MARK_TESTS[test](column, mark):
+            return family
+    return None
+
+
+def _check_cohort_outputs(cohort_dir: Path, clean_inputs: dict) -> tuple[dict, dict, dict]:
+    """Hash ``cohort.csv`` against ``cohort_manifest.json`` and check the manifest's clean hashes.
+
+    Returns the cohort manifest, the manifest's ``inputs.cohort`` entry and
+    the chain check (``<platform>/<table>`` → ``True``). Stops, before
+    anything is written, on an absent manifest or table, a ``cohort.csv``
+    whose hash differs from the recorded one, and a recorded clean hash that
+    differs from the clean manifest's (the cohort was built from an earlier
+    clean), naming the file and the ``cohort`` command.
+    """
+    manifest_path = cohort_dir / COHORT_MANIFEST
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"{COHORT_MANIFEST} is absent from {cohort_dir}; run cohort first")
+    cohort_manifest = json.loads(manifest_path.read_text())
+    table_path = cohort_dir / COHORT_TABLE
+    if not table_path.is_file():
+        raise FileNotFoundError(f"{COHORT_TABLE} is absent from {cohort_dir}; run cohort first")
+    recorded = cohort_manifest.get("outputs", {})
+    if COHORT_TABLE not in recorded:
+        raise RuntimeError(f"{COHORT_TABLE}: {COHORT_MANIFEST} records no hash for it; rerun cohort")
+    sha = _sha256_file(table_path)
+    if sha != recorded[COHORT_TABLE]["sha256"]:
+        raise RuntimeError(
+            f"{COHORT_TABLE}: sha256 {sha} differs from the hash {COHORT_MANIFEST} records "
+            f"({recorded[COHORT_TABLE]['sha256']}); the cohort output changed after cohort, rerun cohort"
+        )
+    chain = {}
+    recorded_clean = cohort_manifest.get("inputs", {}).get("clean", {})
+    for platform, entry in clean_inputs.items():
+        for name, rec in entry["outputs"].items():
+            try:
+                seen = recorded_clean[platform]["outputs"][name]["sha256"]
+            except (KeyError, TypeError):
+                raise RuntimeError(f"{name}: {COHORT_MANIFEST} records no hash for {platform}/{name}; rerun cohort") from None
+            if seen != rec["sha256"]:
+                raise RuntimeError(
+                    f"{name}: the hash {COHORT_MANIFEST} records for {platform}/{name} ({seen}) differs from the one "
+                    f"{platform}/{CLEAN_MANIFEST} records ({rec['sha256']}); the cohort was built from an earlier "
+                    "clean output, rerun cohort"
+                )
+            chain[f"{platform}/{name}"] = True
+    inputs = {
+        "manifest": {"name": COHORT_MANIFEST, "sha256": _sha256_file(manifest_path)},
+        "outputs": {COHORT_TABLE: {"sha256": sha, "equals_cohort_manifest": True}},
+    }
+    return cohort_manifest, inputs, chain
+
+
+def _standardize(M: np.ndarray) -> np.ndarray:
+    return (M - M.mean(axis=0)) / M.std(axis=0)
+
+
+def _shape_counts(M: np.ndarray) -> dict:
+    """Skew (pandas, bias-corrected) and largest |z| (population sd) per feature, counted over features."""
+    df = pd.DataFrame(M)
+    skew = df.skew().to_numpy()
+    z = ((df - df.mean()) / df.std(ddof=0)).abs().max().to_numpy()
+    return {
+        "abs_skew_gt_1": int((np.abs(skew) > 1).sum()),
+        "skew_lt_minus_1": int((skew < -1).sum()),
+        "median_abs_skew": float(np.median(np.abs(skew))),
+        "max_abs_z_gt_5": int((z > 5).sum()),
+        "max_abs_z_gt_8": int((z > 8).sum()),
+        "max_abs_z_gt_15": int((z > 15).sum()),
+    }
+
+
+def _spectrum(M: np.ndarray) -> dict:
+    """Variance shares of the leading principal components of the standardized block, and its ranks."""
+    s = np.linalg.svd(_standardize(M), compute_uv=False)
+    ev = s**2 / (s**2).sum()
+    return {
+        "features": int(M.shape[1]),
+        "pc1_share": float(ev[0]),
+        "pc1_3_share": float(ev[:3].sum()),
+        "pc1_10_share": float(ev[:10].sum()),
+        "effective_rank": float(1 / np.sum(ev**2)),
+        "numerical_rank": int((s / s[0] > _RANK_TOLERANCE).sum()),
+        "numerical_rank_tolerance": _RANK_TOLERANCE,
+    }
+
+
+def _phase_offset(M: np.ndarray, phase: np.ndarray, levels: tuple[str, str]) -> tuple[np.ndarray, dict]:
+    """Standardized mean difference per feature between the two phases, and the PC correlations with phase."""
+    a, b = M[phase == levels[0]], M[phase == levels[1]]
+    d = (a.mean(axis=0) - b.mean(axis=0)) / np.sqrt((a.var(axis=0) + b.var(axis=0)) / 2)
+    u, _, _ = np.linalg.svd(_standardize(M), full_matrices=False)
+    g = (phase == levels[0]).astype(float)
+    return d, {
+        "contrast": f"{levels[0]} minus {levels[1]}, pooled within-phase sd",
+        "median_abs_d": float(np.median(np.abs(d))),
+        "max_abs_d": float(np.abs(d).max()),
+        "abs_d_gt_0_5": int((np.abs(d) > 0.5).sum()),
+        "abs_d_gt_1": int((np.abs(d) > 1).sum()),
+        "abs_corr_pc1_phase": float(abs(np.corrcoef(u[:, 0], g)[0, 1])),
+        "abs_corr_pc2_phase": float(abs(np.corrcoef(u[:, 1], g)[0, 1])),
+    }
+
+
+def _project(observed, expected):
+    """``observed`` restricted, recursively, to the keys ``expected`` holds (an absent key stays absent)."""
+    if isinstance(expected, dict) and isinstance(observed, dict):
+        return {k: _project(observed[k], v) for k, v in expected.items() if k in observed}
+    return observed
+
+
 def run_export(
     *,
     cleaned_dir: str | Path | None = None,
@@ -1339,44 +1489,329 @@ def run_export(
     out_dir: str | Path | None = None,
     force: bool = False,
 ) -> dict:
-    """Export the MOTCO blocks and metadata from the cleaned matrices and the cohort.
+    """Export the MOTCO blocks, metadata and covariates of the analysis cohort under the feature rule.
 
     Parameters
     ----------
     cleaned_dir:
-        Output root of ``clean`` (default ``constants.CLEANED_DIR``).
+        Output root of ``clean`` (default ``constants.CLEANED_DIR``). Read:
+        ``p180/P180.csv`` and ``nmr/NMR.csv``, each checked against the
+        sha256 its platform's ``clean_manifest.json`` records.
     cohort_dir:
         Output directory of ``cohort`` (default ``constants.COHORT_DIR``).
+        Read: ``cohort.csv``, checked against the sha256
+        ``cohort_manifest.json`` records, and the manifest itself, whose
+        recorded clean hashes must equal the clean manifests' (the chain
+        check: a cohort built from an earlier clean output stops the step,
+        naming the file and the ``cohort`` command). No data-root file and
+        no other file is read.
     out_dir:
         MOTCO input directory (default ``constants.MOTCO_INPUT_DIR``).
     force:
-        Replace an existing export.
+        Replace an existing export (after the new one is complete).
 
     Returns
     -------
     dict
-        ``{"dir": Path, "blocks": {platform: shape}, "manifest": dict, "findings": [...]}``.
+        ``{"dir": Path, "blocks": {platform: (participants, metabolites)},
+        "manifest": dict, "findings": [...]}``.
 
     Notes
     -----
-    Restricts every block to the cohort's participants in ``cohort.csv``
-    order and applies the (undecided) constant ``EXPORT_FEATURE_RULE``
-    (which cleaned metabolites enter each block and on which scale).
-    Covariates are exported, not applied: adjustment is MOTCO's. No step
-    before ``analyze`` uses sex or stage to select features. Output
-    contract: one block per platform, ``<platform>.csv`` (participant ×
-    metabolite, ``rid`` index), ``metadata.csv`` (``rid``, ``sex``,
-    ``stage``, in that order), ``covariates.csv`` (``rid`` plus the
-    covariate columns), all participant-level and gitignored;
-    ``features_<platform>.csv`` (one row per cleaned metabolite with its
-    status under the rule; gitignored with the other CSVs, regenerable) and
-    ``manifest.json`` (input hashes incl. the cohort and clean manifests, the
-    rule as applied, n per sex × stage cell, feature counts per status,
-    every output file's sha256, software, git revision, findings; the only
-    committed file). The directory is written as ``motco_input.tmp/`` and
-    renamed when complete.
+    Applies ``EXPORT_FEATURE_RULE``, decided by the change ``adni-export``.
+    The exported participants are the rows of ``cohort.csv`` that carry
+    every platform flag, in ``cohort.csv`` order (ascending ``rid``).
+    Membership: every cleaned p180 metabolite enters its block; a cleaned
+    NMR column enters unless its name carries a derived mark (percentage
+    ``_PCT``, ratio ``_BY_``, degree ``UNSATURATION``, size ``_SIZE``), in
+    which case it is listed with status ``derived`` and its family. Scale:
+    every kept value is exported as ``log2(x + floor)``, the floor of a
+    metabolite being its 5 % quantile over the exported participants
+    (linear interpolation), computed without sex, stage or a covariate and
+    recorded per feature. Nothing is imputed, replaced, winsorized or
+    removed; nothing is centred per run or phase. Covariates are copied,
+    not applied: adjustment is MOTCO's. Sex and stage are read only to
+    write ``metadata.csv`` and to count cells; ``phase`` only to write
+    ``covariates.csv`` and to describe the p180 run offset, which the
+    manifest records and the step does not correct.
+
+    Stops, before anything is written, naming the file, column or platform
+    and a count, never a participant: an absent input or manifest, a hash
+    that differs from its manifest, a chain mismatch, an absent column, a
+    duplicated ``rid``, a ``sex`` outside ``GROUP_VALUES``, a ``stage``
+    outside ``STAGE_LABELS``, a missing covariate value, a cohort
+    participant absent from a cleaned table, a missing cleaned cell, a
+    non-positive floor, a non-finite exported cell, and an existing output
+    directory without ``force``.
+
+    Output contract: ``p180.csv`` and ``nmr.csv`` (first column ``rid``,
+    then the kept metabolites under their cleaned names in cleaned-column
+    order, on the rule's scale), ``metadata.csv`` (``rid``, ``sex``,
+    ``stage``) and ``covariates.csv`` (``rid``, then
+    ``EXPORT_COVARIATE_COLUMNS`` copied from ``cohort.csv`` unchanged), all
+    with the same ``rid`` column in the same order, participant-level and
+    gitignored; ``features_p180.csv`` and ``features_nmr.csv`` (one row per
+    cleaned column: family, status, zero cells, median, floor, floor over
+    median, skew raw and transformed, largest |z| transformed, phase ``d``;
+    the transformed-scale columns empty for derived rows; aggregate per
+    feature, gitignored with the other CSVs, regenerable); and
+    ``manifest.json`` (versions, git revision, the inputs with their hashes
+    and the chain check, the rule as applied, block order and columns,
+    group and stage values, the covariate codings copied from the cohort
+    manifest, ``covariates_applied`` false, the counts: participants, sex ×
+    stage, features per status and family, zero cells, floors not
+    positive, non-finite cells, missing covariate values, block shares, and
+    per block the distribution-shape counts, the spectrum and the phase
+    offset; expected and observed counts with deviations, output hashes,
+    findings; aggregate, no participant identifier, the only committed
+    file). Observed counts are compared with
+    ``constants.EXPORT_EXPECTED_COUNTS``; each deviation is a finding,
+    printed and recorded, and never stops the step. The directory is
+    written as ``motco_input.tmp/`` and renamed when complete. Reruns on
+    the same inputs are byte-identical.
     """
-    raise NotImplementedError("run_export is a stub; implemented by the export change")
+    cleaned = Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR)
+    cohort_path = Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR)
+    final = Path(out_dir) if out_dir is not None else Path(MOTCO_INPUT_DIR)
+    if final.exists() and not force:
+        raise FileExistsError(f"{final} exists; pass --force to replace it")
+    rule = EXPORT_FEATURE_RULE
+    scale = rule["scale"]
+    findings: list[str] = []
+
+    # --- inputs: the clean outputs, the cohort output and the chain ---------
+    clean_inputs = _check_clean_outputs(cleaned, platforms=EXPORT_BLOCKS, runs=False)
+    cohort_manifest, cohort_inputs, chain = _check_cohort_outputs(cohort_path, clean_inputs)
+    for platform, entry in clean_inputs.items():
+        for name, rec in entry["outputs"].items():
+            print(f"[export] clean {platform}/{name}: sha256 {rec['sha256'][:16]}… equals {entry['manifest']['name']}")
+    print(
+        f"[export] cohort {COHORT_TABLE}: sha256 {cohort_inputs['outputs'][COHORT_TABLE]['sha256'][:16]}… equals "
+        f"{COHORT_MANIFEST}; its recorded clean hashes equal the clean manifests' ({len(chain)} file(s))"
+    )
+    try:
+        covariate_codings = cohort_manifest["settings"]["ANALYSIS_COVARIATES"]
+    except KeyError:
+        raise RuntimeError(f"{COHORT_MANIFEST} records no ANALYSIS_COVARIATES under settings; rerun cohort") from None
+    if covariate_codings != json.loads(json.dumps(ANALYSIS_COVARIATES)):
+        findings.append(
+            f"{COHORT_MANIFEST} records ANALYSIS_COVARIATES that differ from constants.ANALYSIS_COVARIATES; "
+            "the export copies the cohort's codings"
+        )
+
+    # --- the exported participants: every platform flag, cohort order -------
+    cohort = pd.read_csv(cohort_path / COHORT_TABLE)
+    required = [SAMPLE_COLUMN, GROUP_COLUMN, STAGE_COLUMN, *EXPORT_COVARIATE_COLUMNS, *EXPORT_BLOCKS]
+    absent = [c for c in required if c not in cohort.columns]
+    if absent:
+        raise ValueError(f"{COHORT_TABLE}: column(s) absent: {', '.join(repr(c) for c in absent)}")
+    both = cohort[cohort[list(EXPORT_BLOCKS)].astype(bool).all(axis=1)].reset_index(drop=True)
+    problems = []
+    n_dup = int(both[SAMPLE_COLUMN].duplicated().sum())
+    if n_dup:
+        problems.append(f"{SAMPLE_COLUMN}: {n_dup} duplicated value(s)")
+    outside = ~both[GROUP_COLUMN].isin(GROUP_VALUES)
+    if outside.any():
+        problems.append(f"{GROUP_COLUMN}: values outside GROUP_VALUES: " + _value_counts_text(both.loc[outside, GROUP_COLUMN]))
+    outside = ~both[STAGE_COLUMN].isin(STAGE_LABELS)
+    if outside.any():
+        problems.append(f"{STAGE_COLUMN}: values outside STAGE_LABELS: " + _value_counts_text(both.loc[outside, STAGE_COLUMN]))
+    for name, n_missing in both[list(EXPORT_COVARIATE_COLUMNS)].isna().sum().items():
+        if n_missing:
+            problems.append(f"{name}: {int(n_missing)} missing value(s); nothing is imputed")
+    if problems:
+        raise ValueError(f"export stops before writing anything ({COHORT_TABLE}, rows with every platform flag): " + "; ".join(problems))
+    rids = both[SAMPLE_COLUMN].to_numpy()
+    sex_stage = _sex_stage(both)
+    cells = "; ".join(
+        f"{sex_} {'/'.join(STAGE_LABELS)} " + "/".join(str(n) for n in sex_stage[sex_].values()) for sex_ in GROUP_VALUES
+    )
+    print(f"[export] participants: {len(both)} of the {len(cohort)} rows of {COHORT_TABLE} carry every platform flag ({cells})")
+
+    # --- the cleaned tables aligned to the participants ----------------------
+    blocks: dict[str, pd.DataFrame] = {}
+    for platform in EXPORT_BLOCKS:
+        name = CLEAN_TABLES[platform]
+        table = pd.read_csv(cleaned / platform / name, index_col=PARTICIPANT_ID_COLUMN)
+        n_dup = int(table.index.duplicated().sum())
+        if n_dup:
+            raise RuntimeError(f"{platform}/{name}: {n_dup} duplicated participant(s)")
+        n_absent = int((~pd.Index(rids).isin(table.index)).sum())
+        if n_absent:
+            raise RuntimeError(
+                f"{platform}: {n_absent} cohort participant(s) absent from {name}; the cohort was built from "
+                "another clean output, rerun cohort"
+            )
+        blocks[platform] = table.loc[rids]
+        print(f"[export] {platform}/{name}: {table.shape[0]} × {table.shape[1]} cleaned → {len(rids)} × {table.shape[1]} exported participants")
+
+    # --- membership by family, the floor and the scale ------------------------
+    phase_levels = tuple(ANALYSIS_COVARIATES["phase"]["levels"])
+    phase = both["phase"].to_numpy()  # read only to describe the run offset
+    exported: dict[str, pd.DataFrame] = {}
+    feature_tables: dict[str, pd.DataFrame] = {}
+    counts: dict = {
+        "participants": len(both),
+        "sex_stage": sex_stage,
+        "features": {},
+        "zero_cells": {},
+        "metabolites_with_zeros": {},
+        "floors_not_positive": {},
+        "non_finite": {},
+        "missing_covariate_values": int(both[list(EXPORT_COVARIATE_COLUMNS)].isna().sum().sum()),
+        "block_shares": {},
+        "joint_features": 0,
+        "shape": {},
+        "spectrum": {},
+        "phase_offset": {},
+    }
+    for platform in EXPORT_BLOCKS:
+        table = blocks[platform]
+        name = CLEAN_TABLES[platform]
+        derived_marks = rule["membership"][platform]["derived"]
+        families = {c: _feature_family(str(c), derived_marks) for c in table.columns}
+        kept = [c for c in table.columns if families[c] is None]
+        kept_pos = {c: j for j, c in enumerate(kept)}
+        counts["features"][platform] = {
+            "cleaned": int(table.shape[1]),
+            "kept": len(kept),
+            "derived": {fam: sum(1 for f in families.values() if f == fam) for fam in _DERIVED_FAMILIES},
+        }
+        X = table.to_numpy(dtype=float)
+        n_missing = int(np.isnan(X).sum())
+        if n_missing:
+            raise RuntimeError(f"{platform}/{name}: {n_missing} missing cell(s) among the exported participants")
+        Xk = table[kept].to_numpy(dtype=float)
+        floor = np.quantile(Xk, scale["floor_quantile"], axis=0, method=scale["floor_method"])
+        counts["floors_not_positive"][platform] = n_bad = int((~(floor > 0)).sum())
+        if n_bad:
+            raise RuntimeError(
+                f"{platform}: {n_bad} kept metabolite(s) with a non-positive floor ({scale['floor_quantile']:.0%} "
+                "quantile over the exported participants); the rule needs a proposal, not a patch"
+            )
+        T = np.log2(Xk + floor)
+        counts["non_finite"][platform] = n_bad = int((~np.isfinite(T)).sum())
+        if n_bad:
+            raise RuntimeError(f"{platform}: {n_bad} non-finite cell(s) after {scale['transform']}")
+        zeros = (X == 0).sum(axis=0)
+        zeros_kept = (Xk == 0).sum(axis=0)
+        counts["zero_cells"][platform] = int(zeros_kept.sum())
+        counts["metabolites_with_zeros"][platform] = int((zeros_kept > 0).sum())
+        median = np.median(X, axis=0)
+        skew_raw = pd.DataFrame(X).skew().to_numpy()
+        Tdf = pd.DataFrame(T)
+        skew_t = Tdf.skew().to_numpy()
+        max_abs_z = ((Tdf - Tdf.mean()) / Tdf.std(ddof=0)).abs().max().to_numpy()
+        d, offset = _phase_offset(T, phase, phase_levels)
+        rows = []
+        for i, c in enumerate(table.columns):
+            fam = families[c]
+            row = {
+                "feature": c,
+                "family": fam or _KEPT_FAMILY,
+                "status": "derived" if fam else "kept",
+                "zero_cells": int(zeros[i]),
+                "median": median[i],
+                "skew_raw": skew_raw[i],
+            }
+            if fam is None:
+                j = kept_pos[c]
+                row.update(
+                    floor=floor[j],
+                    floor_over_median=floor[j] / median[i],
+                    skew_transformed=skew_t[j],
+                    max_abs_z_transformed=max_abs_z[j],
+                    phase_d=d[j],
+                )
+            rows.append(row)
+        feature_tables[platform] = pd.DataFrame(rows, columns=list(_FEATURE_COLUMNS))
+        block = pd.DataFrame(T, columns=kept)
+        block.insert(0, SAMPLE_COLUMN, rids)
+        exported[platform] = block
+        counts["shape"][platform] = _shape_counts(T)
+        counts["spectrum"][platform] = _spectrum(T)
+        counts["phase_offset"][platform] = offset
+        derived_text = ", ".join(f"{fam} {n}" for fam, n in counts["features"][platform]["derived"].items() if n)
+        print(
+            f"[export] {platform}: {len(kept)} of {table.shape[1]} cleaned column(s) kept"
+            + (f" ({derived_text} derived)" if derived_text else "")
+            + f"; zero cells {counts['zero_cells'][platform]} in {counts['metabolites_with_zeros'][platform]} metabolite(s); "
+            f"{scale['transform']} with floor at the {scale['floor_quantile']:.0%} quantile; "
+            f"phase |d| > 1 for {offset['abs_d_gt_1']} metabolite(s), median |d| {offset['median_abs_d']:.2f}"
+        )
+    total = sum(counts["features"][p]["kept"] for p in EXPORT_BLOCKS)
+    counts["joint_features"] = total
+    counts["block_shares"] = {p: counts["features"][p]["kept"] / total for p in EXPORT_BLOCKS}
+
+    # --- the predeclared counts ------------------------------------------------
+    expected = json.loads(json.dumps(EXPORT_EXPECTED_COUNTS))
+    observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
+    deviations = [msg for key in expected for msg in _count_deviations(expected[key], observed.get(key), key)]
+    findings += deviations
+
+    manifest = {
+        "step": "export",
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "versions": _software_versions(),
+        "git_revision": _git_revision(),
+        "inputs": {"clean": clean_inputs, "cohort": cohort_inputs, "chain": chain},
+        "settings": {
+            "EXPORT_FEATURE_RULE": rule,
+            "blocks": EXPORT_BLOCKS,
+            "block_columns": {p: [str(c) for c in exported[p].columns if c != SAMPLE_COLUMN] for p in EXPORT_BLOCKS},
+            "sample_column": SAMPLE_COLUMN,
+            "group_column": GROUP_COLUMN,
+            "group_values": GROUP_VALUES,
+            "stage_column": STAGE_COLUMN,
+            "stage_order": STAGE_LABELS,
+            "covariate_columns": EXPORT_COVARIATE_COLUMNS,
+            "covariates": covariate_codings,
+            "covariates_applied": False,
+            "motco_transform": scale["motco_transform"],
+            "units": scale["transform"],
+        },
+        "counts": counts,
+        "expected": expected,
+        "deviations": deviations,
+        "findings": findings,
+    }
+
+    # --- outputs -------------------------------------------------------------------
+    names = [f"{p}.csv" for p in EXPORT_BLOCKS] + [EXPORT_METADATA, EXPORT_COVARIATES]
+    with _finalize_output_dir(final, force=force) as tmp:
+        for platform in EXPORT_BLOCKS:
+            exported[platform].to_csv(tmp / f"{platform}.csv", index=False)
+        both[[SAMPLE_COLUMN, GROUP_COLUMN, STAGE_COLUMN]].to_csv(tmp / EXPORT_METADATA, index=False)
+        both[[SAMPLE_COLUMN, *EXPORT_COVARIATE_COLUMNS]].to_csv(tmp / EXPORT_COVARIATES, index=False)
+        for platform in EXPORT_BLOCKS:
+            feature_name = EXPORT_FEATURES.format(platform=platform)
+            feature_tables[platform].to_csv(tmp / feature_name, index=False)
+            names.append(feature_name)
+        manifest["outputs"] = {
+            name: {
+                "sha256": _sha256_file(tmp / name),
+                "bytes": (tmp / name).stat().st_size,
+                "participant_level": not name.startswith("features_"),
+            }
+            for name in names
+        }
+        _write_manifest(tmp / EXPORT_MANIFEST, manifest)
+
+    shapes = {p: (len(rids), counts["features"][p]["kept"]) for p in EXPORT_BLOCKS}
+    print(
+        f"[export] wrote {final}/ ("
+        + ", ".join(f"{p}.csv {n} × {m}" for p, (n, m) in shapes.items())
+        + f", {EXPORT_METADATA}, {EXPORT_COVARIATES}, "
+        + ", ".join(EXPORT_FEATURES.format(platform=p) for p in EXPORT_BLOCKS)
+        + f", {EXPORT_MANIFEST})"
+    )
+    if deviations:
+        print(f"[export] {len(deviations)} count deviation(s) from the predeclared counts")
+    else:
+        print("[export] counts reproduce the predeclared ones")
+    for msg in findings:
+        print(f"[export] FINDING: {msg}")
+    return {"dir": final, "blocks": shapes, "manifest": manifest, "findings": findings}
 
 
 def run_analysis(

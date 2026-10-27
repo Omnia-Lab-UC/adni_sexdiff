@@ -17,14 +17,14 @@ Scientific constants
     baseline row and baseline sample per participant, the platform
     intersection), ``STAGE_RULE`` (``DX.bl`` onto ``STAGE_LABELS``, subtypes
     merged) and ``ANALYSIS_COVARIATES`` (set, order, sources and coding), by
-    the change ``adni-cohort``. The others are undecided and not defined;
-    the names reserved for them (a proposal may rename them) are:
+    the change ``adni-cohort``; ``EXPORT_FEATURE_RULE`` (which cleaned
+    metabolites enter each block, by family, and on which scale), by the
+    change ``adni-export``. The others are undecided and not defined; the
+    names reserved for them (a proposal may rename them) are:
 
     - ``ANALYSIS_PERMUTATIONS``, ``ANALYSIS_SEED``, ``ANALYSIS_ALPHA`` –
       MOTCO's RRPP permutations, seed and rejection rule.
     - ``ANALYSIS_RANK_FLOOR`` – the latent-rank floor passed to MOTCO.
-    - ``EXPORT_FEATURE_RULE`` – which cleaned metabolites enter each block
-      and on which scale.
     - ``DIAGNOSTIC_VARIABLES``, ``DIAGNOSTIC_CORRELATION_THRESHOLD`` – the
       axis diagnostics' variables and reporting flag.
     - ``READING_RULES`` – the binding reading rules of the report.
@@ -463,4 +463,80 @@ COHORT_EXPECTED_COUNTS: dict[str, dict] = {
         "missing_covariate_values": 0,
     },
     "union": {"participants": 1594, "both": 1501, "p180_only": 91, "nmr_only": 2},
+}
+
+
+# --- export: scientific constant ---------------------------------------------
+
+#: Decided by the change ``adni-export``. Two parts. ``membership``: a block
+#: holds the measured concentrations of its platform, each once. Every
+#: cleaned p180 metabolite enters (µM concentrations). A cleaned NMR column
+#: enters unless its name carries one of the ``derived`` marks, which name
+#: the deterministic functions of other columns of the block: the
+#: percentages (suffix ``_PCT``), the ratios (containing ``_BY_``), the
+#: degree of unsaturation (``UNSATURATION``) and the particle sizes (suffix
+#: ``_SIZE``). The marks are tested in this order; the change's spike checked
+#: them against the Nightingale dictionary's units for every cleaned column.
+#: ``scale``: every kept value is exported as ``log2(x + floor)``, the floor
+#: of a metabolite being its ``floor_quantile`` quantile over the exported
+#: participants (``floor_method`` is numpy's interpolation), computed without
+#: sex, stage or a covariate and recorded per feature; a non-positive floor
+#: stops the step. MOTCO's unit transform is ``motco_transform`` and MOTCO
+#: z-scores every feature itself. No value is imputed, replaced, winsorized
+#: or removed, and nothing is centred per run. Never changed by a flag, a
+#: result or a count.
+EXPORT_FEATURE_RULE: dict[str, dict] = {
+    "membership": {
+        "p180": {"derived": {}},
+        "nmr": {
+            "derived": {
+                "percentage": ("endswith", "_PCT"),
+                "ratio": ("contains", "_BY_"),
+                "degree": ("equals", "UNSATURATION"),
+                "size": ("endswith", "_SIZE"),
+            }
+        },
+    },
+    "scale": {
+        "transform": "log2(x + floor)",
+        "floor_quantile": 0.05,
+        "floor_method": "linear",
+        "motco_transform": "identity",
+    },
+}
+
+# --- export: conventions and predeclared counts ------------------------------
+
+#: The blocks in the order passed to MOTCO (``<platform>.csv`` each).
+EXPORT_BLOCKS: tuple[str, ...] = ("p180", "nmr")
+#: The status of a cleaned column under ``EXPORT_FEATURE_RULE``: ``kept`` (a
+#: column of the block) or ``derived`` (excluded, with its family).
+EXPORT_FEATURE_STATUSES: tuple[str, ...] = ("kept", "derived")
+#: The columns of ``covariates.csv`` after ``rid``: the ``ANALYSIS_COVARIATES``
+#: in declared order, copied from ``cohort.csv`` unchanged.
+EXPORT_COVARIATE_COLUMNS: tuple[str, ...] = tuple(ANALYSIS_COVARIATES)
+
+#: Predeclared by the change ``adni-export`` from its spike (``spike.md``,
+#: 2026-10-27) on the clean and cohort outputs of ``adni-metabolomics-clean``
+#: and ``adni-cohort``: the exported participants and their sex × stage
+#: cells; per platform the cleaned columns, the kept ones and the derived
+#: ones by family, the zero cells and the metabolites holding them (counted
+#: before the floor), the non-positive floors, the non-finite cells after
+#: the transform and the metabolites whose phase offset ``|d|`` exceeds 1 on
+#: the rule's scale; the missing covariate values. ``export`` compares its
+#: observed counts with these and records every difference as a finding; a
+#: difference never stops the step and never changes the rule.
+EXPORT_EXPECTED_COUNTS: dict[str, dict | int] = {
+    "participants": 1501,
+    "sex_stage": {"Female": {"CN": 237, "MCI": 310, "AD": 125}, "Male": {"CN": 223, "MCI": 448, "AD": 158}},
+    "features": {
+        "p180": {"cleaned": 133, "kept": 133, "derived": {"percentage": 0, "ratio": 0, "degree": 0, "size": 0}},
+        "nmr": {"cleaned": 245, "kept": 165, "derived": {"percentage": 72, "ratio": 4, "degree": 1, "size": 3}},
+    },
+    "zero_cells": {"p180": 0, "nmr": 41},
+    "metabolites_with_zeros": {"p180": 0, "nmr": 3},
+    "floors_not_positive": {"p180": 0, "nmr": 0},
+    "non_finite": {"p180": 0, "nmr": 0},
+    "phase_offset": {"p180": {"abs_d_gt_1": 80}, "nmr": {"abs_d_gt_1": 0}},
+    "missing_covariate_values": 0,
 }
