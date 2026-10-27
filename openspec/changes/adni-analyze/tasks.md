@@ -32,7 +32,7 @@
 
 ## 6. Commit hygiene
 
-- [ ] 6.1 Before committing, run `git status` and `git check-ignore -q` over every file under `results/motco_analysis/`. Regenerate the analysis on the clean tree at the implementing commit so `analysis_manifest.json` records it (as the earlier steps did), and list in the commit message `results/motco_analysis/result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json` and `summary.md` as the only files added under `results/`, each with why it is aggregate. Verify the staged list holds nothing else under `results/`, and that the proposal, design, spec and tasks hold no `RID` value (`grep -nE '\bRID\b' openspec/changes/adni-analyze` hits only column-name mentions).
+- [x] 6.1 Before committing, run `git status` and `git check-ignore -q` over every file under `results/motco_analysis/`. Regenerate the analysis on the clean tree at the implementing commit so `analysis_manifest.json` records it (as the earlier steps did), and list in the commit message `results/motco_analysis/result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json` and `summary.md` as the only files added under `results/`, each with why it is aggregate. Verify the staged list holds nothing else under `results/`, and that the proposal, design, spec and tasks hold no `RID` value (`grep -nE '\bRID\b' openspec/changes/adni-analyze` hits only column-name mentions).
 
 ## Workflow follow-up
 
