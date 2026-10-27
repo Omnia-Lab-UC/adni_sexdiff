@@ -15,15 +15,19 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 file says otherwise.
 
 Status (2026-10-27): `clean` (change `adni-metabolomics-clean`), `cohort`
-(change `adni-cohort`) and `export` (change `adni-export`) are implemented
-and run on the workstation, whose data root holds the raw metabolomics
-files and the ADNIMERGE freeze; the cluster copy and clone do not exist
-yet. Every other step below is a stub whose body raises
-`NotImplementedError`; its docstring in `data.py` states the inputs, the
-outputs and the output contract. Five scientific constants are decided,
-`CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES` and
-`EXPORT_FEATURE_RULE`; the others are undecided (see "Flag and ask"). Each
-step is implemented by its own OpenSpec change, in order.
+(change `adni-cohort`), `export` (change `adni-export`) and `analyze`
+(change `adni-analyze`) are implemented and run on the workstation, whose
+data root holds the raw metabolomics files and the ADNIMERGE freeze; the
+cluster copy and clone do not exist yet. `axis-diagnostics` and `report`
+are stubs whose body raises `NotImplementedError`; their docstrings in
+`data.py` state the inputs, the outputs and the output contract. Decided
+scientific constants: `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`,
+`ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis settings
+(`ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with
+`ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
+`ANALYSIS_LATENT_ADJUSTMENT`) and `READING_RULES`; the diagnostic
+variables and threshold are undecided (see "Flag and ask"). Each step is
+implemented by its own OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
    pinned release's QC functions called in-process in the order of its
@@ -92,19 +96,48 @@ step is implemented by its own OpenSpec change, in order.
    findings; aggregate, the only committed file). No step before `analyze`
    uses sex or stage to select features; the blocks and feature tables are
    byte-identical under permuted labels.
-4. `analyze` – from `results/motco_input/` only: one
-   `motco.analysis.analyze_trajectories` call (MOTCO ≥ 0.10.0; never
-   assembled from `motco plsr` + `motco de`), group `sex`, stage `stage` in
-   CN / MCI / AD order, `ANALYSIS_COVARIATES` (with its categorical
-   codings declared), the undecided `ANALYSIS_PERMUTATIONS`,
-   `ANALYSIS_SEED`, `ANALYSIS_RANK_FLOOR` (passed explicitly, checked
-   against MOTCO's default before any input is read),
-   MOTCO's other defaults not overridden. Writes `results/motco_analysis/`:
-   MOTCO's `result.json`, `latent_scores.csv`, `pls_loadings.csv`,
-   `stage_means.csv`, plus `analysis_metadata.csv`, `analysis_manifest.json`
-   (hashes, settings, `n_jobs`, a `cli_equivalent`, versions, findings) and
-   `summary.md`. `latent_scores.csv` and `analysis_metadata.csv` are
-   participant-level.
+4. `analyze` – from `results/motco_input/` only (`p180.csv`, `nmr.csv`,
+   `metadata.csv`, `covariates.csv`, each checked against the sha256 in
+   `manifest.json`; the manifest's block columns, covariate codings and
+   counts): one `motco.analysis.analyze_trajectories` call (never
+   assembled from `motco plsr` + `motco de`), after two gates that run
+   before any input is read (MOTCO ≥ `ANALYSIS_MOTCO_MIN_VERSION` 0.10.0,
+   and MOTCO's default rank floor equal to `ANALYSIS_RANK_FLOOR`), on the
+   blocks in `EXPORT_BLOCKS` order (transform `identity`), group `sex` in
+   `GROUP_VALUES` order, stage `stage` in CN / MCI / AD order, the
+   `ANALYSIS_COVARIATES` additively with `ANALYSIS_CATEGORICAL_COVARIATES`
+   declared categorical (six design columns, LS-means at the pooled
+   covariate mean), missing policy `error`, and
+   `TrajectoryAnalysisParams(permutations=ANALYSIS_PERMUTATIONS,
+   seed=ANALYSIS_SEED, n_jobs, min_components=ANALYSIS_RANK_FLOOR,
+   covariate_latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT)` and nothing
+   else; MOTCO's other defaults are not overridden and are read back from
+   the record. The four tables must carry the same `rid` column in the
+   same order; a value outside the rules, a missing covariate value or a
+   missing block cell stops it before anything is written, naming the file
+   or column and a count. The metadata table the model sees is
+   `analysis_metadata.csv` parsed back as `motco analyze --metadata`
+   parses it, so the manifest's `cli_equivalent` reproduces the run with
+   MOTCO's CLI. Writes `results/motco_analysis/`: MOTCO's `result.json`,
+   `latent_scores.csv`, `pls_loadings.csv`, `stage_means.csv`, plus
+   `analysis_metadata.csv` (`rid`, `sex`, `stage`, the five covariates),
+   `analysis_manifest.json` (versions with MOTCO and scikit-learn, git
+   revision, inputs with observed and recorded hashes and the export
+   manifest's hash and revision, every setting by constant name, `n_jobs`,
+   the covariate block, the MOTCO defaults used, the latent adjustment
+   with the predeclared arm, `cli_equivalent`, counts, the predeclared
+   `ANALYSIS_EXPECTED_COUNTS` beside the observed ones with deviations,
+   output hashes with a participant-level flag, findings) and `summary.md`
+   (generated from the record: the statistics with p-values, rejection
+   under `ANALYSIS_REJECTION_RULE` and null summaries, the CV-selected
+   rank, floor and eigengap beside `angle`, the cell sizes, the latent and
+   covariate blocks, the export context, `READING_RULES` verbatim).
+   `latent_scores.csv` and `analysis_metadata.csv` are participant-level;
+   the other five files are aggregate and committed. Findings, never
+   stops: a count deviation, `n_jobs ≠ 1` (the run is not reported), a
+   CV-selected rank equal to the floor, fewer CV repeats than requested, a
+   non-finite statistic or p-value, a moved MOTCO default. On the cluster
+   it runs through `scripts/analyze.sbatch`.
 5. `axis-diagnostics` – from `results/motco_input/`, `results/motco_analysis/`
    and `results/cohort/` only: Spearman and covariate-partial Spearman
    correlations of every latent component with the undecided
@@ -215,9 +248,11 @@ behavior or defaults change.
   enters only through an OpenSpec proposal that states it before any run,
   lives as a named constant in `src/adni_sexdiff/constants.py`, and is
   listed under "Flag and ask" below. Decided so far: `CLEAN_OPTIONS`,
-  `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`;
-  `constants.py` reserves the others' names in its docstring and defines
-  none of them.
+  `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`,
+  `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with
+  `ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
+  `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`; `constants.py` reserves
+  the others' names in its docstring and defines none of them.
 - Never set, change or default one of them in code, a flag or a script
   without a proposal. Never choose one from a result.
 
@@ -248,20 +283,28 @@ behavior or defaults change.
   environment variables, platforms, columns, output names, pins, the
   participant-level patterns, the clean inputs and the raw-file repair
   registry, the cohort's file, columns and sex values, the export's block
-  order, feature statuses and covariate columns) defined; scientific
-  constants reserved by name only until a proposal defines them
+  order, feature statuses and covariate columns, the analysis' statistics,
+  missing policy, categorical covariates and input files) defined;
+  scientific constants reserved by name only until a proposal defines them
   (`CLEAN_OPTIONS` defined, with its predeclared `CLEAN_EXPECTED_COUNTS` and
   `RAW_INPUT_SHA256`; `COHORT_RULE`, `STAGE_RULE` and `ANALYSIS_COVARIATES`
   defined, with the predeclared `COHORT_EXPECTED_COUNTS`;
   `EXPORT_FEATURE_RULE` defined, with the predeclared
-  `EXPORT_EXPECTED_COUNTS`).
-- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`
-  and `export` implemented, the others stubs), `resolve_data_root`, the
-  version checks, the raw-input helpers and the manifest / `.tmp` helpers
-  every step reuses.
+  `EXPORT_EXPECTED_COUNTS`; `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`,
+  `ANALYSIS_ALPHA`, `ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
+  `ANALYSIS_LATENT_ADJUSTMENT` with
+  `ANALYSIS_PREDECLARED_LATENT_SENSITIVITY`, and `READING_RULES` defined,
+  with the predeclared `ANALYSIS_EXPECTED_COUNTS`).
+- `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`,
+  `export` and `analyze` implemented, the others stubs), `resolve_data_root`,
+  the version gates (`check_metabo_adni_version`, `check_motco_version`,
+  `check_motco_rank_floor`), the raw-input helpers, the analysis input
+  loader and summary renderer, and the manifest / `.tmp` helpers every step
+  reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
   and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
-  `spike_raw_inventory.py` (the clean change's read-only spike),
+  `analyze.sbatch` (`analyze` on the cluster, no `--n-jobs`, so a reported
+  run), `spike_raw_inventory.py` (the clean change's read-only spike),
   `spike_cohort_inventory.py` (the cohort change's read-only spike),
   `spike_export_inventory.py` (the export change's read-only spike; it
   reads the Nightingale dictionary for the name-mark cross-check, which
@@ -355,16 +398,24 @@ behavior or defaults change.
   (`manifest.json`, `counts.phase_offset`) and per metabolite
   (`features_<platform>.csv`, `phase_d`) and does not correct it: the runs
   differ in stage composition (EMCI and SMC exist only in ADNI-GO/2), so
-  per-run centering would move stage signal between runs. The analyze
-  proposal decides how `phase` enters MOTCO (as a covariate of the stage
-  means, and whether `covariate_latent_adjustment = "stage"` runs as a
-  sensitivity); the axis-diagnostics proposal puts `phase` among
-  `DIAGNOSTIC_VARIABLES`. The blocks enter MOTCO 0.10.0 unweighted: p180
-  holds 133 / 298 of the joint features; the manifest records the shares.
+  per-run centering would move stage signal between runs. `phase` enters
+  MOTCO as a covariate of the stage means (decided by `adni-analyze`:
+  additively with the other four covariates, design column
+  `phase[ADNI2GO]`, LS-means at the pooled phase proportion, no sex ×
+  covariate or stage × covariate term); the primary's latent space is
+  built without the covariates, and the `stage`-conditioned latent
+  adjustment is the predeclared sensitivity arm of the next change
+  `adni-latent-sensitivity`, run after `axis-diagnostics` has measured the
+  primary's components against phase; the axis-diagnostics proposal puts
+  `phase` among `DIAGNOSTIC_VARIABLES`. The blocks enter MOTCO 0.10.0
+  unweighted: p180 holds 133 / 298 of the joint features; the manifest
+  records the shares.
 - Flag and ask before changing, and never set without a proposal
   (constraint 5); decided so far: `CLEAN_OPTIONS`, `COHORT_RULE`,
-  `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`; the others
-  are undecided:
+  `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`,
+  `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
+  `ANALYSIS_RANK_FLOOR`, `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`;
+  the diagnostic constants are undecided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
     for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
@@ -387,9 +438,9 @@ behavior or defaults change.
     categorical 0/1/2), `phase` (`ORIGPROT`: `ADNI1` → `ADNI1`, `ADNIGO` and
     `ADNI2` → `ADNI2GO`; categorical), `statin` (medication table,
     `HMG CoA reductase inhibitors` on the `sc` row, filled 1, empty 0;
-    categorical); missing policy `error`, nothing imputed. Whether the
-    covariates also condition MOTCO's latent space
-    (`covariate_latent_adjustment`) is the analyze proposal's decision.
+    categorical); missing policy `error`, nothing imputed. They do not
+    condition the primary's latent space (`ANALYSIS_LATENT_ADJUSTMENT`,
+    decided by `adni-analyze`).
   - `EXPORT_FEATURE_RULE` – decided by `adni-export`. Membership: a block
     holds the measured concentrations of its platform, each once; every
     cleaned p180 metabolite enters (133); a cleaned NMR column enters unless
@@ -406,17 +457,38 @@ behavior or defaults change.
     `EXPORT_EXPECTED_COUNTS`. The sensitivity variants (all 245 NMR
     columns, the raw scale, `log2(x + 1)`, the generalized log) are a
     later change, registered after the primary analysis.
-  - `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` – MOTCO's RRPP
-    permutations, seed and rejection rule.
-  - `ANALYSIS_RANK_FLOOR` – the latent-rank floor passed to MOTCO.
+  - `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
+    `ANALYSIS_REJECTION_RULE` – decided by `adni-analyze`: 9999 RRPP
+    permutations (the p-value `(1 + b) / (1 + B)` is exact in size at any
+    count; the count sets the resolution, 0.0001), seed 20261027 (the
+    proposal's date), α = 0.05, rejected when `p <= alpha` (the rule of
+    MOTCO's covariate Type I check).
+  - `ANALYSIS_RANK_FLOOR` – decided by `adni-analyze`: 2, MOTCO's validated
+    default `min_components`, passed explicitly and checked equal to
+    MOTCO's default before any input is read; a MOTCO whose default moved
+    stops the run.
+  - `ANALYSIS_LATENT_ADJUSTMENT` – decided by `adni-analyze`: `None` for the
+    primary (the covariate-blind basis of MOTCO's validated path). The
+    `stage`-conditioned latent adjustment with the same five covariates and
+    every other setting equal is the predeclared sensitivity arm
+    (`ANALYSIS_PREDECLARED_LATENT_SENSITIVITY`) of the next change
+    `adni-latent-sensitivity`, read beside the primary and never replacing
+    it; `group_stage` conditioning is not admissible and does not run.
+    Every other MOTCO setting stays MOTCO's default (net-displacement
+    orientation, double CV 4 × 3 folds, 5 repeats, `max_components` 20,
+    `random_state` 1203, no forced rank, no attribution) and is read back
+    from the record; a moved default is a finding.
+  - `READING_RULES` – decided by `adni-analyze`, written before any run:
+    nine statements printed verbatim in `summary.md` and carried by every
+    report, sensitivity and diagnostic (the primary stays primary and an
+    arm's differing status is dependence; the CV-selected rank, floor,
+    eigengap and null summary beside `angle`; `angle` and `shape`
+    non-rejections uninformative, no power statement at this design; a
+    `delta` rejection a difference, not of size; the covariate block, the
+    run offset, the block shares and the feature rule beside the results;
+    reported runs at `n_jobs = 1`; no result changes a constant).
   - `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD` – the axis
     diagnostics' variables and reporting flag.
-  - `READING_RULES` – the binding reading rules of the report, carried from
-    MOTCO's reports (`../MOTCO/docs/roadmap.md`): CV-selected rank beside
-    `angle`; `angle`/`shape` non-rejections uninformative; a `delta`
-    rejection a difference, not specifically of size; covariate block and
-    feature filtering beside the results. Written into the analyze proposal
-    before any run.
 - Deviations from predeclared counts go to a manifest's `findings`, never
   silently.
 - Statistical choices are scientific decisions. Don't change them silently;
@@ -434,8 +506,10 @@ behavior or defaults change.
 - Compute nodes have no internet access. Light steps (`cohort`, `export`,
   `report`) run on the login node; `clean` through `scripts/clean.sbatch`
   (it calls `.venv/bin/adni-sexdiff`, synced on the login node, since
-  `uv run` could try to reach the network), `analyze` through an sbatch
-  script its change adds.
+  `uv run` could try to reach the network), `analyze` through
+  `scripts/analyze.sbatch` (the same locked environment, no `--n-jobs`, so
+  a reported run; compare the pulled `analysis_manifest.json` with the
+  workstation's: statistics, p-values, rank).
 - Only aggregate outputs leave the cluster: `scripts/sync_results.sh`
   (constraint 2). Never copy raw files, cleaned matrices or MOTCO inputs
   between machines.

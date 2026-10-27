@@ -5,12 +5,15 @@ Sex × stage (CN / MCI / AD) trajectory comparison on ADNI serum metabolomics
 the first MOTCO application at a well-powered design (n ≈ 1,300). Later ADNI
 layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 
-**Status: `clean`, `cohort` and `export` implemented** (changes
-`adni-metabolomics-clean`, `adni-cohort` and `adni-export`) and run on the
-workstation; every other step is a stub that raises `NotImplementedError`.
-The statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
-`STAGE_RULE`, `ANALYSIS_COVARIATES` and `EXPORT_FEATURE_RULE`; the analysis
-settings, the diagnostic variables and the reading rules are undecided.
+**Status: `clean`, `cohort`, `export` and `analyze` implemented** (changes
+`adni-metabolomics-clean`, `adni-cohort`, `adni-export` and `adni-analyze`)
+and run on the workstation; `axis-diagnostics` and `report` are stubs that
+raise `NotImplementedError`. The statistical choices made so far are
+`CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`,
+`EXPORT_FEATURE_RULE`, the analysis settings (`ANALYSIS_PERMUTATIONS`,
+`ANALYSIS_SEED`, `ANALYSIS_ALPHA`, `ANALYSIS_RANK_FLOOR`,
+`ANALYSIS_LATENT_ADJUSTMENT`) and `READING_RULES`; the diagnostic variables
+and their threshold are undecided.
 `AGENTS.md` holds the conventions and the hard constraints and is the single
 source of truth.
 
@@ -38,12 +41,12 @@ Project layout:
 ├── data/            # raw ADNI files, uploaded by hand: LONI archive under Metabolomics/, clinical tables under Clinical/, the names the steps read as symlinks (gitignored)
 ├── reports/         # committed case-study reports (numbers pasted from results/, checked by script)
 ├── results/         # pipeline outputs; only aggregate files are committed (see .gitignore)
-├── scripts/         # sync_results.sh (aggregate outputs between workstation and cluster), clean.sbatch (clean on the cluster), spike_*_inventory.py (the changes' read-only spikes)
+├── scripts/         # sync_results.sh (aggregate outputs between workstation and cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py (the changes' read-only spikes)
 ├── src/
 │   └── adni_sexdiff/
 │       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, report
 │       ├── constants.py   # conventions; scientific constants enter through OpenSpec proposals only
-│       └── data.py        # pipeline steps (clean, cohort and export implemented; the others stubs with their output contracts)
+│       └── data.py        # pipeline steps (clean, cohort, export and analyze implemented; the others stubs with their output contracts)
 ├── openspec/        # change proposals and specs
 ├── flake.nix        # Python 3.12 + uv; the shell hook runs `uv sync --locked`
 ├── pyproject.toml   # package adni_sexdiff, CLI adni-sexdiff (uv, uv.lock committed)
@@ -59,7 +62,8 @@ Pipeline (each step reads the previous step's outputs only):
    → `results/cohort/` (below)
 3. `export` – the MOTCO blocks under the feature rule, metadata and
    covariates of the analysis cohort → `results/motco_input/` (below)
-4. `analyze` – `motco.analysis.analyze_trajectories` → `results/motco_analysis/`
+4. `analyze` – one `motco.analysis.analyze_trajectories` call at the
+   predeclared settings → `results/motco_analysis/` (below)
 5. `axis-diagnostics` – what the latent and block axes correlate with →
    `results/motco_diagnostics/`
 6. `report` – the case-study report from the generated files, or a check of
@@ -73,6 +77,7 @@ uv run adni-sexdiff --help
 uv run adni-sexdiff clean --platform all
 uv run adni-sexdiff cohort
 uv run adni-sexdiff export
+uv run adni-sexdiff analyze
 ```
 
 ## `clean`
@@ -313,6 +318,112 @@ shares.
 `export` is a light step: on the cluster it runs on the login node after
 `cohort`. Each machine builds its own blocks from its own data root; only
 `manifest.json` is synced.
+
+## `analyze`
+
+```
+uv run adni-sexdiff analyze [--input-dir DIR] [--out-dir DIR] [--n-jobs N] [--force]
+```
+
+Runs the covariate-adjusted MOTCO comparison of the female and male
+sex × stage trajectories on the exported blocks: one
+`motco.analysis.analyze_trajectories` call (never assembled from `motco plsr`
++ `motco de`), at the settings decided by the change `adni-analyze` before
+any run. Each is a constant, never a flag:
+
+| setting | constant | value |
+|---|---|---|
+| RRPP permutations | `ANALYSIS_PERMUTATIONS` | 9999 (the p-value is `(1 + b) / (1 + B)`, exact in size at any count; the count sets the resolution, 0.0001) |
+| RRPP seed | `ANALYSIS_SEED` | 20261027 |
+| rejection | `ANALYSIS_ALPHA`, `ANALYSIS_REJECTION_RULE` | α = 0.05, rejected when `p <= alpha` |
+| latent-rank floor | `ANALYSIS_RANK_FLOOR` | 2 (`min_components`, MOTCO's validated default, passed explicitly) |
+| latent adjustment | `ANALYSIS_LATENT_ADJUSTMENT` | none for the primary (the covariate-blind basis); the `stage`-conditioned adjustment is the predeclared sensitivity arm of the next change, `adni-latent-sensitivity` |
+| covariates | `ANALYSIS_COVARIATES` | `age`, `education` numeric; `apoe4`, `phase`, `statin` categorical (`ANALYSIS_CATEGORICAL_COVARIATES`); additive, missing policy `error` |
+| everything else | MOTCO's defaults, read back from the record | net-displacement orientation, double CV (4 outer × 3 inner folds, 5 repeats, up to 20 components, random state 1203), no forced rank, no attribution, transform `identity`, group order `Female`, `Male`, stage order `CN`, `MCI`, `AD` |
+
+Gates, before any input is read: the installed MOTCO must be at least
+`ANALYSIS_MOTCO_MIN_VERSION` (0.10.0) and MOTCO's default rank floor must
+equal `ANALYSIS_RANK_FLOOR` (a MOTCO whose default moved stops the run
+instead of changing the primary); either stops naming both values.
+
+Inputs: `p180.csv`, `nmr.csv`, `metadata.csv` and `covariates.csv` from
+`results/motco_input/`, each checked against the sha256 `manifest.json`
+records, and the manifest itself (block columns, covariate codings,
+counts). Nothing else is read. Before anything is written the step checks
+that the four tables carry the same `rid` column in the same order, that
+the column sets match the contract and the manifest's block columns, that
+`sex` and `stage` are within their values, that each categorical covariate
+is within its levels and that no covariate value or block cell is missing;
+a failure names the file or column and a count, never a participant.
+
+How `phase` enters: as a covariate of the stage means, additively with the
+other four. The design has six columns (`age`, `education`, `apoe4[1]`,
+`apoe4[2]`, `phase[ADNI2GO]`, `statin[1]`; reference levels `0`, `ADNI1`,
+`0`) and the LS-means are evaluated at the pooled covariate mean, so the
+stage means are within-phase contrasts at the pooled phase proportion.
+The run offset itself is not corrected (`export`), the adjustment has no
+sex × covariate or stage × covariate term, and the latent space of the
+primary is built without the covariates; the `stage`-conditioned latent
+adjustment is the predeclared sensitivity arm, run by the next change
+after `axis-diagnostics`.
+
+The metadata table the model sees is `analysis_metadata.csv` parsed back
+exactly as `motco analyze --metadata` parses it, so the manifest's
+`cli_equivalent` reproduces the run with MOTCO's CLI (checked on the
+workstation: the statistics, p-values, null summaries and rank are equal
+and `pls_loadings.csv`, `stage_means.csv` and `latent_scores.csv` are
+byte-identical).
+
+Outputs in `results/motco_analysis/` (written as
+`results/motco_analysis.tmp/` and renamed when complete; an existing
+directory stops the step unless `--force` is given; reruns on the same
+inputs, MOTCO release and `n_jobs` give equal statistics, p-values and
+rank and byte-identical CSVs):
+
+| file | content | committed / synced |
+|---|---|---|
+| `result.json` | MOTCO's record: statistics, p-values, null summaries, the configuration spectrum, the latent block (rank, selection mode, `cv_mean_auroc`), the design, the covariate block, the blocks, the settings and software | yes (aggregate) |
+| `latent_scores.csv` | the per-participant PLS scores, keyed by `rid` | no (participant-level) |
+| `pls_loadings.csv` | `block`, `feature`, one column per component | yes (aggregate) |
+| `stage_means.csv` | the fitted LS-mean per sex × stage in latent coordinates | yes (aggregate) |
+| `analysis_metadata.csv` | `rid`, `sex`, `stage`, the five covariates, one row per exported participant in export order | no (participant-level) |
+| `analysis_manifest.json` | versions (MOTCO, scikit-learn among them), git revision, the inputs with observed and recorded hashes and the export manifest's hash and revision, every setting by constant name, `n_jobs`, the covariate block from the record, the MOTCO defaults used, the latent adjustment with the predeclared arm, `cli_equivalent`, counts, expected and observed counts with deviations, output hashes with a participant-level flag, findings | yes (aggregate, no `RID`) |
+| `summary.md` | generated from `result.json`: the statistics with p-values, rejection and null summaries, the CV-selected rank, floor and eigengap beside `angle`, the reading of each status, the cell sizes, the latent and covariate blocks, the export context and `READING_RULES` verbatim | yes (aggregate) |
+
+The manifest checks the counts predeclared from the export and cohort
+manifests (`ANALYSIS_EXPECTED_COUNTS`): 1501 participants (Female
+CN / MCI / AD 237 / 310 / 125, Male 223 / 448 / 158), 133 + 165 = 298
+features, the six design columns, the level counts (`apoe4` 810 / 542 /
+149, `phase` 684 / 817, `statin` 797 / 704), 0 dropped, CV rank selection
+at floor 2, 9999 permutations. A deviation is a finding, printed and
+recorded; it never stops the step and never changes a setting. Findings
+also record `n_jobs` other than 1, a CV-selected rank equal to the floor
+(the floor is binding), fewer CV repeats completed than requested, a
+non-finite statistic or p-value and a MOTCO default that differs from the
+one the proposal states.
+
+`--n-jobs`: MOTCO seeds one RRPP stream per worker, so another value
+changes the permutation draws (the p-values and null summaries; the
+statistics, rank, scores and loadings do not change). Reported runs use
+`n_jobs = 1` (`REPORTED_N_JOBS`); another value is a finding and the run
+is not reported.
+
+Reading rules (`READING_RULES`, printed verbatim in `summary.md` and
+binding for every report, sensitivity and diagnostic), in brief: the
+primary stays primary and an arm's differing status is dependence on that
+arm's setting; the CV-selected rank, the floor, the eigengap and the null
+summary are read beside `angle`; `angle` and `shape` non-rejections are
+uninformative (no power statement exists at this design); a `delta`
+rejection is a difference, not specifically of size; the covariate block,
+the p180 run offset, the block shares and the feature rule are read beside
+the results; reported runs use `n_jobs = 1`; no result changes a constant.
+
+On the cluster, `scripts/analyze.sbatch` runs `analyze` (partition
+`512x1024`, 1 CPU, 4 GB, 1 h, no `--n-jobs`, so a reported run; Slurm logs
+in `results/motco_analysis/logs/`) after `export` on the login node; pull
+the aggregate outputs with `scripts/sync_results.sh` and compare the
+manifests (statistics, p-values, rank; a floating-point difference across
+machines is recorded, not a gate).
 
 Dependencies: `motco` (git tag `v0.10.0`, via `[tool.uv.sources]`),
 `metabo_adni==0.5.8` (cleaning, never reimplemented here), `pandas`, `numpy`.
