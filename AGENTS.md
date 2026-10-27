@@ -15,19 +15,21 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 file says otherwise.
 
 Status (2026-10-27): `clean` (change `adni-metabolomics-clean`), `cohort`
-(change `adni-cohort`), `export` (change `adni-export`) and `analyze`
-(change `adni-analyze`) are implemented and run on the workstation, whose
+(change `adni-cohort`), `export` (change `adni-export`), `analyze`
+(change `adni-analyze`) and `axis-diagnostics` (change
+`adni-axis-diagnostics`) are implemented and run on the workstation, whose
 data root holds the raw metabolomics files and the ADNIMERGE freeze; the
-cluster copy and clone do not exist yet. `axis-diagnostics` and `report`
-are stubs whose body raises `NotImplementedError`; their docstrings in
-`data.py` state the inputs, the outputs and the output contract. Decided
-scientific constants: `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`,
+cluster copy and clone do not exist yet. `report` is a stub whose body
+raises `NotImplementedError`; its docstring in `data.py` states the
+inputs, the outputs and the output contract. Decided scientific
+constants: `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`,
 `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis settings
 (`ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with
 `ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
-`ANALYSIS_LATENT_ADJUSTMENT`) and `READING_RULES`; the diagnostic
-variables and threshold are undecided (see "Flag and ask"). Each step is
-implemented by its own OpenSpec change, in order.
+`ANALYSIS_LATENT_ADJUSTMENT`), `READING_RULES` and the diagnostic
+constants (`DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD`);
+every constant the six steps need is decided (see "Flag and ask"). Each
+step is implemented by its own OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
    pinned release's QC functions called in-process in the order of its
@@ -138,16 +140,47 @@ implemented by its own OpenSpec change, in order.
    CV-selected rank equal to the floor, fewer CV repeats than requested, a
    non-finite statistic or p-value, a moved MOTCO default. On the cluster
    it runs through `scripts/analyze.sbatch`.
-5. `axis-diagnostics` – from `results/motco_input/`, `results/motco_analysis/`
-   and `results/cohort/` only: Spearman and covariate-partial Spearman
-   correlations of every latent component with the undecided
-   `DIAGNOSTIC_VARIABLES`, the same for the first PCs of each z-scored
-   block, the geometry shares along each component; rows at or above
-   `DIAGNOSTIC_CORRELATION_THRESHOLD` flagged, no p-values. Writes
+5. `axis-diagnostics` – from `results/motco_input/` (the four tables, each
+   checked against `manifest.json`; the manifest's block columns, covariate
+   codings and recorded phase offset), `results/motco_analysis/`
+   (`result.json`, `latent_scores.csv`, `stage_means.csv`,
+   `pls_loadings.csv`, `analysis_manifest.json`; the analysis manifest's
+   recorded input hashes and export-manifest hash checked against the
+   export files now, the `pls_` column counts against the record's rank,
+   the stage-mean rows, the loadings' features and the `rid` set of the
+   scores) and `results/cohort/` (`cohort.csv` against
+   `cohort_manifest.json`, whose hash must equal the export manifest's
+   record; the both-flag rows must be the exported participants in order)
+   only, nothing else; a mismatch stops it before anything is written,
+   naming the file, both hashes or both counts and the step to rerun. For
+   every latent component: Spearman and partial Spearman correlations
+   (given the record's six design columns,
+   `DIAGNOSTIC_CONDITIONING_COLUMNS`, built from `covariates.csv` with the
+   export's codings and checked by name and column mean against the
+   record's `design_columns` and `reference_row`) with the eight
+   `DIAGNOSTIC_VARIABLES`, the same for the first `DIAGNOSTIC_N_BLOCK_PCS`
+   PCs of each z-scored block (pc1 against `phase` beside the export's
+   recorded Pearson value), the geometry shares along each component from
+   `stage_means.csv` and the block composition of each component from
+   `pls_loadings.csv`; |ρ| at or above `DIAGNOSTIC_CORRELATION_THRESHOLD`
+   flagged, raw and partial separately, no p-value. Writes
    `results/motco_diagnostics/` (`axis_correlations.csv`, `block_pcs.csv`,
-   `geometry_shares.csv`, `diagnostics.md`, `diagnostics_manifest.json`; all
-   aggregate). It reads sex and stage, so it is never a filter: its outputs
-   feed no `export` or `analyze` run.
+   `geometry_shares.csv`, `components.csv`, `diagnostics.md` with the
+   flagged rows first and `READING_RULES` verbatim,
+   `diagnostics_manifest.json` with the twelve input hashes and the chain
+   checks, the analysis read with `is_primary`, the variables with sources
+   and derivations, the threshold, the conditioning columns, the
+   definition of every statistic, the predeclared
+   `DIAGNOSTICS_EXPECTED_COUNTS` beside the observed ones with deviations,
+   output hashes, findings; every file per component, per block or per
+   variable, no `rid`, all committed). Findings, never stops: a count
+   deviation, an analysis read with `n_jobs ≠ 1`, an analysis that is not
+   the primary (`--analysis-dir` or a recorded latent adjustment: the
+   `primary` and `rows` expectations are skipped, the arm path of
+   `adni-latent-sensitivity`), a constant variable, the flagged variables
+   per component. It reads sex and stage, so it is never a filter: its
+   outputs feed no `export` or `analyze` run, and no arm or variant is
+   derived from a diagnostic value.
 6. `report` – from the generated files only (`result.json`, `summary.md`,
    the manifests, `stage_counts.csv`, the diagnostics): writes
    `reports/motco-adni-<date>.md`, or with `--check` compares every number
@@ -294,13 +327,21 @@ behavior or defaults change.
   `ANALYSIS_ALPHA`, `ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
   `ANALYSIS_LATENT_ADJUSTMENT` with
   `ANALYSIS_PREDECLARED_LATENT_SENSITIVITY`, and `READING_RULES` defined,
-  with the predeclared `ANALYSIS_EXPECTED_COUNTS`).
+  with the predeclared `ANALYSIS_EXPECTED_COUNTS`; `DIAGNOSTIC_VARIABLES`
+  and `DIAGNOSTIC_CORRELATION_THRESHOLD` defined, with the conventions
+  `DIAGNOSTIC_N_BLOCK_PCS`, `DIAGNOSTIC_CONDITIONING_COLUMNS`,
+  `DIAGNOSTICS_ANALYSIS_FILES`, `DIAGNOSTICS_GEOMETRY_QUANTITIES` and the
+  predeclared `DIAGNOSTICS_EXPECTED_COUNTS`).
 - `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`,
-  `export` and `analyze` implemented, the others stubs), `resolve_data_root`,
-  the version gates (`check_metabo_adni_version`, `check_motco_version`,
-  `check_motco_rank_floor`), the raw-input helpers, the analysis input
-  loader and summary renderer, and the manifest / `.tmp` helpers every step
-  reuses.
+  `export`, `analyze` and `axis-diagnostics` implemented, `report` a stub),
+  `resolve_data_root`, the version gates (`check_metabo_adni_version`,
+  `check_motco_version`, `check_motco_rank_floor`), the raw-input helpers,
+  the analysis input loader (shared by `analyze` and `axis-diagnostics`)
+  and summary renderer, the diagnostic statistics (`spearman`,
+  `partial_spearman`, `block_principal_components`, `geometry_shares`,
+  `block_loading_shares`), the chain checks (`_check_analysis_inputs`,
+  `_check_cohort_chain`) and `render_axis_diagnostics`, and the manifest /
+  `.tmp` helpers every step reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
   and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
   `analyze.sbatch` (`analyze` on the cluster, no `--n-jobs`, so a reported
@@ -406,16 +447,20 @@ behavior or defaults change.
   built without the covariates, and the `stage`-conditioned latent
   adjustment is the predeclared sensitivity arm of the next change
   `adni-latent-sensitivity`, run after `axis-diagnostics` has measured the
-  primary's components against phase; the axis-diagnostics proposal puts
-  `phase` among `DIAGNOSTIC_VARIABLES`. The blocks enter MOTCO 0.10.0
-  unweighted: p180 holds 133 / 298 of the joint features; the manifest
-  records the shares.
+  primary's components against phase (`phase` is among
+  `DIAGNOSTIC_VARIABLES`, decided by `adni-axis-diagnostics`; the
+  diagnostic also correlates each block's PCs with `phase` beside the
+  export's recorded value and records which block carries each component).
+  The blocks enter MOTCO 0.10.0 unweighted: p180 holds 133 / 298 of the
+  joint features; the export manifest records the shares and
+  `components.csv` the loading share of each block per component.
 - Flag and ask before changing, and never set without a proposal
   (constraint 5); decided so far: `CLEAN_OPTIONS`, `COHORT_RULE`,
   `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`,
   `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
-  `ANALYSIS_RANK_FLOOR`, `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`;
-  the diagnostic constants are undecided:
+  `ANALYSIS_RANK_FLOOR`, `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`,
+  `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD`; every
+  constant the six steps need is decided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
     for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
@@ -487,8 +532,23 @@ behavior or defaults change.
     `delta` rejection a difference, not of size; the covariate block, the
     run offset, the block shares and the feature rule beside the results;
     reported runs at `n_jobs = 1`; no result changes a constant).
-  - `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD` – the axis
-    diagnostics' variables and reporting flag.
+  - `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD` – decided by
+    `adni-axis-diagnostics` (2026-10-27, before any run). The variables, in
+    this order, each with its source among the kept outputs: `age`,
+    `education` (`covariates.csv`, years), `apoe4` (0 / 1 / 2, ordinal),
+    `phase` (1 for `ADNI2GO`, 0 for `ADNI1`: the p180 run), `statin`
+    (1 / 0), `stage` (`metadata.csv`: CN 0, MCI 1, AD 2), `male` (1 for
+    Male), `dx_bl` (`cohort.csv`: CN 0, SMC 1, EMCI 2, LMCI 3, AD 4, the
+    enrollment gradient `STAGE_RULE` merges; SMC and EMCI exist only in
+    ADNI-GO/2, so a phase axis is also a `dx_bl` axis). The threshold 0.3
+    is a reporting flag on |ρ|, raw and partial, for latent components and
+    block PCs alike: magnitude, not significance (no p-value on any
+    correlation), and never an adoption rule. Conventions beside them: the
+    partial correlations condition on the record's six design columns
+    (`DIAGNOSTIC_CONDITIONING_COLUMNS`), `DIAGNOSTIC_N_BLOCK_PCS` = 3; the
+    predeclared counts are `DIAGNOSTICS_EXPECTED_COUNTS`. The diagnostic
+    feeds no filter, variant or arm: nothing is chosen from a flagged row,
+    and no `export` or `analyze` run reads its outputs.
 - Deviations from predeclared counts go to a manifest's `findings`, never
   silently.
 - Statistical choices are scientific decisions. Don't change them silently;

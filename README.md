@@ -5,15 +5,17 @@ Sex × stage (CN / MCI / AD) trajectory comparison on ADNI serum metabolomics
 the first MOTCO application at a well-powered design (n ≈ 1,300). Later ADNI
 layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 
-**Status: `clean`, `cohort`, `export` and `analyze` implemented** (changes
-`adni-metabolomics-clean`, `adni-cohort`, `adni-export` and `adni-analyze`)
-and run on the workstation; `axis-diagnostics` and `report` are stubs that
-raise `NotImplementedError`. The statistical choices made so far are
-`CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`,
-`EXPORT_FEATURE_RULE`, the analysis settings (`ANALYSIS_PERMUTATIONS`,
-`ANALYSIS_SEED`, `ANALYSIS_ALPHA`, `ANALYSIS_RANK_FLOOR`,
-`ANALYSIS_LATENT_ADJUSTMENT`) and `READING_RULES`; the diagnostic variables
-and their threshold are undecided.
+**Status: `clean`, `cohort`, `export`, `analyze` and `axis-diagnostics`
+implemented** (changes `adni-metabolomics-clean`, `adni-cohort`,
+`adni-export`, `adni-analyze` and `adni-axis-diagnostics`) and run on the
+workstation; `report` is a stub that raises `NotImplementedError`. The
+statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
+`STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis
+settings (`ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
+`ANALYSIS_RANK_FLOOR`, `ANALYSIS_LATENT_ADJUSTMENT`), `READING_RULES` and
+the diagnostic constants (`DIAGNOSTIC_VARIABLES`,
+`DIAGNOSTIC_CORRELATION_THRESHOLD`); every constant the six steps need is
+decided.
 `AGENTS.md` holds the conventions and the hard constraints and is the single
 source of truth.
 
@@ -46,7 +48,7 @@ Project layout:
 │   └── adni_sexdiff/
 │       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, report
 │       ├── constants.py   # conventions; scientific constants enter through OpenSpec proposals only
-│       └── data.py        # pipeline steps (clean, cohort, export and analyze implemented; the others stubs with their output contracts)
+│       └── data.py        # pipeline steps (clean, cohort, export, analyze and axis-diagnostics implemented; report a stub with its output contract)
 ├── openspec/        # change proposals and specs
 ├── flake.nix        # Python 3.12 + uv; the shell hook runs `uv sync --locked`
 ├── pyproject.toml   # package adni_sexdiff, CLI adni-sexdiff (uv, uv.lock committed)
@@ -64,8 +66,9 @@ Pipeline (each step reads the previous step's outputs only):
    covariates of the analysis cohort → `results/motco_input/` (below)
 4. `analyze` – one `motco.analysis.analyze_trajectories` call at the
    predeclared settings → `results/motco_analysis/` (below)
-5. `axis-diagnostics` – what the latent and block axes correlate with →
-   `results/motco_diagnostics/`
+5. `axis-diagnostics` – what the latent components and the block axes
+   correlate with, the geometry shares and the block composition per
+   component → `results/motco_diagnostics/` (below)
 6. `report` – the case-study report from the generated files, or a check of
    one against them → `reports/`
 
@@ -78,6 +81,7 @@ uv run adni-sexdiff clean --platform all
 uv run adni-sexdiff cohort
 uv run adni-sexdiff export
 uv run adni-sexdiff analyze
+uv run adni-sexdiff axis-diagnostics
 ```
 
 ## `clean`
@@ -424,6 +428,126 @@ in `results/motco_analysis/logs/`) after `export` on the login node; pull
 the aggregate outputs with `scripts/sync_results.sh` and compare the
 manifests (statistics, p-values, rank; a floating-point difference across
 machines is recorded, not a gate).
+
+## `axis-diagnostics`
+
+```
+uv run adni-sexdiff axis-diagnostics [--input-dir DIR] [--analysis-dir DIR] [--cohort-dir DIR] [--out-dir DIR] [--force]
+```
+
+Measures, from the kept outputs only, what each latent component of the
+analysis and each block's leading principal axes correlate with, how much
+of the sex × stage geometry lies along each component and which block
+carries it. It reads `results/motco_input/` (`p180.csv`, `nmr.csv`,
+`metadata.csv`, `covariates.csv`, each checked against the sha256
+`manifest.json` records; the manifest's block columns, covariate codings
+and recorded phase offset), `results/motco_analysis/` (`result.json`,
+`latent_scores.csv`, `stage_means.csv`, `pls_loadings.csv`,
+`analysis_manifest.json`) and `results/cohort/` (`cohort.csv`,
+`cohort_manifest.json`), and no data-root file or cleaned table. It takes
+seconds on a workstation and runs wherever the analysis outputs are.
+
+Chain checks, before anything is written (a failure names the file and
+both hashes or both counts and the step to rerun, never a participant):
+every input hash the analysis manifest records equals the export file's
+sha256 now, and so does the export manifest's; the `pls_` column count of
+`latent_scores.csv`, `stage_means.csv` and `pls_loadings.csv` equals the
+record's selected rank; `stage_means.csv` holds one row per sex × stage;
+`pls_loadings.csv` holds every exported feature once; `latent_scores.csv`
+lists exactly the exported participants; `cohort.csv` hashes to its
+manifest's record, `cohort_manifest.json` to the export manifest's record,
+and the rows with both platform flags are the exported participants in
+export order.
+
+Variables (`DIAGNOSTIC_VARIABLES`, decided by the change
+`adni-axis-diagnostics` before any run and never chosen or extended from
+a result), in this order; a value outside its levels stops the step naming
+the column and a count:
+
+| variable | source | derivation |
+|---|---|---|
+| `age`, `education` | `covariates.csv` | as exported (years) |
+| `apoe4` | `covariates.csv` | ε4 allele count 0 / 1 / 2, read as ordinal |
+| `phase` | `covariates.csv` | 1 for `ADNI2GO`, 0 for `ADNI1` (the p180 run; the design column `phase[ADNI2GO]`) |
+| `statin` | `covariates.csv` | 1 for a statin user at `sc`, 0 otherwise |
+| `stage` | `metadata.csv` | ordinal CN 0, MCI 1, AD 2 |
+| `male` | `metadata.csv` | 1 for Male, 0 for Female |
+| `dx_bl` | `cohort.csv` | ordinal CN 0, SMC 1, EMCI 2, LMCI 3, AD 4: ADNI's enrollment gradient, which `STAGE_RULE` merges; SMC and EMCI exist only in ADNI-GO/2, so a phase axis is also a `dx_bl` axis and the partial correlation has to show which it is |
+
+Statistics (each defined once in `data.py` and written into the manifest):
+
+- Spearman ρ over the pairwise-complete participants (undefined with fewer
+  than three, or a constant);
+- the partial Spearman ρ given the six design columns of the record
+  (`DIAGNOSTIC_CONDITIONING_COLUMNS`: `age`, `education`, `apoe4[1]`,
+  `apoe4[2]`, `phase[ADNI2GO]`, `statin[1]`, built from `covariates.csv`
+  with the export's codings and checked by name and by column mean against
+  the record's `design_columns` and `reference_row`, so the partial reads
+  as what the model's adjustment leaves): the Spearman correlation of the
+  OLS residuals of both variables on an intercept and the design;
+  undefined for a covariate itself;
+- the first three principal components of each z-scored block
+  (`DIAGNOSTIC_N_BLOCK_PCS`; population SD, SVD, each sign fixed so that
+  its largest loading is positive) with their variance shares, and pc1's
+  Spearman with `phase` beside the Pearson value the export recorded (a
+  cross-check with no agreement threshold);
+- the geometry shares from `stage_means.csv`: per component, the share of
+  the squared length of each sex's net displacement (AD minus CN, what
+  `angle` reads), of the per-stage sex differences (Female minus Male) and
+  of the stage-centred sex differences; the shares of a quantity sum to 1;
+- the block composition of each component: the share of its squared
+  `pls_loadings.csv` entries (MOTCO's rotation weights on the z-scored
+  joint features; the blocks enter unweighted, 133 / 298 and 165 / 298)
+  held by each block, summing to 1.
+
+A correlation is flagged when |ρ| ≥ `DIAGNOSTIC_CORRELATION_THRESHOLD`
+(0.3, decided with the variables), raw and partial separately. The flag is
+a reporting threshold on magnitude: no p-value is attached to any
+correlation (at n = 1501 the sampling SD of ρ under independence is about
+0.026, so a flag lies far outside sampling noise), and it is not an
+adoption rule: nothing is chosen from a flagged row.
+
+Outputs in `results/motco_diagnostics/` (written as
+`results/motco_diagnostics.tmp/` and renamed when complete; an existing
+directory stops the step unless `--force` is given; two runs on the same
+inputs give byte-identical CSVs and `diagnostics.md`). Every file is per
+component, per block or per variable, holds no `rid`, and is committed:
+
+| file | content |
+|---|---|
+| `axis_correlations.csv` | per latent component × variable: `component`, `component_sd`, `variable`, `source`, `n`, `spearman`, `n_partial`, `partial_spearman`, `flag_raw`, `flag_partial` (64 rows at rank 8) |
+| `block_pcs.csv` | the same for the first three PCs of each block, with `block` and `variance_share` (48 rows) |
+| `geometry_shares.csv` | `quantity`, `component`, `value` (the signed component of a single vector; empty for the summed quantities), `along`, `total`, `share` (32 rows at rank 8) |
+| `components.csv` | per component: `sd`, `loading_share_p180`, `loading_share_nmr`, `n_flagged_raw`, `n_flagged_partial`, `top_variable`, `top_spearman` (8 rows) |
+| `diagnostics.md` | what the tables are and are not, the flagged rows first (latent components, then block PCs, by \|ρ\|), the component summary, the variable × component table, the block PCs beside the export's recorded phase offset, the geometry shares, the analysis read, the findings and `READING_RULES` verbatim |
+| `diagnostics_manifest.json` | versions, git revision, the twelve inputs with sha256 and the chain checks, the analysis read (manifest hash, latent adjustment, `n_jobs`, rank, whether it is the primary), the variables with sources and derivations, the threshold, the conditioning columns, the definition of every statistic, the counts, the predeclared `DIAGNOSTICS_EXPECTED_COUNTS` beside them with deviations, output hashes, findings |
+
+The manifest checks the counts predeclared from the export, cohort and
+analysis manifests (`DIAGNOSTICS_EXPECTED_COUNTS`): 1501 participants and
+the sex × stage cells, the eight variables, the six conditioning columns,
+133 and 165 features with three PCs each, and, for the primary, rank 8 by
+CV, no latent adjustment, `n_jobs` 1 and the row counts 64 / 48 / 32 / 8.
+A deviation is a finding, printed and recorded; it never stops the step
+and never changes a constant. Findings also record an analysis read whose
+`n_jobs` is not 1 (its draws are not the reported ones; the scores are
+unaffected), an analysis that is not the primary, a variable that is
+constant or has fewer than three complete rows, and, per component, the
+flagged variables as counts and names.
+
+Running on an arm: `--analysis-dir` and `--out-dir` let a sensitivity
+change (next: `adni-latent-sensitivity`, the `stage`-conditioned latent
+arm) run the same diagnostic on an analysis directory that mirrors the
+primary's. The manifest then records `is_primary` false, the `primary`
+and `rows` expectations are skipped and a finding names the directory and
+the adjustment. No other flag; no setting is a flag.
+
+The diagnostic reads sex and stage, so it is never a filter: no `export`
+or `analyze` run reads `results/motco_diagnostics/`, and arms and variants
+are predeclared in a change proposal, never derived from a diagnostic
+value. An axis correlated with a variable is a finding about the
+measurement space of the primary analysis, not a reinterpretation of its
+statistics or p-values; `diagnostics.md` prints `READING_RULES` verbatim
+and the primary stays primary.
 
 Dependencies: `motco` (git tag `v0.10.0`, via `[tool.uv.sources]`),
 `metabo_adni==0.5.8` (cleaning, never reimplemented here), `pandas`, `numpy`.
