@@ -173,6 +173,9 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+# The module file pins the interpreter to a machine-specific path; each
+# machine keeps its own (as ../sead_sexdiff does). The rest of .idea/ is shared.
+.idea/*.iml
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
