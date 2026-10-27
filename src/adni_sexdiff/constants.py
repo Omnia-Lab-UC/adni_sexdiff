@@ -19,15 +19,18 @@ Scientific constants
     merged) and ``ANALYSIS_COVARIATES`` (set, order, sources and coding), by
     the change ``adni-cohort``; ``EXPORT_FEATURE_RULE`` (which cleaned
     metabolites enter each block, by family, and on which scale), by the
-    change ``adni-export``. The others are undecided and not defined; the
-    names reserved for them (a proposal may rename them) are:
+    change ``adni-export``; ``ANALYSIS_PERMUTATIONS``, ``ANALYSIS_SEED``,
+    ``ANALYSIS_ALPHA`` with ``ANALYSIS_REJECTION_RULE``,
+    ``ANALYSIS_RANK_FLOOR``, ``ANALYSIS_LATENT_ADJUSTMENT`` (the primary's
+    measurement settings, with the ``stage``-conditioned latent adjustment
+    predeclared as a sensitivity arm of the change
+    ``adni-latent-sensitivity``) and ``READING_RULES`` (the binding reading
+    rules every reader of the result carries), by the change
+    ``adni-analyze``. The others are undecided and not defined; the names
+    reserved for them (a proposal may rename them) are:
 
-    - ``ANALYSIS_PERMUTATIONS``, ``ANALYSIS_SEED``, ``ANALYSIS_ALPHA`` –
-      MOTCO's RRPP permutations, seed and rejection rule.
-    - ``ANALYSIS_RANK_FLOOR`` – the latent-rank floor passed to MOTCO.
     - ``DIAGNOSTIC_VARIABLES``, ``DIAGNOSTIC_CORRELATION_THRESHOLD`` – the
       axis diagnostics' variables and reporting flag.
-    - ``READING_RULES`` – the binding reading rules of the report.
 """
 
 from __future__ import annotations
@@ -539,4 +542,120 @@ EXPORT_EXPECTED_COUNTS: dict[str, dict | int] = {
     "non_finite": {"p180": 0, "nmr": 0},
     "phase_offset": {"p180": {"abs_d_gt_1": 80}, "nmr": {"abs_d_gt_1": 0}},
     "missing_covariate_values": 0,
+}
+
+
+# --- analyze: scientific constants -------------------------------------------
+
+#: Decided by the change ``adni-analyze`` (2026-10-27, before any run) and
+#: never changed by a flag, a result or a count. The measurement settings of
+#: the primary analysis, one ``motco.analysis.analyze_trajectories`` call on
+#: the exported blocks: MOTCO's RRPP permutations (the p-value is
+#: ``(1 + b) / (1 + B)``, exact in size at any count; 9999 sets the Monte
+#: Carlo resolution at 0.0001), the RRPP seed (the proposal's date), the
+#: rejection rule (``p <= alpha``, the rule of MOTCO's covariate Type I
+#: check, exact for that p-value), the latent-rank floor (``min_components``,
+#: MOTCO's validated default, passed explicitly and checked equal to MOTCO's
+#: default before any input is read) and the latent adjustment of the primary
+#: (``None``: the covariate-blind basis of MOTCO's validated path). Every
+#: other MOTCO setting stays MOTCO's default and is read back from the record
+#: into the manifest. ``phase`` enters as a covariate of the stage means
+#: (``ANALYSIS_COVARIATES``), additively; the run offset is not corrected.
+ANALYSIS_PERMUTATIONS = 9999
+ANALYSIS_SEED = 20261027
+ANALYSIS_ALPHA = 0.05
+ANALYSIS_REJECTION_RULE = "p <= alpha"
+ANALYSIS_RANK_FLOOR = 2
+ANALYSIS_LATENT_ADJUSTMENT: str | None = None
+#: The ``stage``-conditioned latent adjustment (``covariate_latent_adjustment``
+#: ``"stage"``, the same five covariates, every other setting equal) is
+#: decided by ``adni-analyze`` as a predeclared sensitivity arm, run by the
+#: following change after ``axis-diagnostics``; it is read beside the primary
+#: under ``READING_RULES`` and never replaces it. ``group_stage`` conditioning
+#: is not admissible and does not run.
+ANALYSIS_PREDECLARED_LATENT_SENSITIVITY: dict[str, str] = {
+    "setting": "covariate_latent_adjustment",
+    "conditioning": "stage",
+    "change": "adni-latent-sensitivity",
+}
+
+#: Decided by the change ``adni-analyze``, written before any run: the
+#: binding reading rules of the result, printed verbatim in ``summary.md``
+#: and carried by every report, sensitivity and diagnostic that reads the
+#: analysis. Carried from MOTCO's reports (``../MOTCO/docs/roadmap.md``).
+READING_RULES: tuple[str, ...] = (
+    "The primary result is the covariate-adjusted analysis on the covariate-blind basis with the five "
+    "covariates; every sensitivity (latent adjustment, export variants, the CN / LMCI / AD arm, a rank sweep) "
+    "is read beside it, and a rejection status that differs in an arm is dependence on that arm's setting, "
+    "never a replacement of the primary.",
+    "The CV-selected rank, the rank floor, the record's `config_spectrum` eigengap and the `angle` null "
+    "summary are reported beside `angle`. The floor defines `angle` and `shape` in at least two dimensions; "
+    "it does not make them powerful.",
+    "`angle` and `shape` non-rejections are uninformative: MOTCO's operating characteristics were measured "
+    "at n = 80 on a structural analogue (InterSIM blocks, 498 features), and no power statement exists at "
+    "this design (n = 1501, 298 metabolites, six design columns). `angle` reads only the endpoint stages "
+    "(CN and AD). A rejection is evidence that the trajectories differ in that respect, with Type I "
+    "controlled at the validated designs.",
+    "A `delta` rejection is evidence of a difference between the sexes' trajectories, not specifically of "
+    "a difference in size.",
+    "The covariate block of the record (design columns, reference row, missing policy, dropped "
+    "participants) is reported beside the results. The adjustment is additive and linear on a "
+    "covariate-blind basis, validated at three design columns and n = 80, and has no sex × covariate or "
+    "stage × covariate term: the run offset is assumed equal in both sexes and across stages.",
+    "The p180 run offset (export manifest `counts.phase_offset`: median |d| 1.12, 80 of 133 metabolites "
+    "above 1, PC1 correlation 0.73 with phase; NMR 0.21, 0, 0.13) and the block shares (p180 133 / 298, "
+    "unweighted in MOTCO 0.10.0) are reported beside the results. A latent component that tracks phase is "
+    "a reading matter for `axis-diagnostics` and the latent-adjusted arm, not an adjustment of the primary.",
+    "Feature membership and scale (`EXPORT_FEATURE_RULE`: 165 of 245 NMR columns, the floored log2, "
+    "nothing imputed, winsorized or removed) are reported beside the results.",
+    "Reported runs use `n_jobs = 1`; a run at another value carries a finding and is not reported. Report "
+    "numbers are pasted from the generated files and checked by `report --check`.",
+    "No result changes a constant. The analysis is run once at these settings; a second run at other "
+    "settings is a new proposal.",
+)
+
+# --- analyze: conventions and predeclared counts ------------------------------
+
+#: The statistics MOTCO reports, in the order the summary lists them.
+ANALYSIS_STATISTICS: tuple[str, ...] = ("delta", "angle", "shape")
+#: MOTCO's missing-covariate policy: a missing value stops the step (the
+#: loader stops first, naming the column and a count); nothing is imputed.
+ANALYSIS_MISSING_COVARIATES = "error"
+#: The covariates declared categorical to MOTCO, derived from the coding
+#: decided by ``adni-cohort`` so that it lives in one place.
+ANALYSIS_CATEGORICAL_COVARIATES: tuple[str, ...] = tuple(
+    name for name, spec in ANALYSIS_COVARIATES.items() if spec["coding"] == "categorical"
+)
+#: Every export file ``analyze`` reads, by name in the export directory. No
+#: other file is read.
+ANALYSIS_INPUT_FILES: tuple[str, ...] = (
+    *(f"{platform}.csv" for platform in EXPORT_BLOCKS),
+    EXPORT_METADATA,
+    EXPORT_COVARIATES,
+    EXPORT_MANIFEST,
+)
+
+#: Predeclared by the change ``adni-analyze`` from the export and cohort
+#: manifests (none from a MOTCO run on ADNI data): the exported participants
+#: and their sex × stage cells, the features per block and joint, the design
+#: columns MOTCO renders from ``ANALYSIS_COVARIATES`` (typed out, so a renamed
+#: level surfaces as a deviation), the observed count per categorical level,
+#: the participants dropped for a missing covariate, the rank selection mode,
+#: the floor and the permutations as the record states them. ``analyze``
+#: compares its observed counts with these and records every difference as a
+#: finding; a difference never stops the step and never changes a setting.
+ANALYSIS_EXPECTED_COUNTS: dict[str, dict | int | str | tuple] = {
+    "participants": 1501,
+    "sex_stage": {"Female": {"CN": 237, "MCI": 310, "AD": 125}, "Male": {"CN": 223, "MCI": 448, "AD": 158}},
+    "features": {"p180": 133, "nmr": 165, "joint": 298},
+    "design_columns": ("age", "education", "apoe4[1]", "apoe4[2]", "phase[ADNI2GO]", "statin[1]"),
+    "covariate_levels": {
+        "apoe4": {"0": 810, "1": 542, "2": 149},
+        "phase": {"ADNI1": 684, "ADNI2GO": 817},
+        "statin": {"0": 797, "1": 704},
+    },
+    "dropped": 0,
+    "component_selection": "cv",
+    "min_components": ANALYSIS_RANK_FLOOR,
+    "permutations": ANALYSIS_PERMUTATIONS,
 }
