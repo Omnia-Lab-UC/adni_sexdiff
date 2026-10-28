@@ -9,9 +9,9 @@
         },
         "pcs": 3,
         "variance_shares": {
-          "pc1": 0.43779980094289367,
-          "pc2": 0.24669660993807893,
-          "pc3": 0.08539593799729978
+          "pc1": 0.43779980094289345,
+          "pc2": 0.24669660993807951,
+          "pc3": 0.08539593799729961
         }
       },
       "p180": {
@@ -22,9 +22,9 @@
         },
         "pcs": 3,
         "variance_shares": {
-          "pc1": 0.4183075176778528,
-          "pc2": 0.07052959804466429,
-          "pc3": 0.06022999131512985
+          "pc1": 0.41830751767785274,
+          "pc2": 0.07052959804466431,
+          "pc3": 0.06022999131512982
         }
       }
     },
@@ -171,7 +171,7 @@
     ],
     "variables_missing": {}
   },
-  "created_at": "2026-10-27T20:35:03+00:00",
+  "created_at": "2026-10-28T16:30:34+00:00",
   "deviations": [],
   "expected": {
     "blocks": {
@@ -235,7 +235,7 @@
     "pls_4: 2 of 8 variables flagged at |rho| >= 0.3 (raw or partial): statin (-0.36; partial n/a), phase (0.32; partial n/a)"
   ],
   "git_revision": {
-    "commit": "69c8e2c60fd86a2aef9fc8157ec9d8c3c3d0010d",
+    "commit": "35a1b62c65e4343bf5b879b8db44f155e6f0bcc5",
     "dirty": false
   },
   "inputs": {
@@ -342,6 +342,41 @@
       }
     }
   },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+    "cpus_available": 24,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-office",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
   "outputs": {
     "axis_correlations.csv": {
       "bytes": 6200,
@@ -349,9 +384,9 @@
       "sha256": "d0406d1964eadd9081f7ebccf414e51586cbd0a46bd0aedf953764e2c904afa5"
     },
     "block_pcs.csv": {
-      "bytes": 4871,
+      "bytes": 4879,
       "participant_level": false,
-      "sha256": "e999a7a01c75db6933ebd6de4f99cb923327307baaa6d4e7f825c7c42b924bb5"
+      "sha256": "4998e90e387ad927c4fd5e711edbf442a62fe4a8387bc6bc661e9b6197620796"
     },
     "components.csv": {
       "bytes": 847,

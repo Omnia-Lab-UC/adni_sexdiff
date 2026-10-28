@@ -84,6 +84,29 @@ uv run adni-sexdiff analyze
 uv run adni-sexdiff axis-diagnostics
 ```
 
+Numerics. Every step runs in a pinned numeric environment
+(`constants.NUMERIC_SETTINGS`, change `adni-portable-numerics`), so any
+machine writes the same bytes from the same inputs and the hash chain holds
+whichever machine ran a step. Importing `adni_sexdiff` sets the four
+variables before numpy loads; the Nix shell and the sbatch scripts export
+them too:
+
+| variable | value | what it fixes |
+|---|---|---|
+| `NPY_DISABLE_CPU_FEATURES` | `X86_V4 AVX512_ICL` | numpy's AVX-512 `log2` (`export`) |
+| `OPENBLAS_CORETYPE` | `Haswell` | OpenBLAS's kernel choice (`analyze`) |
+| `OPENBLAS_NUM_THREADS` | `1` | the block SVD's thread-dependent reductions (`axis-diagnostics`) |
+| `OMP_NUM_THREADS` | `1` | OpenMP threads (no effect today) |
+
+Every manifest records the state the run actually had (`numerics`: host,
+CPU, the variables, numpy's `log2` target, each BLAS library's kernel and
+threads, `pinned`). To check a machine, run a step and read
+`numerics.pinned`. A run that is not pinned completes with a finding and is
+not committed; this happens, for example, when numpy was imported before
+`adni_sexdiff` in a script. On 2026-10-28 an AVX-512 machine reproduced every
+committed output pinned, on 24 CPUs and on 1, where unpinned runs had
+differed at about 1e-15. The pin needs x86-64 with AVX2.
+
 ## `clean`
 
 ```

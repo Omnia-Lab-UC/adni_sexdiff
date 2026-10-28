@@ -174,8 +174,12 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 # The module file pins the interpreter to a machine-specific path; each
-# machine keeps its own (as ../sead_sexdiff does). The rest of .idea/ is shared.
+# machine keeps its own (as ../sead_sexdiff does), and modules.xml lists that
+# machine's module file (PyCharm adds `adni-sexdiff@1.iml` when the named one
+# is absent), so it is per-machine too. The rest of .idea/ (inspection
+# profiles, vcs.xml) is shared.
 .idea/*.iml
+.idea/modules.xml
 
 # Abstra
 # Abstra is an AI-powered process automation framework.

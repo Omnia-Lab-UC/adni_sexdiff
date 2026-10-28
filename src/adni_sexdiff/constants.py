@@ -4,8 +4,11 @@ Two kinds of constant live here.
 
 Conventions
     Paths, environment variables, platform and column names, output file
-    names, version pins and the reporting rules of ``AGENTS.md``. They are
-    defined below and may be changed by an ordinary change.
+    names, version pins, the reporting rules of ``AGENTS.md`` and the pinned
+    numeric environment (``NUMERIC_SETTINGS``, change
+    ``adni-portable-numerics``). They are defined below and may be changed by
+    an ordinary change. This module imports nothing but ``__future__``, so
+    the package can read ``NUMERIC_SETTINGS`` before numpy loads.
 
 Scientific constants
     Statistical choices are scientific decisions. Each enters this module
@@ -134,6 +137,30 @@ ANALYSIS_MOTCO_MIN_VERSION = "0.10.0"
 #: Reported runs use one worker: MOTCO seeds one RRPP stream per worker, so
 #: another ``n_jobs`` changes the permutation draws.
 REPORTED_N_JOBS = 1
+#: The pinned numeric environment (change ``adni-portable-numerics``): with
+#: it, every machine computes the same bits from the same inputs, so the hash
+#: chain between steps holds whichever machine runs them. Importing the
+#: package sets these variables before numpy loads; every manifest records
+#: the state the process actually had (``numerics``). Measured on 2026-10-28
+#: on an AVX-512 machine against outputs made on one without it: unpinned,
+#: ``export``, ``analyze`` and the block SVD differed at about 1e-15; pinned,
+#: every committed output reproduced, on 24 CPUs and on 1.
+NUMERIC_SETTINGS: dict[str, str] = {
+    # numpy's AVX-512 dispatch: its AVX-512 ``log2`` differs in the last bit
+    # from the baseline one (``export``'s floored log2). Disabling a feature a
+    # machine lacks is silently ignored.
+    "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+    # OpenBLAS's kernel choice: AVX-512 machines pick "SkylakeX", whose
+    # products differ in the last bit from "Haswell"'s (``analyze``).
+    "OPENBLAS_CORETYPE": "Haswell",
+    # The block SVD's reductions depend on the thread count, and OpenBLAS caps
+    # threads at the available CPUs; one thread is the count every machine
+    # (and a one-CPU cluster job) can run. ``analyze`` took 19 s at 1 and 24.
+    "OPENBLAS_NUM_THREADS": "1",
+    # OpenMP threads: no effect on any output on 2026-10-28; pinned so that a
+    # later OpenMP reduction cannot reintroduce a machine dependence.
+    "OMP_NUM_THREADS": "1",
+}
 
 
 # --- clean: inputs, outputs and the repair registry ------------------------
