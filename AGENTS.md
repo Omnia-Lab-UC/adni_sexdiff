@@ -14,22 +14,36 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 (the SEA-AD astrocyte case study); its conventions apply here unless this
 file says otherwise.
 
-Status (2026-10-27): `clean` (change `adni-metabolomics-clean`), `cohort`
+Status (2026-10-28): `clean` (change `adni-metabolomics-clean`), `cohort`
 (change `adni-cohort`), `export` (change `adni-export`), `analyze`
 (change `adni-analyze`) and `axis-diagnostics` (change
-`adni-axis-diagnostics`) are implemented and run on the workstation, whose
-data root holds the raw metabolomics files and the ADNIMERGE freeze; the
-cluster copy and clone do not exist yet. `report` is a stub whose body
-raises `NotImplementedError`; its docstring in `data.py` states the
-inputs, the outputs and the output contract. Decided scientific
-constants: `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`,
-`ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis settings
-(`ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with
-`ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
-`ANALYSIS_LATENT_ADJUSTMENT`), `READING_RULES` and the diagnostic
-constants (`DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD`);
-every constant the six steps need is decided (see "Flag and ask"). Each
-step is implemented by its own OpenSpec change, in order.
+`adni-axis-diagnostics`) are implemented, and so is the sensitivity step
+`latent-sensitivity` (change `adni-latent-sensitivity`: the predeclared
+`stage`-conditioned latent-adjustment arm, read beside the primary and
+never replacing it). They run on a data machine; the cluster copy and
+clone do not exist yet. A data machine is any of the user's machines whose
+local participant-level files under `results/` (the export CSVs,
+`cohort.csv`, the primary's `latent_scores.csv` and
+`analysis_metadata.csv`) hash to the values the committed manifests
+record; the hash checks pick it and no machine is named. Any machine with
+a data root becomes one by a pinned rebuild from it (`clean` → `cohort` →
+`export` → `analyze` into a scratch directory), a hash check of every
+output the committed manifests record, and copying the participant-level
+files into the gitignored paths under `results/`. The manifests written
+before `adni-portable-numerics` record no machine, but their outputs
+reproduce pinned on any machine. `report` is a stub whose body raises
+`NotImplementedError`; its docstring in `data.py` states the inputs, the
+outputs and the output contract. Decided scientific constants:
+`CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`,
+`EXPORT_FEATURE_RULE`, the analysis settings (`ANALYSIS_PERMUTATIONS`,
+`ANALYSIS_SEED`, `ANALYSIS_ALPHA` with `ANALYSIS_REJECTION_RULE`,
+`ANALYSIS_RANK_FLOOR`, `ANALYSIS_LATENT_ADJUSTMENT`), `READING_RULES`, the
+diagnostic constants (`DIAGNOSTIC_VARIABLES`,
+`DIAGNOSTIC_CORRELATION_THRESHOLD`) and the sensitivity constants
+(`LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
+`LATENT_SENSITIVITY_READING_RULES`); every constant the six steps and the
+sensitivity step need is decided (see "Flag and ask"). Each step is
+implemented by its own OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
    pinned release's QC functions called in-process in the order of its
@@ -181,11 +195,65 @@ step is implemented by its own OpenSpec change, in order.
    per component. It reads sex and stage, so it is never a filter: its
    outputs feed no `export` or `analyze` run, and no arm or variant is
    derived from a diagnostic value.
+   - Sensitivity step, after `axis-diagnostics` and before `report`:
+     `latent-sensitivity` (change `adni-latent-sensitivity`) – from
+     `results/motco_input/` (the five files, checked as `analyze` checks
+     them), the primary's `results/motco_analysis/result.json` and
+     `analysis_manifest.json` (read, never written) and
+     `results/cohort/cohort_manifest.json` (its hash and its per-cell
+     descriptives; no `cohort.csv`), after the gates of `analyze`: the
+     primary manifest must record the export files now on disk and no
+     latent adjustment, under the installed MOTCO with `ANALYSIS_SEED` and
+     `ANALYSIS_PERMUTATIONS`, and the cohort manifest's hash must equal the
+     export manifest's record; a mismatch stops it naming the file or
+     setting, both values and the step to rerun. One
+     `analyze_trajectories` call through the function `analyze` shares
+     (`_run_trajectory_analysis`) at the primary's settings plus
+     `covariate_latent_adjustment = "stage"` (`LATENT_SENSITIVITY_ARM`, the
+     arm `adni-analyze` predeclared; the five covariates; nothing else).
+     MOTCO's rare-level condition is not worked around: a residualization
+     design that is not of full rank, on the full sample or in a CV
+     training set, stops the step with MOTCO's message and nothing
+     written. Writes `results/motco_latent_sensitivity/`: `analysis/` (the
+     seven files `analyze` writes, laid out as the primary's so that
+     `axis-diagnostics --analysis-dir` reads it unchanged; `result.json`
+     carries MOTCO's `latent_adjustment` block, `analysis_manifest.json`
+     records `step` `latent-sensitivity`, the arm by constant name, the
+     primary as `reference` with its two hashes, the `numerics` block and
+     the predeclared `LATENT_SENSITIVITY_EXPECTED_COUNTS` beside the
+     observed ones; `summary.md` adds the latent-adjustment section and
+     `LATENT_SENSITIVITY_READING_RULES` after `READING_RULES`;
+     `latent_scores.csv` and `analysis_metadata.csv` participant-level,
+     already matched by the `results/**` ignore patterns), `comparison/`
+     (`latent_sensitivity.csv`, the primary row then the arm row, every
+     value read from the two records; `latent_sensitivity.md`, the
+     statistics with a status per statistic, `same` or `differs (basis
+     dependence)`, the latent spaces, the arm's latent-adjustment block,
+     the covariate roles beside the cohort manifest's per-cell
+     descriptives copied value for value, MOTCO's two latent-adjustment
+     decisions, the findings and both sets of reading rules;
+     `latent_sensitivity_manifest.json`; all aggregate) and never
+     `diagnostics/`, which `axis-diagnostics --analysis-dir
+     results/motco_latent_sensitivity/analysis --out-dir
+     results/motco_latent_sensitivity/diagnostics` writes (its
+     `diagnostics.md` names the arm and prints both sets of rules).
+     `analysis/` and `comparison/` are staged as `.tmp/` directories and
+     renamed together. Findings, never stops: those of `analyze`, an arm
+     rank that differs from the primary's, a statistic whose status
+     differs (basis dependence), a primary read with `n_jobs ≠ 1`,
+     cohort-manifest cells that differ from the record's, a replaced arm
+     whose `diagnostics/` exists. The primary stays primary in every output
+     and no arm value changes a constant, selects a covariate, reruns the
+     primary or defines a variant.
 6. `report` – from the generated files only (`result.json`, `summary.md`,
-   the manifests, `stage_counts.csv`, the diagnostics): writes
+   the manifests, `stage_counts.csv`, the diagnostics, and the sensitivity
+   step's comparison, arm record and arm diagnostics under
+   `results/motco_latent_sensitivity/`): writes
    `reports/motco-adni-<date>.md`, or with `--check` compares every number
    of an existing report with the generated files and fails naming the
-   cell. Reports quote aggregate values only.
+   cell. Reports quote aggregate values only and carry
+   `LATENT_SENSITIVITY_READING_RULES` after `READING_RULES` wherever they
+   quote the arm.
 
 `README.md` documents the layout and the pipeline; keep it in sync when
 behavior or defaults change.
@@ -203,8 +271,12 @@ behavior or defaults change.
 - Committed outputs are aggregate only: `result.json`, `stage_means.csv`,
   `pls_loadings.csv`, manifests with hashes (among them
   `results/cleaned/*/clean_manifest.json`), `summary.md`,
-  `stage_counts.csv` (group × stage counts), the diagnostics tables and the
-  reports under `reports/`.
+  `stage_counts.csv` (group × stage counts), the diagnostics tables, the
+  latent-sensitivity comparison (`latent_sensitivity.csv`,
+  `latent_sensitivity.md`, its manifest) and the reports under `reports/`.
+  An arm's analysis directory follows the primary's rule: its
+  `latent_scores.csv` and `analysis_metadata.csv` are participant-level,
+  its other five files aggregate.
 - `.gitignore` enforces this: `data/`, `results/cleaned/**` except
   `results/cleaned/*/clean_manifest.json`,
   `results/cohort/*.csv` except `stage_counts.csv`,
@@ -222,8 +294,9 @@ behavior or defaults change.
 
 ### 2. Where the data lives
 
-- Data lives on the workstations and on `cluster.ing.uc.cl` only: never in a
-  cloud service, never in a public bucket, never in a chat or an artifact.
+- Data lives on the user's machines (the data machines of the status
+  paragraph above) and on `cluster.ing.uc.cl` only: never in a cloud
+  service, never in a public bucket, never in a chat or an artifact.
 - There is no download step: LONI needs a login, so the raw ADNI files are
   uploaded by hand into the data root. The canonical copy is
   `/home1/tgonza/adni_sexdiff/data` on the cluster; the data root is an
@@ -284,8 +357,11 @@ behavior or defaults change.
   `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`,
   `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with
   `ANALYSIS_REJECTION_RULE`, `ANALYSIS_RANK_FLOOR`,
-  `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`; `constants.py` reserves
-  the others' names in its docstring and defines none of them.
+  `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`, `DIAGNOSTIC_VARIABLES`,
+  `DIAGNOSTIC_CORRELATION_THRESHOLD`, `LATENT_SENSITIVITY_ARM`,
+  `LATENT_SENSITIVITY_COVARIATE_ROLES`, `LATENT_SENSITIVITY_READING_RULES`;
+  `constants.py` reserves the others' names in its docstring and defines
+  none of them.
 - Never set, change or default one of them in code, a flag or a script
   without a proposal. Never choose one from a result.
 
@@ -340,19 +416,36 @@ behavior or defaults change.
   and `DIAGNOSTIC_CORRELATION_THRESHOLD` defined, with the conventions
   `DIAGNOSTIC_N_BLOCK_PCS`, `DIAGNOSTIC_CONDITIONING_COLUMNS`,
   `DIAGNOSTICS_ANALYSIS_FILES`, `DIAGNOSTICS_GEOMETRY_QUANTITIES` and the
-  predeclared `DIAGNOSTICS_EXPECTED_COUNTS`).
+  predeclared `DIAGNOSTICS_EXPECTED_COUNTS`; `LATENT_SENSITIVITY_ARM`,
+  `LATENT_SENSITIVITY_COVARIATE_ROLES` and
+  `LATENT_SENSITIVITY_READING_RULES` defined, with the conventions
+  `LATENT_SENSITIVITY_DIR`, `LATENT_SENSITIVITY_SUBDIRS`,
+  `LATENT_SENSITIVITY_TABLE`, `LATENT_SENSITIVITY_SUMMARY`,
+  `LATENT_SENSITIVITY_MANIFEST` and the predeclared
+  `LATENT_SENSITIVITY_EXPECTED_COUNTS`; two import-time assertions tie the
+  arm to `ANALYSIS_PREDECLARED_LATENT_SENSITIVITY` and the roles to
+  `ANALYSIS_COVARIATES`).
 - `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`,
-  `export`, `analyze` and `axis-diagnostics` implemented, `report` a stub),
-  `resolve_data_root`, the version gates (`check_metabo_adni_version`,
-  `check_motco_version`, `check_motco_rank_floor`), the raw-input helpers,
-  the analysis input loader (shared by `analyze` and `axis-diagnostics`)
-  and summary renderer, the diagnostic statistics (`spearman`,
+  `export`, `analyze` and `axis-diagnostics` implemented, `report` a stub)
+  and the sensitivity step `latent-sensitivity` (`run_latent_sensitivity`,
+  with the reference checks `_check_primary_reference` and
+  `_check_cohort_manifest`, the comparison rows and
+  `render_latent_sensitivity`), `resolve_data_root`, the version gates
+  (`check_metabo_adni_version`, `check_motco_version`,
+  `check_motco_rank_floor`), the raw-input helpers, the analysis input
+  loader (shared by `analyze`, `axis-diagnostics` and
+  `latent-sensitivity`), the shared analysis function
+  (`_run_trajectory_analysis`: the body of `analyze`, which the arm calls
+  with `latent_adjustment` as its one differing setting; the primary's
+  bytes are its gate) and the summary renderer (arm-aware when the record
+  carries `latent_adjustment`), the diagnostic statistics (`spearman`,
   `partial_spearman`, `block_principal_components`, `geometry_shares`,
   `block_loading_shares`), the chain checks (`_check_analysis_inputs`,
-  `_check_cohort_chain`) and `render_axis_diagnostics`, the numeric-state
-  record (`_numerics_record`, `_numerics_finding`, `_numerics`), and the
-  manifest / `.tmp` helpers every step reuses.
-- `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
+  whose hints name the command that wrote the analysis read,
+  `_check_cohort_chain`) and `render_axis_diagnostics` (arm-aware), the
+  numeric-state record (`_numerics_record`, `_numerics_finding`,
+  `_numerics`), and the manifest / `.tmp` helpers every step reuses.
+- `scripts/` – `sync_results.sh` (aggregate outputs between a machine
   and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
   `analyze.sbatch` (`analyze` on the cluster, no `--n-jobs`, so a reported
   run), `spike_raw_inventory.py` (the clean change's read-only spike),
@@ -362,7 +455,9 @@ behavior or defaults change.
   `export` does not).
 - `data/` – raw ADNI files, uploaded by hand; gitignored, never committed.
 - `results/` – pipeline outputs; only the aggregate files named in
-  constraint 1 are committed.
+  constraint 1 are committed. `results/motco_latent_sensitivity/` holds the
+  sensitivity step's `analysis/` (the arm, laid out as
+  `results/motco_analysis/`), `comparison/` and `diagnostics/`.
 - `reports/` – committed case-study reports (`motco-adni-<date>.md`),
   numbers pasted from generated outputs and checked by `report --check`.
 - `openspec/` – OpenSpec change proposals/specs (see below).
@@ -376,7 +471,7 @@ behavior or defaults change.
   Outside the Nix shell numpy cannot load its native libraries; run
   commands through `nix develop -c ...` there.
 - Run the CLI:
-  `uv run adni-sexdiff <clean|cohort|export|analyze|axis-diagnostics|report> [options]`.
+  `uv run adni-sexdiff <clean|cohort|export|analyze|axis-diagnostics|latent-sensitivity|report> [options]`.
 - Dependencies: `motco` (git tag, constraint 4), `metabo_adni==0.5.8`
   (constraint 3), `pandas`, `numpy`, `threadpoolctl` (the numeric-state
   record). Add dependencies with `uv add <pkg>` so `pyproject.toml` and
@@ -403,7 +498,8 @@ behavior or defaults change.
 - There is no test suite or linter configured yet. Verify changes by running
   the relevant CLI command or importing the function; say so explicitly when
   something could not be verified (real data is never available to an agent
-  outside the workstations and the cluster).
+  outside the data machines and the cluster). Synthetic checks run on any
+  machine from a scratch directory, never from a data root.
 
 ## Data & domain notes
 
@@ -474,12 +570,16 @@ behavior or defaults change.
   `phase[ADNI2GO]`, LS-means at the pooled phase proportion, no sex ×
   covariate or stage × covariate term); the primary's latent space is
   built without the covariates, and the `stage`-conditioned latent
-  adjustment is the predeclared sensitivity arm of the next change
-  `adni-latent-sensitivity`, run after `axis-diagnostics` has measured the
-  primary's components against phase (`phase` is among
-  `DIAGNOSTIC_VARIABLES`, decided by `adni-axis-diagnostics`; the
-  diagnostic also correlates each block's PCs with `phase` beside the
-  export's recorded value and records which block carries each component).
+  adjustment is the predeclared sensitivity arm, run by
+  `latent-sensitivity` (change `adni-latent-sensitivity`) after
+  `axis-diagnostics` measured the primary's components against phase
+  (`phase` is among `DIAGNOSTIC_VARIABLES`, decided by
+  `adni-axis-diagnostics`; the diagnostic also correlates each block's PCs
+  with `phase` beside the export's recorded value and records which block
+  carries each component) and read beside the primary, never replacing
+  it. The arm's components can still track phase, since the raw features
+  are measured in the adjusted basis; its own `axis-diagnostics` run
+  measures that, and arm rule 9 reads it as a measurement-space finding.
   The blocks enter MOTCO 0.10.0 unweighted: p180 holds 133 / 298 of the
   joint features; the export manifest records the shares and
   `components.csv` the loading share of each block per component.
@@ -488,8 +588,10 @@ behavior or defaults change.
   `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`,
   `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
   `ANALYSIS_RANK_FLOOR`, `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`,
-  `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD`; every
-  constant the six steps need is decided:
+  `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD`,
+  `LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
+  `LATENT_SENSITIVITY_READING_RULES`; every constant the six steps and the
+  sensitivity step need is decided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
     for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
@@ -578,6 +680,44 @@ behavior or defaults change.
     predeclared counts are `DIAGNOSTICS_EXPECTED_COUNTS`. The diagnostic
     feeds no filter, variant or arm: nothing is chosen from a flagged row,
     and no `export` or `analyze` run reads its outputs.
+  - `LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
+    `LATENT_SENSITIVITY_READING_RULES` – decided by
+    `adni-latent-sensitivity` (2026-10-28, before any run). The single arm
+    `latent_stage`: `covariate_latent_adjustment = "stage"`, the five
+    `ANALYSIS_COVARIATES` in their order and coding, every other setting
+    the primary's (`ANALYSIS_*` and MOTCO's defaults, `n_jobs = 1` for the
+    reported run); it must equal `ANALYSIS_PREDECLARED_LATENT_SENSITIVITY`
+    (an import-time assertion), and no `extended_covariates` or
+    `group_stage` arm exists. The roles, per covariate, as its relation to
+    the stage effect: `age`, `education` and `apoe4` pre-disease (they can
+    confound the stage effect, not be downstream of it), `phase` design
+    (the assay run and protocol, tied to stage composition by design),
+    `statin` the one mediator candidate (a treatment that may follow
+    diagnosis; it stays in the arm because the arm was predeclared with
+    the five covariates, and the reading carries the limitation); no
+    statistic or threshold is computed for them, and
+    `latent_sensitivity.md` prints them beside the cohort manifest's
+    per-cell descriptives, copied. The nine arm rules, printed verbatim
+    after `READING_RULES` in the arm's `summary.md`,
+    `latent_sensitivity.md`, the arm's `diagnostics.md` and every report
+    that quotes the arm: the arm never replaces the primary (MOTCO's
+    `candidate_fails`); a differing status is basis dependence; the arm's
+    rank, floor, eigengap and null summary beside its `angle`; an
+    arm-only `angle` rejection is read against MOTCO's translation
+    control; an arm's non-rejection is weaker than the primary's; the
+    `latent_adjustment` and covariate blocks with `feature_r2` beside the
+    results; the mediator limitation with `statin`; no operating
+    characteristic at this design; an arm axis in the diagnostic is a
+    measurement-space finding and never grounds to adopt the arm. The
+    rule that binds all of it: the arm never replaces the primary and
+    feeds no choice (no constant, covariate, variant or rerun of the
+    primary comes from an arm value). Its predeclared counts are
+    `LATENT_SENSITIVITY_EXPECTED_COUNTS` (the `ANALYSIS_EXPECTED_COUNTS`
+    plus the latent-adjustment block: conditioning `stage`, the five
+    covariates, the eight residualization design columns `stage[1]`,
+    `stage[2]` then the six design columns, 1501 samples, residual df
+    1492, feature scale `pooled_standardized`); the arm's rank is not
+    predeclared.
 - Deviations from predeclared counts go to a manifest's `findings`, never
   silently.
 - Statistical choices are scientific decisions. Don't change them silently;
@@ -598,7 +738,9 @@ behavior or defaults change.
   `uv run` could try to reach the network), `analyze` through
   `scripts/analyze.sbatch` (the same locked environment, no `--n-jobs`, so
   a reported run; compare the pulled `analysis_manifest.json` with the
-  workstation's: statistics, p-values, rank). Both scripts export
+  data machine's: statistics, p-values, rank). `latent-sensitivity` runs
+  there the same way once the clone exists (pinned, so it must reproduce
+  the committed hashes). Both scripts export
   `NUMERIC_SETTINGS`; `OPENBLAS_CORETYPE=Haswell` needs AVX2, so check a
   node once (`grep -m1 -o avx2 /proc/cpuinfo` in a job) and read the pulled
   manifest's `numerics` (`pinned` true, the node's CPU).

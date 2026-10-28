@@ -32,9 +32,20 @@ Scientific constants
     ``adni-analyze``; ``DIAGNOSTIC_VARIABLES`` (the eight variables the axis
     diagnostics correlate the latent and block axes with, their sources and
     codings) and ``DIAGNOSTIC_CORRELATION_THRESHOLD`` (the reporting flag on
-    |rho|, never an adoption rule), by the change ``adni-axis-diagnostics``.
-    Every scientific constant the six steps need is decided; a later variant
-    or arm introduces its own by proposal.
+    |rho|, never an adoption rule), by the change ``adni-axis-diagnostics``;
+    ``LATENT_SENSITIVITY_ARM`` (the single ``stage``-conditioned
+    latent-adjustment arm, tied to ``ANALYSIS_PREDECLARED_LATENT_SENSITIVITY``
+    by an import-time assertion), ``LATENT_SENSITIVITY_COVARIATE_ROLES``
+    (each covariate's relation to the stage effect, ``statin`` the mediator
+    candidate) and ``LATENT_SENSITIVITY_READING_RULES`` (the nine statements
+    every reader of the arm carries after ``READING_RULES``), by the change
+    ``adni-latent-sensitivity``, with the predeclared
+    ``LATENT_SENSITIVITY_EXPECTED_COUNTS`` and the conventions
+    ``LATENT_SENSITIVITY_DIR``, ``LATENT_SENSITIVITY_SUBDIRS``,
+    ``LATENT_SENSITIVITY_TABLE``, ``LATENT_SENSITIVITY_SUMMARY`` and
+    ``LATENT_SENSITIVITY_MANIFEST``. Every scientific constant the six steps
+    and the sensitivity step need is decided; a later variant or arm
+    introduces its own by proposal.
 """
 
 from __future__ import annotations
@@ -827,3 +838,161 @@ DIAGNOSTICS_RANK_INDEPENDENT_KEYS: tuple[str, ...] = (
     "conditioning_columns",
     "blocks",
 )
+
+
+# --- latent-sensitivity: conventions ------------------------------------------
+
+#: The output root of the ``latent-sensitivity`` step and its three
+#: subdirectories: ``analysis`` (the arm's analysis directory, laid out as the
+#: primary's, written by ``latent-sensitivity``), ``comparison`` (the two
+#: records side by side, written by ``latent-sensitivity``) and ``diagnostics``
+#: (``axis-diagnostics --analysis-dir <analysis> --out-dir <diagnostics>``,
+#: never touched by ``latent-sensitivity``).
+LATENT_SENSITIVITY_DIR = "results/motco_latent_sensitivity"
+LATENT_SENSITIVITY_SUBDIRS: dict[str, str] = {
+    "analysis": "analysis",
+    "comparison": "comparison",
+    "diagnostics": "diagnostics",
+}
+#: The comparison's files under ``<LATENT_SENSITIVITY_DIR>/comparison/``.
+LATENT_SENSITIVITY_TABLE = "latent_sensitivity.csv"
+LATENT_SENSITIVITY_SUMMARY = "latent_sensitivity.md"
+LATENT_SENSITIVITY_MANIFEST = "latent_sensitivity_manifest.json"
+
+# --- latent-sensitivity: scientific constants ---------------------------------
+
+#: Decided by the change ``adni-latent-sensitivity`` (2026-10-28, before any
+#: run) and never changed by a flag, a result or a count. The single
+#: sensitivity arm: MOTCO's covariate latent adjustment conditioned on
+#: ``stage`` (the basis is fitted on the features with the five covariates
+#: regressed out within each stage; the raw features are measured in it), the
+#: same five covariates in the same order and coding, and every other setting
+#: the primary's (``ANALYSIS_*`` and MOTCO's defaults; ``n_jobs = 1`` for the
+#: reported run). It is the arm ``adni-analyze`` predeclared
+#: (``ANALYSIS_PREDECLARED_LATENT_SENSITIVITY``), which the assertion below
+#: ties it to. It is read beside the primary and never replaces it: MOTCO's
+#: power comparison returned ``candidate_fails`` for ``stage`` conditioning.
+#: No ``extended_covariates`` arm (the kept outputs hold no further
+#: covariate) and no ``group_stage`` arm (not admissible).
+LATENT_SENSITIVITY_ARM: dict = {
+    "name": "latent_stage",
+    "setting": "covariate_latent_adjustment",
+    "conditioning": "stage",
+    "covariates": tuple(ANALYSIS_COVARIATES),
+    "change": "adni-latent-sensitivity",
+    "other_settings": "the primary's (ANALYSIS_* constants and MOTCO's defaults)",
+}
+assert {k: LATENT_SENSITIVITY_ARM[k] for k in ("setting", "conditioning", "change")} == ANALYSIS_PREDECLARED_LATENT_SENSITIVITY, (
+    "LATENT_SENSITIVITY_ARM must be the arm adni-analyze predeclared (ANALYSIS_PREDECLARED_LATENT_SENSITIVITY)"
+)
+
+#: Decided by the change ``adni-latent-sensitivity``: the justification
+#: MOTCO's latent-adjustment Type I check asks for (why no residualized
+#: covariate mediates the stage effect), stated per covariate as its relation
+#: to the stage effect. Residualizing a covariate that mediates the stage
+#: effect removes real stage signal, and no data can tell a confounder from a
+#: mediator, so the roles are predeclared and no statistic or threshold is
+#: computed for them; ``latent_sensitivity.md`` prints them beside the cohort
+#: manifest's per-cell descriptives, copied. ``statin`` is the one mediator
+#: candidate; it stays in the arm because the arm was predeclared with the
+#: five covariates, and the reading carries the limitation.
+LATENT_SENSITIVITY_COVARIATE_ROLES: dict[str, dict[str, str]] = {
+    "age": {
+        "role": "pre-disease",
+        "variable": "age at baseline",
+        "justification": "precedes disease: it can confound the stage effect but cannot be downstream of it",
+    },
+    "education": {
+        "role": "pre-disease",
+        "variable": "years of schooling, completed before enrolment",
+        "justification": "precedes disease: it can confound the stage effect but cannot be downstream of it",
+    },
+    "apoe4": {
+        "role": "pre-disease",
+        "variable": "germline APOE e4 genotype (allele count)",
+        "justification": "precedes disease: it can confound the stage effect but cannot be downstream of it",
+    },
+    "phase": {
+        "role": "design",
+        "variable": "the assay run and enrolment protocol (p180 kits ADNI-1 against ADNI-GO/2)",
+        "justification": (
+            "tied to stage composition by design (SMC and EMCI exist only in ADNI-GO/2), not caused by stage"
+        ),
+    },
+    "statin": {
+        "role": "mediator candidate",
+        "variable": "HMG-CoA reductase inhibitor use on the screening medication row",
+        "justification": (
+            "a treatment that may follow diagnosis: prescribing differs with cognitive status; it stays in the arm "
+            "because the arm was predeclared with the five covariates, and the reading carries the limitation"
+        ),
+    },
+}
+assert tuple(LATENT_SENSITIVITY_COVARIATE_ROLES) == tuple(ANALYSIS_COVARIATES), (
+    "LATENT_SENSITIVITY_COVARIATE_ROLES must name the ANALYSIS_COVARIATES in their order"
+)
+
+#: Decided by the change ``adni-latent-sensitivity``, written before any run:
+#: the binding reading rules of the arm, printed verbatim after
+#: ``READING_RULES`` in the arm's ``summary.md``, in ``latent_sensitivity.md``,
+#: in the arm's ``diagnostics.md`` and in every report that quotes the arm.
+#: The numbers quoted are from MOTCO's two latent-adjustment reports
+#: (``../MOTCO/docs/reports/latent-adjustment-type-i-2026-10-20.md`` and
+#: ``latent-adjustment-power-2026-10-20.md``), none from a run of the arm.
+LATENT_SENSITIVITY_READING_RULES: tuple[str, ...] = (
+    "The arm is read beside the primary and never replaces it. MOTCO's power comparison returned "
+    "`candidate_fails` for `stage` conditioning, which excludes the latent adjustment as a replacement of the "
+    "covariate-blind primary.",
+    "The primary and the arm share the export, the covariates and their design, the cells, the CV folds, the "
+    "seed and the permutations. They differ only in the latent basis and the CV-selected rank: the arm's basis is "
+    "fitted on the features with the five covariates regressed out within stage, and the raw features are "
+    "measured in it. A rejection status that differs is basis dependence, not a result of the arm.",
+    "The arm's CV-selected rank, floor, eigengap and `angle` null summary are reported beside its `angle`. A rank "
+    "that differs from the primary's is reported, not ranked as better or worse.",
+    "An `angle` rejection that appears only in the arm is read against MOTCO's controls, and is not evidence of "
+    "an orientation difference on its own: the translation control rejected `angle` at 0.085–0.092 under `stage` "
+    "conditioning, against the 0.0706 bound (the covariate-blind basis was above it too, at 0.076–0.086); under "
+    "the Type I check, `angle` held the bound by only 0.004 (0.067 against 0.0706).",
+    "A `delta` or `shape` non-rejection in the arm is weaker than the primary's. MOTCO measured lost `shape` "
+    "power with a covariate-aligned nuisance axis (0.243 against 0.428) and lost small-magnitude `delta` power "
+    "without one (0.400 against 0.520 at e = 0.1). Reading rules 3 and 4 hold in the arm.",
+    "The arm's `latent_adjustment` block and its covariate block are reported beside its results. The "
+    "`latent_adjustment` block holds the conditioning, the design columns, the residual df, the smallest CV "
+    "training df and the feature R² summary; `feature_r2` states how much feature variance the residualization "
+    "removed.",
+    "Residualizing a covariate that mediates the stage effect removes real stage signal, and no data can tell a "
+    "confounder from a mediator. `age`, `education` and `apoe4` precede disease, and `phase` is the assay run and "
+    "protocol (`LATENT_SENSITIVITY_COVARIATE_ROLES`). `statin` may follow diagnosis, so the arm's basis may have "
+    "removed stage signal that runs through treatment.",
+    "MOTCO's latent-adjustment operating characteristics were measured at one design: n = 80, the SEA-AD MTG "
+    "structure, 498 features, eight covariates in nine design columns, covariates confounded with group × stage "
+    "far beyond this design's. None was measured at this design (n = 1501, 298 metabolites, six design columns), "
+    "and the arm carries no Type I or power claim of its own.",
+    "A component of the arm that tracks a variable in its axis diagnostic is a measurement-space finding about "
+    "the arm. It never reinterprets either analysis' statistics and is never grounds to adopt the arm.",
+)
+
+# --- latent-sensitivity: predeclared counts -----------------------------------
+
+#: Predeclared by the change ``adni-latent-sensitivity`` from the committed
+#: manifests and MOTCO's design rules (none from a run of the arm): every key
+#: of ``ANALYSIS_EXPECTED_COUNTS`` with its value, and the record's
+#: ``latent_adjustment`` block: conditioning ``stage``, the five covariates,
+#: the residualization design columns (MOTCO names the stage indicators by its
+#: ordinal codes: ``stage[1]`` is MCI, ``stage[2]`` is AD; then the six design
+#: columns), the samples, the residual df ``n − 1 − k − q`` (1501 − 1 − 2
+#: stage indicators − 6 design columns) and the feature scale. The arm's rank
+#: is not predeclared. ``latent-sensitivity`` compares the arm record with
+#: these and records every difference as a finding; a difference never stops
+#: the step and never changes a setting.
+LATENT_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict | int | str | tuple] = {
+    **ANALYSIS_EXPECTED_COUNTS,
+    "latent_adjustment": {
+        "conditioning": "stage",
+        "covariates": tuple(ANALYSIS_COVARIATES),
+        "design_columns": ("stage[1]", "stage[2]", *ANALYSIS_EXPECTED_COUNTS["design_columns"]),
+        "n_samples": 1501,
+        "residual_df": 1501 - 1 - 2 - 6,
+        "feature_scale": "pooled_standardized",
+    },
+}

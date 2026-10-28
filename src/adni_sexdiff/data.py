@@ -3,18 +3,22 @@
 ``clean`` (change ``adni-metabolomics-clean``), ``cohort`` (change
 ``adni-cohort``), ``export`` (change ``adni-export``), ``analyze`` (change
 ``adni-analyze``) and ``axis-diagnostics`` (change
-``adni-axis-diagnostics``) are implemented. ``report`` is a stub: its
-docstring states the inputs it reads, the files it writes and the contract
-of those files, and its body raises ``NotImplementedError`` until an
-OpenSpec change implements it. Every scientific constant the steps need is
-decided and lives in ``constants``; a variant or arm enters only through a
-proposal.
+``adni-axis-diagnostics``) are implemented, and so is the sensitivity step
+``latent-sensitivity`` (change ``adni-latent-sensitivity``: the predeclared
+``stage``-conditioned latent-adjustment arm, read beside the primary and
+never replacing it). ``report`` is a stub: its docstring states the inputs
+it reads, the files it writes and the contract of those files, and its body
+raises ``NotImplementedError`` until an OpenSpec change implements it. Every
+scientific constant the steps need is decided and lives in ``constants``; a
+variant or arm enters only through a proposal.
 
 The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_known_repairs``), the version gates (``check_metabo_adni_version``,
-``check_motco_version``, ``check_motco_rank_floor``) and the manifest and
-output-directory helpers (``_git_revision``, ``_software_versions``,
-``_write_manifest``, ``_finalize_output_dir``) are shared by every step.
+``check_motco_version``, ``check_motco_rank_floor``), the shared analysis
+function (``_run_trajectory_analysis``, the body of ``analyze`` that the arm
+calls with its one differing setting) and the manifest and output-directory
+helpers (``_git_revision``, ``_software_versions``, ``_write_manifest``,
+``_finalize_output_dir``) are shared by every step.
 
 ADNI is controlled-access. Every table keyed by ``RID`` is participant-level:
 it stays under the ignored paths of ``constants.PARTICIPANT_LEVEL_PATTERNS``,
@@ -34,7 +38,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -110,6 +114,15 @@ from .constants import (
     GROUP_COLUMN,
     GROUP_VALUES,
     KNOWN_RAW_FILE_REPAIRS,
+    LATENT_SENSITIVITY_ARM,
+    LATENT_SENSITIVITY_COVARIATE_ROLES,
+    LATENT_SENSITIVITY_DIR,
+    LATENT_SENSITIVITY_EXPECTED_COUNTS,
+    LATENT_SENSITIVITY_MANIFEST,
+    LATENT_SENSITIVITY_READING_RULES,
+    LATENT_SENSITIVITY_SUBDIRS,
+    LATENT_SENSITIVITY_SUMMARY,
+    LATENT_SENSITIVITY_TABLE,
     METABO_ADNI_VERSION,
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
@@ -514,7 +527,9 @@ def _finalize_output_dir(final: str | Path, *, force: bool) -> Generator[Path, N
     and a stale ``<final>.tmp/`` from an earlier run is removed. When the
     block completes, ``final`` (under ``force``) is replaced by the staging
     directory; when it raises, ``final`` is untouched and ``<final>.tmp/``
-    keeps whatever was written, for inspection.
+    keeps whatever was written, for inspection (an empty staging directory,
+    with nothing to inspect, is removed, so a run that fails before writing
+    leaves no ``.tmp/``).
     """
     final = Path(final)
     tmp = final.with_name(final.name + ".tmp")
@@ -523,7 +538,12 @@ def _finalize_output_dir(final: str | Path, *, force: bool) -> Generator[Path, N
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
-    yield tmp
+    try:
+        yield tmp
+    except BaseException:
+        if tmp.is_dir() and not any(tmp.iterdir()):
+            tmp.rmdir()
+        raise
     if final.exists():
         if not force:
             raise FileExistsError(f"{final} appeared during the run; {tmp} is kept")
@@ -2343,6 +2363,21 @@ def render_analysis_summary(
         statistic's status, the cell sizes, the latent block, the covariate
         block with the reference-row table, the export context and
         ``READING_RULES`` verbatim. Numbers carry six significant digits.
+
+    Notes
+    -----
+    The renderer keys on ``record.get("latent_adjustment")``. Without the
+    block (the primary) every line is the one above. With it (the
+    ``stage``-conditioned arm of ``latent-sensitivity``, change
+    ``adni-latent-sensitivity``) the title and header name the arm, a
+    "Latent adjustment" section follows "Latent space" (conditioning,
+    covariates, the residualization design columns with ``stage[1]`` and
+    ``stage[2]`` named, residual df, smallest CV training df, feature scale,
+    the ``feature_r2`` quantiles and mean), each reading line carries the
+    arm's note (a non-rejection is weaker than the primary's, a rejection the
+    primary does not make is basis dependence) and
+    ``LATENT_SENSITIVITY_READING_RULES`` follows ``READING_RULES`` under its
+    own heading.
     """
     design, meas, latent = record["design"], record["measurement"], record["latent"]
     stages, groups = design["stage_levels"], design["group_levels"]
@@ -2350,8 +2385,23 @@ def render_analysis_summary(
     floor_binding = latent["component_selection"] == "cv" and selected == rank_floor
     eigengap = (record.get("config_spectrum", {}).get("pooled") or {}).get("relative_eigengap")
     blocks_text = ", ".join(f"{b['name']} ({b['n_features']} features, {b['transform']})" for b in record["blocks"])
+    adjustment = record.get("latent_adjustment")
+    title = "# MOTCO trajectory analysis: ADNI serum metabolomics, sex × stage"
+    if adjustment:
+        title += f" — `{adjustment['conditioning']}`-conditioned latent-adjustment arm"
+        latent_clause = (
+            f"; latent adjustment: `{adjustment['conditioning']}` (the sensitivity arm "
+            f"`{LATENT_SENSITIVITY_ARM['name']}`, `LATENT_SENSITIVITY_ARM` of `{LATENT_SENSITIVITY_ARM['change']}`: "
+            "the latent basis is fitted on the features with the covariates regressed out within stage and the raw "
+            "features are measured in it; read beside the primary, never replacing it)."
+        )
+    else:
+        latent_clause = (
+            "; latent adjustment: none (the primary; the `stage`-conditioned arm is the predeclared sensitivity "
+            f"of `{ANALYSIS_PREDECLARED_LATENT_SENSITIVITY['change']}`)."
+        )
     lines = [
-        "# MOTCO trajectory analysis: ADNI serum metabolomics, sex × stage",
+        title,
         "",
         f"MOTCO {record['software']['motco']}; n = {design['n_samples']}; groups {' vs '.join(groups)} "
         f"(`{design['group_col']}`); stages {' → '.join(stages)} (`{design['stage_col']}`); blocks {blocks_text}; "
@@ -2359,8 +2409,7 @@ def render_analysis_summary(
         f"{meas['seed']}; α = {alpha}, rejected when {ANALYSIS_REJECTION_RULE} (`ANALYSIS_REJECTION_RULE`); "
         f"n_jobs {n_jobs}"
         + ("" if n_jobs == REPORTED_N_JOBS else f" (not a reported run: reported runs use n_jobs = {REPORTED_N_JOBS})")
-        + "; latent adjustment: none (the primary; the `stage`-conditioned arm is the predeclared sensitivity "
-        f"of `{ANALYSIS_PREDECLARED_LATENT_SENSITIVITY['change']}`).",
+        + latent_clause,
         "",
         "## Statistics",
         "",
@@ -2410,8 +2459,16 @@ def render_analysis_summary(
     for s in ANALYSIS_STATISTICS:
         if status[s] is None:
             lines.append(f"- `{s}`: no p-value in the record.")
-        else:
-            lines.append("- " + readings[s][0 if status[s] else 1])
+            continue
+        line = "- " + readings[s][0 if status[s] else 1]
+        if adjustment and status[s]:
+            line += (
+                " In the arm, a rejection the primary does not make is basis dependence, not a result of the arm (arm "
+                "rule 2" + ("; an arm-only `angle` rejection is read against MOTCO's controls, arm rule 4)." if s == "angle" else ").")
+            )
+        elif adjustment:
+            line += " In the arm this non-rejection is weaker than the primary's (arm rule 5)."
+        lines.append(line)
     lines += [
         "",
         "## Cell sizes",
@@ -2442,6 +2499,31 @@ def render_analysis_summary(
         f"rank floor {cv.get('min_components', 1)}, random_state {cv.get('random_state')}",
         f"- blocks: {blocks_text}; features are z-scored by MOTCO (pooled per-feature scalers)",
     ]
+    if adjustment:
+        design_cols = [str(c) for c in adjustment["design_columns"]]
+        stage_names = {f"stage[{k}]": st for k, st in enumerate(stages)}
+        n_cond = sum(c in stage_names for c in design_cols)
+        r2 = adjustment.get("feature_r2", {})
+        lines += [
+            "",
+            "## Latent adjustment",
+            "",
+            f"- conditioning: `{adjustment['conditioning']}` (`covariate_latent_adjustment`, `LATENT_SENSITIVITY_ARM`): "
+            "the basis is fitted on the pooled-standardized features with the covariates regressed out given the "
+            "intercept and the stage indicators, per CV training set and on the full sample; the raw features are "
+            "projected onto it; the trajectory model, LS-means and RRPP are the primary's",
+            "- covariates residualized (in order): " + ", ".join(f"`{c}`" for c in adjustment["covariates"]),
+            f"- residualization design columns: {len(design_cols)} ("
+            + ", ".join(f"{c} = {stage_names[c]}" if c in stage_names else c for c in design_cols) + ")",
+            f"- samples {adjustment['n_samples']}; residual df {adjustment['residual_df']} (n − 1 − {n_cond} stage "
+            f"indicator(s) − {len(design_cols) - n_cond} design column(s)); smallest CV training df "
+            f"{adjustment.get('cv_min_training_df')}",
+            f"- feature scale: `{adjustment['feature_scale']}`",
+            "- feature R² of the covariates given the intercept and the stage indicators (the share of each feature's "
+            "variance the residualization removed): q05 / q25 / q50 / q75 / q95 "
+            + " / ".join(_fmt(r2.get(q), ".3f") for q in ("q05", "q25", "q50", "q75", "q95"))
+            + f"; mean {_fmt(r2.get('mean'), '.3f')}; fraction above 0.5 {_fmt(r2.get('fraction_above_0.5'), '.3f')}",
+        ]
     cov = record.get("covariates")
     lines += ["", "## Covariates", ""]
     if cov is None:
@@ -2480,8 +2562,14 @@ def render_analysis_summary(
             f"{_fmt(offsets.get(p, {}).get('abs_corr_pc1_phase'), '.2f')}"
             for p in EXPORT_BLOCKS
         ),
-        "- `phase` enters as a covariate of the stage means (above); the `stage`-conditioned latent adjustment "
-        f"is the predeclared sensitivity arm of `{ANALYSIS_PREDECLARED_LATENT_SENSITIVITY['change']}`",
+        (
+            "- `phase` enters as a covariate of the stage means (above) and, in this arm, is among the covariates "
+            "regressed out of the features within stage before the basis is fitted; the primary's latent space is "
+            "built without it"
+            if adjustment
+            else "- `phase` enters as a covariate of the stage means (above); the `stage`-conditioned latent adjustment "
+            f"is the predeclared sensitivity arm of `{ANALYSIS_PREDECLARED_LATENT_SENSITIVITY['change']}`"
+        ),
         "",
         "## Reading rules",
         "",
@@ -2489,114 +2577,95 @@ def render_analysis_summary(
         "",
     ]
     lines += [f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)]
+    if adjustment:
+        lines += [
+            "",
+            "## Reading rules of the arm",
+            "",
+            f"Binding for every reader of the arm (`LATENT_SENSITIVITY_READING_RULES`, decided by "
+            f"`{LATENT_SENSITIVITY_ARM['change']}` before any run), after `READING_RULES`:",
+            "",
+        ]
+        lines += [f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)]
     return "\n".join(lines) + "\n"
 
 
-def run_analysis(
+def _run_trajectory_analysis(
     *,
-    input_dir: str | Path | None = None,
-    out_dir: str | Path | None = None,
-    n_jobs: int = REPORTED_N_JOBS,
-    force: bool = False,
+    input_dir: Path,
+    final: Path,
+    n_jobs: int,
+    force: bool,
+    step: str,
+    latent_adjustment: str | None,
+    expected: dict,
+    manifest_extra: dict | Callable[[dict], dict] | None = None,
+    loaded: dict | None = None,
+    staging: Path | None = None,
 ) -> dict:
-    """Run the covariate-adjusted MOTCO sex × stage trajectory comparison.
+    """One ``analyze_trajectories`` call written as an analysis directory, shared by ``analyze`` and ``latent-sensitivity``.
 
     Parameters
     ----------
-    input_dir:
-        Output directory of ``export`` (default ``constants.MOTCO_INPUT_DIR``).
-        Read: ``p180.csv``, ``nmr.csv``, ``metadata.csv``, ``covariates.csv``
-        (each checked against the sha256 ``manifest.json`` records) and
-        ``manifest.json`` (block columns, covariate codings, counts). No
-        data-root file, no cohort file, no cleaned table.
-    out_dir:
-        Analysis directory (default ``constants.MOTCO_ANALYSIS_DIR``).
-    n_jobs:
-        Parallel jobs for MOTCO's CV and RRPP. MOTCO seeds one RRPP stream
-        per worker, so a value other than 1 changes the permutation draws
-        (p-values, null summaries) but not the statistics, rank or latent
-        space; reported runs use ``constants.REPORTED_N_JOBS`` (1) and
-        another value is recorded as a finding and not reported.
-    force:
-        Replace an existing analysis directory (after the new one is
-        complete).
+    input_dir, final:
+        The export directory and the analysis directory the step promises.
+    n_jobs, force:
+        The caller's flags (``n_jobs``: MOTCO's CV and RRPP workers; ``force``:
+        replace an existing ``final``).
+    step:
+        The calling step, ``analyze`` or ``latent-sensitivity``: the printed
+        prefix, the manifest's ``step`` and the name in the loader's messages.
+    latent_adjustment:
+        ``TrajectoryAnalysisParams.covariate_latent_adjustment``:
+        ``ANALYSIS_LATENT_ADJUSTMENT`` (``None``) for the primary,
+        ``LATENT_SENSITIVITY_ARM["conditioning"]`` (``stage``) for the arm.
+        The only setting that differs between the two callers.
+    expected:
+        The predeclared counts the record is compared with
+        (``ANALYSIS_EXPECTED_COUNTS`` or ``LATENT_SENSITIVITY_EXPECTED_COUNTS``);
+        every deviation is a finding.
+    manifest_extra:
+        Top-level keys added to the manifest: a dict, or a callable of the
+        record (after the call) returning one. Its ``findings`` entry, if any,
+        is appended to the findings after those of the analysis and before the
+        numeric state is recorded.
+    loaded:
+        ``_load_analysis_inputs(input_dir, step=step)`` when the caller has
+        already read and checked the export, which is then not read twice;
+        ``None`` reads it here.
+    staging:
+        An existing, empty directory to write the outputs into when the
+        caller stages the directory itself (``latent-sensitivity`` renames
+        ``analysis.tmp/`` and ``comparison.tmp/`` together); ``None`` stages
+        ``<final>.tmp/`` here and renames it when complete.
 
     Returns
     -------
     dict
-        ``{"dir": Path, "record": dict, "manifest": dict, "findings": [...]}``.
+        ``{"dir": Path, "record": dict, "manifest": dict, "findings": [...], "names": [...]}``
+        (``names``: the files written, without the manifest).
 
     Notes
     -----
-    Gates, before any input is read: ``check_motco_version`` (MOTCO at
-    least ``ANALYSIS_MOTCO_MIN_VERSION``) and ``check_motco_rank_floor``
-    (MOTCO's default ``min_components`` equals ``ANALYSIS_RANK_FLOOR``);
-    then an existing output directory without ``force``. The inputs are
-    then checked (``_load_analysis_inputs``): the export directory and the
-    five files exist, each CSV hashes to the value the export manifest
-    records, the four tables carry the same ``rid`` column in the same
-    order, the column sets match the contract and the manifest's
-    ``block_columns``, ``sex`` is in ``GROUP_VALUES``, ``stage`` in
-    ``STAGE_LABELS``, each categorical covariate within its levels, no
-    covariate value or block cell missing. A failure stops the step naming
-    the file or column and a count, never a participant, and nothing is
-    written.
-
-    One call of ``motco.analysis.analyze_trajectories`` (never assembled
-    from ``motco plsr`` + ``motco de``) on the blocks in ``EXPORT_BLOCKS``
-    order (transform ``identity``, MOTCO z-scores every feature itself),
-    group ``sex`` in ``GROUP_VALUES`` order, stage ``stage`` in
-    ``STAGE_LABELS`` order, the ``ANALYSIS_COVARIATES`` entered additively
-    in their order with ``ANALYSIS_CATEGORICAL_COVARIATES`` declared
-    categorical (drop-first indicators, the first level the reference;
-    LS-means at the pooled covariate mean), missing policy
-    ``ANALYSIS_MISSING_COVARIATES``, and
-    ``TrajectoryAnalysisParams(permutations=ANALYSIS_PERMUTATIONS,
-    seed=ANALYSIS_SEED, n_jobs=n_jobs, min_components=ANALYSIS_RANK_FLOOR,
-    covariate_latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT)`` and nothing
-    else: MOTCO's orientation estimator, CV settings and attribution stay
-    its defaults and are read back from the record. The metadata table the
-    model sees is ``analysis_metadata.csv`` parsed back as ``motco analyze
-    --metadata`` parses it, so the manifest's ``cli_equivalent`` reproduces
-    the run. ``phase`` enters as a covariate of the stage means; the run
-    offset is not corrected, and the ``stage``-conditioned latent
-    adjustment is the predeclared sensitivity arm of a following change.
-
-    Output contract (``results/motco_analysis/``, written as
-    ``motco_analysis.tmp/`` and renamed when complete): MOTCO's artifact
-    from ``write_analysis_outputs`` (``result.json``, ``latent_scores.csv``,
-    ``pls_loadings.csv``, ``stage_means.csv``), ``analysis_metadata.csv``
-    (``rid``, ``sex``, ``stage``, the five covariates, one row per exported
-    participant in export order), ``analysis_manifest.json`` (versions with
-    MOTCO and scikit-learn, git revision, the inputs with observed and
-    recorded hashes and the export manifest's hash and revision, every
-    setting by constant name, ``n_jobs``, the blocks, the covariate block
-    from the record, the MOTCO defaults used, the latent adjustment with
-    the predeclared arm, ``cli_equivalent``, the counts, the predeclared
-    ``ANALYSIS_EXPECTED_COUNTS`` beside them with deviations, output hashes
-    with a participant-level flag, findings) and ``summary.md``
-    (``render_analysis_summary``: the statistics with p-values, rejection
-    under ``ANALYSIS_REJECTION_RULE`` and null summaries, the CV-selected
-    rank, floor and eigengap beside ``angle``, the cell sizes, the latent
-    and covariate blocks, the export context and ``READING_RULES``).
-    ``latent_scores.csv`` and ``analysis_metadata.csv`` are
-    participant-level and gitignored; the other five files are aggregate
-    and the committed ones.
-
-    Findings, recorded and printed, never a stop: a deviation from the
-    predeclared counts; ``n_jobs`` other than 1 (the run is not reported);
-    a CV-selected rank equal to the floor (the floor is binding); fewer CV
-    repeats completed than requested; a non-finite statistic or p-value; a
-    MOTCO default that differs from the one the proposal states; a CV
-    setting MOTCO clamped; covariate codings in the export manifest that
-    differ from the constant. No finding names a participant.
-
-    The manifest's ``numerics`` block records the numeric environment the run
-    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
-    variables, numpy's ``log2`` target, each BLAS library's kernel and
-    threads, ``pinned``); a run that is not pinned is a finding, never a
-    stop, and its outputs are not committed.
+    Everything but ``latent_adjustment`` is fixed here: the gates, the loader,
+    the dataset (blocks in ``EXPORT_BLOCKS`` order, transform
+    ``EXPORT_FEATURE_RULE``'s, the ``ANALYSIS_COVARIATES`` with
+    ``ANALYSIS_CATEGORICAL_COVARIATES`` categorical, missing policy
+    ``ANALYSIS_MISSING_COVARIATES``), ``TrajectoryAnalysisParams(
+    permutations=ANALYSIS_PERMUTATIONS, seed=ANALYSIS_SEED, n_jobs,
+    min_components=ANALYSIS_RANK_FLOOR, covariate_latent_adjustment=
+    latent_adjustment)``, the counts, the findings, the manifest, the summary
+    and the output directory, as ``run_analysis`` documents them. With
+    ``step="analyze"``, ``latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT`` and
+    ``expected=ANALYSIS_EXPECTED_COUNTS`` it is ``run_analysis``, whose
+    outputs it reproduces byte for byte (the gate of
+    ``adni-latent-sensitivity``). When the record carries a
+    ``latent_adjustment`` block, the counts gain it (conditioning,
+    covariates, design columns, samples, residual df, smallest CV training df,
+    feature scale, ``feature_r2``) and ``render_analysis_summary`` renders the
+    arm's sections; otherwise every byte is the primary's.
     """
+    log = f"[{step}]"
     motco_version = check_motco_version()
     rank_floor = check_motco_rank_floor()
     from motco.analysis import (
@@ -2607,25 +2676,24 @@ def run_analysis(
         write_analysis_outputs,
     )
 
-    input_dir = Path(input_dir) if input_dir is not None else Path(MOTCO_INPUT_DIR)
-    final = Path(out_dir) if out_dir is not None else Path(MOTCO_ANALYSIS_DIR)
     if final.exists() and not force:
         raise FileExistsError(f"{final} exists; pass --force to replace it")
-    print(f"[analyze] MOTCO {motco_version}; rank floor {rank_floor} equals MOTCO's default")
+    print(f"{log} MOTCO {motco_version}; rank floor {rank_floor} equals MOTCO's default")
 
     # --- inputs ---------------------------------------------------------------
-    loaded = _load_analysis_inputs(input_dir)
+    if loaded is None:
+        loaded = _load_analysis_inputs(input_dir, step=step)
     findings: list[str] = list(loaded["findings"])
     blocks, frame, export_manifest = loaded["blocks"], loaded["metadata"], loaded["export_manifest"]
     for name, rec in loaded["inputs"].items():
-        print(f"[analyze] {name}: sha256 {rec['sha256'][:16]}…" + (f" equals {EXPORT_MANIFEST}" if "recorded" in rec else ""))
+        print(f"{log} {name}: sha256 {rec['sha256'][:16]}…" + (f" equals {EXPORT_MANIFEST}" if "recorded" in rec else ""))
     sex_stage = _sex_stage(frame)
     cells = "; ".join(
         f"{sex_} {'/'.join(STAGE_LABELS)} " + "/".join(str(n) for n in sex_stage[sex_].values()) for sex_ in GROUP_VALUES
     )
     n_features = {p: int(blocks[p].shape[1]) for p in EXPORT_BLOCKS}
     print(
-        f"[analyze] participants: {len(frame)} ({cells}); features "
+        f"{log} participants: {len(frame)} ({cells}); features "
         + " + ".join(f"{n_features[p]} {p}" for p in EXPORT_BLOCKS) + f" = {sum(n_features.values())}; covariates "
         + ", ".join(f"{c} ({ANALYSIS_COVARIATES[c]['coding']})" for c in ANALYSIS_COVARIATES)
     )
@@ -2657,12 +2725,12 @@ def run_analysis(
         seed=ANALYSIS_SEED,
         n_jobs=n_jobs,
         min_components=ANALYSIS_RANK_FLOOR,
-        covariate_latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT,
+        covariate_latent_adjustment=latent_adjustment,
     )
     design = dataset.covariate_design
-    print(f"[analyze] design columns: {len(design.column_names)} (" + ", ".join(design.column_names) + ")")
+    print(f"{log} design columns: {len(design.column_names)} (" + ", ".join(design.column_names) + ")")
     print(
-        f"[analyze] CV rank selection (floor {params.resolved_min_components}) + {params.permutations} RRPP "
+        f"{log} CV rank selection (floor {params.resolved_min_components}) + {params.permutations} RRPP "
         f"permutations, seed {params.seed}, n_jobs {n_jobs}, latent adjustment {params.covariate_latent_adjustment}…"
     )
 
@@ -2671,14 +2739,21 @@ def run_analysis(
     record = result.record
     latent, meas = record["latent"], record["measurement"]
     print(
-        f"[analyze] rank {latent['selected_lv']} ({latent['component_selection']}), cv_mean_auroc "
+        f"{log} rank {latent['selected_lv']} ({latent['component_selection']}), cv_mean_auroc "
         f"{_fmt(latent.get('cv_mean_auroc'), '.4f')}, {latent.get('cv_repeats_completed')} CV repeat(s), "
         f"{meas['runtime_seconds']:.1f} s"
     )
     rejected = {s: _rejected(record["p_values"].get(s)) for s in ANALYSIS_STATISTICS}
     for s in ANALYSIS_STATISTICS:
         verdict = "no p-value" if rejected[s] is None else ("rejected" if rejected[s] else "not rejected")
-        print(f"[analyze] {s}: {_fmt(record['statistics'].get(s))} (p {_fmt(record['p_values'].get(s))}, {verdict} at α = {ANALYSIS_ALPHA})")
+        print(f"{log} {s}: {_fmt(record['statistics'].get(s))} (p {_fmt(record['p_values'].get(s))}, {verdict} at α = {ANALYSIS_ALPHA})")
+    adjustment = record.get("latent_adjustment")
+    if adjustment:
+        print(
+            f"{log} latent adjustment: conditioning {adjustment['conditioning']}, residualization design "
+            f"{len(adjustment['design_columns'])} column(s), residual df {adjustment['residual_df']}, smallest CV "
+            f"training df {adjustment.get('cv_min_training_df')}, feature R² median {_fmt(adjustment['feature_r2'].get('q50'), '.3f')}"
+        )
 
     # --- counts, expected, findings ----------------------------------------------------
     cov_record = record["covariates"]
@@ -2704,7 +2779,13 @@ def run_analysis(
         "rejected": rejected,
         "runtime_seconds": meas["runtime_seconds"],
     }
-    expected = json.loads(json.dumps(ANALYSIS_EXPECTED_COUNTS))
+    if adjustment:
+        counts["latent_adjustment"] = {
+            key: adjustment.get(key)
+            for key in ("conditioning", "covariates", "design_columns", "n_samples", "residual_df",
+                        "cv_min_training_df", "feature_scale", "feature_r2")
+        }
+    expected = json.loads(json.dumps(expected))
     observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
     deviations = [msg for key in expected for msg in _count_deviations(expected[key], observed.get(key), key)]
     findings += deviations
@@ -2740,12 +2821,14 @@ def run_analysis(
             findings.append(f"MOTCO clamped the CV setting {key} from {record['params'].get(key)!r} to {cv_used[key]!r}")
     if (cv_used.get("min_components", 1)) != rank_floor:
         findings.append(f"the CV ran with rank floor {cv_used.get('min_components', 1)}, not ANALYSIS_RANK_FLOOR = {rank_floor}")
+    extra = dict(manifest_extra(record) if callable(manifest_extra) else (manifest_extra or {}))
+    findings += list(extra.pop("findings", []))
 
-    numerics, numerics_findings = _numerics("[analyze]")
+    numerics, numerics_findings = _numerics(log)
     findings += numerics_findings
     versions = _software_versions((*_MANIFEST_PACKAGES, "motco", "scikit-learn"))
     manifest = {
-        "step": "analyze",
+        "step": step,
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "versions": versions,
         "numerics": numerics,
@@ -2797,7 +2880,7 @@ def run_analysis(
                 "attribution": False,
                 "stated_by_proposal": _MOTCO_DEFAULTS_STATED,
             },
-            "latent_adjustment": ANALYSIS_LATENT_ADJUSTMENT,
+            "latent_adjustment": latent_adjustment,
             "predeclared_sensitivity": ANALYSIS_PREDECLARED_LATENT_SENSITIVITY,
             "cli_equivalent": _analysis_cli_equivalent(input_dir, final / ANALYSIS_METADATA, params, n_jobs),
         },
@@ -2805,11 +2888,13 @@ def run_analysis(
         "expected": expected,
         "deviations": deviations,
         "findings": findings,
+        **extra,
     }
 
     # --- outputs ----------------------------------------------------------------------
     participant_level = {ANALYSIS_LATENT_SCORES, ANALYSIS_METADATA}
-    with _finalize_output_dir(final, force=force) as tmp:
+
+    def write(tmp: Path) -> list[str]:
         written = write_analysis_outputs(result, tmp)
         (tmp / ANALYSIS_METADATA).write_text(metadata_csv)
         (tmp / ANALYSIS_SUMMARY).write_text(render_analysis_summary(record, export_manifest=export_manifest, n_jobs=n_jobs))
@@ -2823,15 +2908,151 @@ def run_analysis(
             for name in names
         }
         _write_manifest(tmp / ANALYSIS_MANIFEST, manifest)
+        return names
 
-    print(f"[analyze] wrote {final}/ (" + ", ".join([*names, ANALYSIS_MANIFEST]) + ")")
-    if deviations:
-        print(f"[analyze] {len(deviations)} count deviation(s) from the predeclared counts")
+    if staging is None:
+        with _finalize_output_dir(final, force=force) as tmp:
+            names = write(tmp)
+        where = final
     else:
-        print("[analyze] counts reproduce the predeclared ones")
+        names = write(staging)
+        where = staging
+
+    print(f"{log} wrote {where}/ (" + ", ".join([*names, ANALYSIS_MANIFEST]) + ")")
+    if deviations:
+        print(f"{log} {len(deviations)} count deviation(s) from the predeclared counts")
+    else:
+        print(f"{log} counts reproduce the predeclared ones")
     for msg in findings:
-        print(f"[analyze] FINDING: {msg}")
-    return {"dir": final, "record": record, "manifest": manifest, "findings": findings}
+        print(f"{log} FINDING: {msg}")
+    return {"dir": final, "record": record, "manifest": manifest, "findings": findings, "names": names}
+
+
+def run_analysis(
+    *,
+    input_dir: str | Path | None = None,
+    out_dir: str | Path | None = None,
+    n_jobs: int = REPORTED_N_JOBS,
+    force: bool = False,
+) -> dict:
+    """Run the covariate-adjusted MOTCO sex × stage trajectory comparison (the primary analysis).
+
+    Parameters
+    ----------
+    input_dir:
+        Output directory of ``export`` (default ``constants.MOTCO_INPUT_DIR``).
+        Read: ``p180.csv``, ``nmr.csv``, ``metadata.csv``, ``covariates.csv``
+        (each checked against the sha256 ``manifest.json`` records) and
+        ``manifest.json`` (block columns, covariate codings, counts). No
+        data-root file, no cohort file, no cleaned table.
+    out_dir:
+        Analysis directory (default ``constants.MOTCO_ANALYSIS_DIR``).
+    n_jobs:
+        Parallel jobs for MOTCO's CV and RRPP. MOTCO seeds one RRPP stream
+        per worker, so a value other than 1 changes the permutation draws
+        (p-values, null summaries) but not the statistics, rank or latent
+        space; reported runs use ``constants.REPORTED_N_JOBS`` (1) and
+        another value is recorded as a finding and not reported.
+    force:
+        Replace an existing analysis directory (after the new one is
+        complete).
+
+    Returns
+    -------
+    dict
+        ``{"dir": Path, "record": dict, "manifest": dict, "findings": [...]}``.
+
+    Notes
+    -----
+    The body is ``_run_trajectory_analysis`` with ``step="analyze"``,
+    ``latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT`` and
+    ``expected=ANALYSIS_EXPECTED_COUNTS``; the ``latent-sensitivity`` step
+    calls the same function with the arm's setting (change
+    ``adni-latent-sensitivity``), and the primary's outputs are its byte
+    gate.
+
+    Gates, before any input is read: ``check_motco_version`` (MOTCO at
+    least ``ANALYSIS_MOTCO_MIN_VERSION``) and ``check_motco_rank_floor``
+    (MOTCO's default ``min_components`` equals ``ANALYSIS_RANK_FLOOR``);
+    then an existing output directory without ``force``. The inputs are
+    then checked (``_load_analysis_inputs``): the export directory and the
+    five files exist, each CSV hashes to the value the export manifest
+    records, the four tables carry the same ``rid`` column in the same
+    order, the column sets match the contract and the manifest's
+    ``block_columns``, ``sex`` is in ``GROUP_VALUES``, ``stage`` in
+    ``STAGE_LABELS``, each categorical covariate within its levels, no
+    covariate value or block cell missing. A failure stops the step naming
+    the file or column and a count, never a participant, and nothing is
+    written.
+
+    One call of ``motco.analysis.analyze_trajectories`` (never assembled
+    from ``motco plsr`` + ``motco de``) on the blocks in ``EXPORT_BLOCKS``
+    order (transform ``identity``, MOTCO z-scores every feature itself),
+    group ``sex`` in ``GROUP_VALUES`` order, stage ``stage`` in
+    ``STAGE_LABELS`` order, the ``ANALYSIS_COVARIATES`` entered additively
+    in their order with ``ANALYSIS_CATEGORICAL_COVARIATES`` declared
+    categorical (drop-first indicators, the first level the reference;
+    LS-means at the pooled covariate mean), missing policy
+    ``ANALYSIS_MISSING_COVARIATES``, and
+    ``TrajectoryAnalysisParams(permutations=ANALYSIS_PERMUTATIONS,
+    seed=ANALYSIS_SEED, n_jobs=n_jobs, min_components=ANALYSIS_RANK_FLOOR,
+    covariate_latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT)`` and nothing
+    else: MOTCO's orientation estimator, CV settings and attribution stay
+    its defaults and are read back from the record. The metadata table the
+    model sees is ``analysis_metadata.csv`` parsed back as ``motco analyze
+    --metadata`` parses it, so the manifest's ``cli_equivalent`` reproduces
+    the run. ``phase`` enters as a covariate of the stage means; the run
+    offset is not corrected, and the ``stage``-conditioned latent
+    adjustment is the predeclared sensitivity arm, run by
+    ``latent-sensitivity`` beside this primary and never replacing it.
+
+    Output contract (``results/motco_analysis/``, written as
+    ``motco_analysis.tmp/`` and renamed when complete): MOTCO's artifact
+    from ``write_analysis_outputs`` (``result.json``, ``latent_scores.csv``,
+    ``pls_loadings.csv``, ``stage_means.csv``), ``analysis_metadata.csv``
+    (``rid``, ``sex``, ``stage``, the five covariates, one row per exported
+    participant in export order), ``analysis_manifest.json`` (versions with
+    MOTCO and scikit-learn, git revision, the inputs with observed and
+    recorded hashes and the export manifest's hash and revision, every
+    setting by constant name, ``n_jobs``, the blocks, the covariate block
+    from the record, the MOTCO defaults used, the latent adjustment with
+    the predeclared arm, ``cli_equivalent``, the counts, the predeclared
+    ``ANALYSIS_EXPECTED_COUNTS`` beside them with deviations, output hashes
+    with a participant-level flag, findings) and ``summary.md``
+    (``render_analysis_summary``: the statistics with p-values, rejection
+    under ``ANALYSIS_REJECTION_RULE`` and null summaries, the CV-selected
+    rank, floor and eigengap beside ``angle``, the cell sizes, the latent
+    and covariate blocks, the export context and ``READING_RULES``).
+    ``latent_scores.csv`` and ``analysis_metadata.csv`` are
+    participant-level and gitignored; the other five files are aggregate
+    and the committed ones.
+
+    Findings, recorded and printed, never a stop: a deviation from the
+    predeclared counts; ``n_jobs`` other than 1 (the run is not reported);
+    a CV-selected rank equal to the floor (the floor is binding); fewer CV
+    repeats completed than requested; a non-finite statistic or p-value; a
+    MOTCO default that differs from the one the proposal states; a CV
+    setting MOTCO clamped; covariate codings in the export manifest that
+    differ from the constant. No finding names a participant.
+
+    The manifest's ``numerics`` block records the numeric environment the run
+    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
+    variables, numpy's ``log2`` target, each BLAS library's kernel and
+    threads, ``pinned``); a run that is not pinned is a finding, never a
+    stop, and its outputs are not committed.
+    """
+    input_dir = Path(input_dir) if input_dir is not None else Path(MOTCO_INPUT_DIR)
+    final = Path(out_dir) if out_dir is not None else Path(MOTCO_ANALYSIS_DIR)
+    out = _run_trajectory_analysis(
+        input_dir=input_dir,
+        final=final,
+        n_jobs=n_jobs,
+        force=force,
+        step="analyze",
+        latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT,
+        expected=ANALYSIS_EXPECTED_COUNTS,
+    )
+    return {key: out[key] for key in ("dir", "record", "manifest", "findings")}
 
 
 # --- axis-diagnostics -----------------------------------------------------------
@@ -3169,6 +3390,22 @@ def _conditioning_design(
     return design
 
 
+#: The steps that write an analysis directory, by the ``step`` their manifest records.
+_ANALYSIS_STEPS: tuple[str, ...] = ("analyze", "latent-sensitivity")
+
+
+def _analysis_command(analysis_dir: Path, manifest: dict | None = None) -> str:
+    """The command that wrote ``analysis_dir``, for the diagnostic's hints: ``adni-sexdiff <step>`` from the manifest's ``step``, or both commands when it cannot be read."""
+    both = "`adni-sexdiff analyze` (the primary) or `adni-sexdiff latent-sensitivity` (the arm)"
+    if manifest is None:
+        try:
+            manifest = json.loads((analysis_dir / ANALYSIS_MANIFEST).read_text())
+        except (OSError, ValueError):
+            return both
+    step = manifest.get("step") if isinstance(manifest, dict) else None
+    return f"`adni-sexdiff {step}`" if step in _ANALYSIS_STEPS else both
+
+
 def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) -> dict:
     """Read the analysis directory and chain it to the export the loader read.
 
@@ -3195,26 +3432,32 @@ def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) ->
     -----
     Stops, before anything is written and naming the file and both hashes or
     both counts, never a participant: an absent directory or file (naming
-    ``adni-sexdiff analyze``); an input hash the analysis manifest records
-    that differs from the export file's sha256 now, or an export-manifest
-    hash that differs (the export was regenerated after the analysis); a
-    ``pls_`` column count in ``latent_scores.csv``, ``stage_means.csv`` or
-    ``pls_loadings.csv`` that differs from the record's selected rank; a
-    ``stage_means.csv`` without exactly one row per group × stage of the
-    record's design; a ``pls_loadings.csv`` whose (block, feature) rows are
-    not the export manifest's ``block_columns``, each once; a
-    ``latent_scores.csv`` whose ``rid`` set differs from the export's.
+    the commands that write an analysis directory, ``adni-sexdiff analyze``
+    for the primary and ``adni-sexdiff latent-sensitivity`` for the arm, or
+    the one the manifest's ``step`` names when the manifest is readable); an
+    input hash the analysis manifest records that differs from the export
+    file's sha256 now, or an export-manifest hash that differs (the export
+    was regenerated after the analysis; the hint names the manifest's
+    step); a ``pls_`` column count in ``latent_scores.csv``,
+    ``stage_means.csv`` or ``pls_loadings.csv`` that differs from the
+    record's selected rank; a ``stage_means.csv`` without exactly one row
+    per group × stage of the record's design; a ``pls_loadings.csv`` whose
+    (block, feature) rows are not the export manifest's ``block_columns``,
+    each once; a ``latent_scores.csv`` whose ``rid`` set differs from the
+    export's.
     """
+    both = "`adni-sexdiff analyze` (the primary) or `adni-sexdiff latent-sensitivity` (the arm)"
     if not analysis_dir.is_dir():
-        raise FileNotFoundError(f"{analysis_dir} does not exist; run `adni-sexdiff analyze` first")
+        raise FileNotFoundError(f"{analysis_dir} does not exist; run {both} first")
     absent = [n for n in DIAGNOSTICS_ANALYSIS_FILES if not (analysis_dir / n).is_file()]
     if absent:
         raise FileNotFoundError(
             f"{len(absent)} analysis file(s) absent from {analysis_dir}: " + ", ".join(repr(n) for n in absent)
-            + "; run `adni-sexdiff analyze` first"
+            + f"; run {_analysis_command(analysis_dir)} first"
         )
     manifest = json.loads((analysis_dir / ANALYSIS_MANIFEST).read_text())
     record = json.loads((analysis_dir / ANALYSIS_RESULT).read_text())
+    command = _analysis_command(analysis_dir, manifest)
     recorded = manifest.get("inputs", {}).get("files", {})
     chain: dict[str, bool] = {}
     for name, entry in loaded["inputs"].items():
@@ -3222,11 +3465,11 @@ def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) ->
             continue
         rec = recorded.get(name, {}).get("sha256")
         if rec is None:
-            raise RuntimeError(f"{name}: {ANALYSIS_MANIFEST} records no input hash for it; rerun `adni-sexdiff analyze`")
+            raise RuntimeError(f"{name}: {ANALYSIS_MANIFEST} records no input hash for it; rerun {command}")
         if rec != entry["sha256"]:
             raise RuntimeError(
                 f"{name}: sha256 {entry['sha256']} now differs from the hash {ANALYSIS_MANIFEST} records ({rec}); the "
-                "export was regenerated after the analysis, rerun `adni-sexdiff analyze`"
+                f"export was regenerated after the analysis, rerun {command}"
             )
         chain[name] = True
     rec_manifest = manifest.get("inputs", {}).get("export_manifest", {}).get("sha256")
@@ -3234,7 +3477,7 @@ def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) ->
     if rec_manifest != now_manifest:
         raise RuntimeError(
             f"{EXPORT_MANIFEST}: sha256 {now_manifest} now differs from the hash {ANALYSIS_MANIFEST} records "
-            f"({rec_manifest}); the export was regenerated after the analysis, rerun `adni-sexdiff analyze`"
+            f"({rec_manifest}); the export was regenerated after the analysis, rerun {command}"
         )
 
     rank = int(record["latent"]["selected_lv"])
@@ -3293,7 +3536,7 @@ def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) ->
     if problems:
         raise RuntimeError(
             "axis-diagnostics stops before writing anything: " + "; ".join(problems)
-            + "; the analysis directory is not the one `adni-sexdiff analyze` wrote for this export, rerun it"
+            + f"; the analysis directory is not the one {command} wrote for this export, rerun it"
         )
     scores = scores.set_index(scores[SAMPLE_COLUMN].astype(str))[components].loc[rids]
     files = {
@@ -3443,12 +3686,32 @@ def render_axis_diagnostics(
         the diagnostic's in the heading; the geometry shares; the analysis
         read; the findings; ``READING_RULES`` verbatim. Correlations and
         shares carry three decimals, SDs four significant digits.
+
+    Notes
+    -----
+    The renderer keys on ``analysis["latent_adjustment"]`` (change
+    ``adni-latent-sensitivity``). When it is not null the opening paragraph
+    names the ``stage``-conditioned sensitivity arm and its directory, a
+    flagged row is a finding about the measurement space of the arm (the
+    primary stays primary), the analysis-read section names the arm's
+    constant and ``LATENT_SENSITIVITY_READING_RULES`` follows
+    ``READING_RULES`` under its own heading. On the primary every byte is
+    unchanged.
     """
     axis, pcs, geo, comps_table = tables["axis"], tables["block_pcs"], tables["geometry"], tables["components"]
     comps = _pls_columns(pd.DataFrame(columns=list(dict.fromkeys(axis["component"])))) if len(axis) else []
     var_order = list(variables)
     n_pcs = max((len(b.get("variance_shares", {})) for b in blocks.values()), default=0)
-    which = "the primary" if analysis["is_primary"] else "an arm (not the primary)"
+    latent_adjustment = analysis.get("latent_adjustment")
+    if latent_adjustment is not None:
+        which = (
+            f"the `{latent_adjustment}`-conditioned latent-adjustment sensitivity arm `{LATENT_SENSITIVITY_ARM['name']}` "
+            f"(`LATENT_SENSITIVITY_ARM`, change `{LATENT_SENSITIVITY_ARM['change']}`; not the primary)"
+        )
+        whose = "this arm (the primary stays primary)"
+    else:
+        which = "the primary" if analysis["is_primary"] else "an arm (not the primary)"
+        whose = "the primary analysis"
     lines = [
         "# MOTCO axis diagnostics: ADNI serum metabolomics, sex × stage",
         "",
@@ -3463,7 +3726,7 @@ def render_axis_diagnostics(
         f"component and the block composition of each component. Rows with |rho| ≥ {threshold} are flagged and "
         "listed first; the flag is a reporting threshold, not an adoption rule. No p-value is attached to any "
         "correlation and the tables support no inferential claim. Nothing here chooses a variant or an arm: an axis "
-        "correlated with a variable is a finding about the measurement space of the primary analysis, not a "
+        f"correlated with a variable is a finding about the measurement space of {whose}, not a "
         "reinterpretation of its statistics or p-values (`delta`, `angle` and `shape` keep their recorded status), and "
         "the primary analysis stays primary under the reading rules below.",
         "",
@@ -3613,6 +3876,14 @@ def render_axis_diagnostics(
         f"- latent adjustment: {analysis['latent_adjustment'] if analysis['latent_adjustment'] is not None else 'none'}",
         f"- n_jobs: {n_jobs}" + ("" if n_jobs == REPORTED_N_JOBS else f" (not a reported run: reported runs use n_jobs = {REPORTED_N_JOBS})"),
         f"- primary: {'yes' if analysis['is_primary'] else 'no (the primary rank and row counts are not expected)'}",
+    ]
+    if latent_adjustment is not None:
+        lines.append(
+            f"- arm: `{LATENT_SENSITIVITY_ARM['name']}` (`LATENT_SENSITIVITY_ARM`): a component of the arm that tracks a "
+            "variable here is a measurement-space finding about the arm; it never reinterprets either analysis' "
+            "statistics and is never grounds to adopt the arm (arm rule 9)"
+        )
+    lines += [
         "",
         "## Findings",
         "",
@@ -3626,6 +3897,16 @@ def render_axis_diagnostics(
         "",
     ]
     lines += [f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)]
+    if latent_adjustment is not None:
+        lines += [
+            "",
+            "## Reading rules of the arm",
+            "",
+            f"Binding for every reader of the arm (`LATENT_SENSITIVITY_READING_RULES`, decided by "
+            f"`{LATENT_SENSITIVITY_ARM['change']}` before any run), after `READING_RULES`:",
+            "",
+        ]
+        lines += [f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)]
     return "\n".join(lines) + "\n"
 
 
@@ -4052,6 +4333,926 @@ def run_axis_diagnostics(
     return {"dir": final, "tables": tables, "manifest": manifest, "findings": findings}
 
 
+# --- latent-sensitivity ------------------------------------------------------------
+
+#: The columns of ``latent_sensitivity.csv``, in order (design D6 of
+#: ``adni-latent-sensitivity``): the analysis, then the latent space, then per
+#: statistic the observed value, p, rejection, null mean, SD and q95, then the
+#: arm's latent-adjustment summary (empty for the primary).
+_LATENT_SENSITIVITY_R2_KEYS: tuple[str, ...] = ("q05", "q25", "q50", "q75", "q95", "mean")
+_LATENT_SENSITIVITY_COLUMNS: tuple[str, ...] = (
+    "analysis", "directory", "latent_adjustment",
+    "selected_rank", "component_selection", "cv_mean_auroc", "cv_repeats_completed", "eigengap",
+    *(f"{s}_{k}" for s in ANALYSIS_STATISTICS for k in ("observed", "p", "rejected", "null_mean", "null_sd", "null_q95")),
+    "residual_df", "cv_min_training_df",
+    *(f"feature_r2_{q}" for q in _LATENT_SENSITIVITY_R2_KEYS),
+)
+#: The status of a statistic in the comparison: the primary's rejection under
+#: ``ANALYSIS_REJECTION_RULE`` against the arm's.
+_LATENT_SENSITIVITY_STATUS_SAME = "same"
+_LATENT_SENSITIVITY_STATUS_DIFFERS = "differs (basis dependence)"
+#: MOTCO's two latent-adjustment decisions, quoted in ``latent_sensitivity.md``
+#: with their report paths (the proposal's "Why"); no number here is from a
+#: run of the arm.
+_MOTCO_LATENT_ADJUSTMENT_DECISIONS: tuple[dict[str, str], ...] = (
+    {
+        "report": "../MOTCO/docs/reports/latent-adjustment-type-i-2026-10-20.md",
+        "decision": "adopt_stage",
+        "reading": (
+            "the `stage`-conditioned adjustment holds Type I at the validated design under conditions this change "
+            "meets: the case study's own proposal justifies the covariate set (`LATENT_SENSITIVITY_COVARIATE_ROLES`), "
+            "`group_stage` is not used, the record's `latent_adjustment` and `covariates` blocks are reported beside "
+            "the results, no categorical level is rare enough to drop out of a CV training set, and the earlier "
+            "binding statements stand; `angle` held the 0.0706 bound by 0.004 (0.067)"
+        ),
+    },
+    {
+        "report": "../MOTCO/docs/reports/latent-adjustment-power-2026-10-20.md",
+        "decision": "candidate_fails",
+        "reading": (
+            "the adjustment loses `shape` power with a covariate-aligned nuisance axis (0.243 against 0.428) and "
+            "small-magnitude `delta` power without one (0.400 against 0.520 at e = 0.1), so it is a sensitivity "
+            "read beside the covariate-blind primary, never a replacement of it"
+        ),
+    },
+)
+
+
+def _check_primary_reference(analysis_dir: Path, loaded: dict, *, motco_version: str) -> dict:
+    """Read the primary analysis as a chained, read-only reference (design D4 of ``adni-latent-sensitivity``).
+
+    Parameters
+    ----------
+    analysis_dir:
+        The primary's analysis directory (``results/motco_analysis``).
+    loaded:
+        ``_load_analysis_inputs(input_dir, step="latent-sensitivity")``: the
+        export files' observed hashes.
+    motco_version:
+        The installed MOTCO version (``check_motco_version``).
+
+    Returns
+    -------
+    dict
+        ``dir``, ``record`` (``result.json``), ``manifest``
+        (``analysis_manifest.json``), ``files`` (the two files with sha256
+        and bytes), ``chain`` (export file → ``True``),
+        ``export_manifest_equals`` (``True``), ``rank``, ``n_jobs``,
+        ``motco`` (the version the manifest records).
+
+    Notes
+    -----
+    Reads only the two JSON files: no primary CSV, nothing participant-level.
+    Stops, before anything is written and naming the file or setting, both
+    values and the command to rerun: an absent directory or file (naming
+    ``adni-sexdiff analyze``); an ``inputs.files`` hash or the
+    ``inputs.export_manifest`` hash that differs from the export file now
+    (the export was regenerated after the primary); a recorded
+    ``settings.latent_adjustment`` that is not null or a record with a
+    ``latent_adjustment`` block (the directory is not the primary); a
+    recorded MOTCO version other than the installed one; a recorded
+    ``ANALYSIS_SEED`` or ``ANALYSIS_PERMUTATIONS`` other than the constant.
+    It does not require a ``numerics`` block: the committed primary manifest
+    predates ``adni-portable-numerics``, and the primary's bytes are checked
+    by that change's exact gate instead.
+    """
+    rerun = "rerun `adni-sexdiff analyze` (then latent-sensitivity); nothing was written"
+    if not analysis_dir.is_dir():
+        raise FileNotFoundError(
+            f"{analysis_dir} does not exist: the primary analysis is the arm's reference; run `adni-sexdiff analyze` "
+            "first; nothing was written"
+        )
+    absent = [n for n in (ANALYSIS_RESULT, ANALYSIS_MANIFEST) if not (analysis_dir / n).is_file()]
+    if absent:
+        raise FileNotFoundError(
+            f"{len(absent)} primary file(s) absent from {analysis_dir}: " + ", ".join(repr(n) for n in absent)
+            + "; run `adni-sexdiff analyze` first; nothing was written"
+        )
+    manifest = json.loads((analysis_dir / ANALYSIS_MANIFEST).read_text())
+    record = json.loads((analysis_dir / ANALYSIS_RESULT).read_text())
+    recorded = manifest.get("inputs", {}).get("files", {})
+    chain: dict[str, bool] = {}
+    for name, entry in loaded["inputs"].items():
+        if name == EXPORT_MANIFEST:
+            continue
+        rec = recorded.get(name, {}).get("sha256")
+        if rec is None:
+            raise RuntimeError(f"{name}: the primary's {ANALYSIS_MANIFEST} records no input hash for it; {rerun}")
+        if rec != entry["sha256"]:
+            raise RuntimeError(
+                f"{name}: sha256 {entry['sha256']} now differs from the hash the primary's {ANALYSIS_MANIFEST} records "
+                f"({rec}); the export was regenerated after the primary, {rerun}"
+            )
+        chain[name] = True
+    rec_manifest = manifest.get("inputs", {}).get("export_manifest", {}).get("sha256")
+    now_manifest = loaded["inputs"][EXPORT_MANIFEST]["sha256"]
+    if rec_manifest != now_manifest:
+        raise RuntimeError(
+            f"{EXPORT_MANIFEST}: sha256 {now_manifest} now differs from the hash the primary's {ANALYSIS_MANIFEST} "
+            f"records ({rec_manifest}); the export was regenerated after the primary, {rerun}"
+        )
+    settings = manifest.get("settings", {})
+    latent_adjustment = settings.get("latent_adjustment")
+    if latent_adjustment is not None or "latent_adjustment" in record:
+        raise RuntimeError(
+            f"{analysis_dir} is not the primary: {ANALYSIS_MANIFEST} records latent adjustment {latent_adjustment!r}"
+            + (f" and {ANALYSIS_RESULT} carries a latent_adjustment block" if "latent_adjustment" in record else "")
+            + " (the primary records None); point --analysis-dir at the primary (`adni-sexdiff analyze`); nothing was written"
+        )
+    recorded_motco = manifest.get("versions", {}).get("motco")
+    if recorded_motco != motco_version:
+        raise RuntimeError(
+            f"the primary was made under MOTCO {recorded_motco} but MOTCO {motco_version} is installed; the arm "
+            f"must share the primary's release (AGENTS.md constraint 4), {rerun}"
+        )
+    for name, constant in (("ANALYSIS_SEED", ANALYSIS_SEED), ("ANALYSIS_PERMUTATIONS", ANALYSIS_PERMUTATIONS)):
+        seen = settings.get(name)
+        if seen != constant:
+            raise RuntimeError(
+                f"the primary's {ANALYSIS_MANIFEST} records {name} = {seen!r} but the constant is {constant!r}; "
+                f"the arm must share the primary's seed and permutations, {rerun}"
+            )
+    files = {
+        name: {"sha256": _sha256_file(analysis_dir / name), "bytes": (analysis_dir / name).stat().st_size}
+        for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST)
+    }
+    return {
+        "dir": analysis_dir,
+        "record": record,
+        "manifest": manifest,
+        "files": files,
+        "chain": chain,
+        "export_manifest_equals": True,
+        "rank": int(record["latent"]["selected_lv"]),
+        "n_jobs": settings.get("n_jobs"),
+        "motco": recorded_motco,
+    }
+
+
+def _check_cohort_manifest(cohort_dir: Path, export_manifest: dict) -> dict:
+    """Check ``cohort_manifest.json`` against the export manifest's record and read its descriptives (design D4).
+
+    Returns ``manifest`` (the cohort manifest), ``descriptives`` (its
+    ``descriptives`` block: per sex × stage cell of the intersection set,
+    ``n``, age and education mean and sd, counts per level of ``apoe4``,
+    ``phase`` and ``statin``) and ``files`` (``cohort_manifest.json`` with
+    its sha256, bytes and ``equals_export_manifest``). Reads no
+    ``cohort.csv``. Stops, before anything is written, on an absent manifest
+    (naming ``adni-sexdiff cohort``), an export manifest that records no
+    cohort-manifest hash, and a hash that differs (the cohort was rerun after
+    the export; names ``export`` and ``analyze``).
+    """
+    path = cohort_dir / COHORT_MANIFEST
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"{COHORT_MANIFEST} is absent from {cohort_dir}; run `adni-sexdiff cohort` (then export, analyze) first; "
+            "nothing was written"
+        )
+    recorded = export_manifest.get("inputs", {}).get("cohort", {}).get("manifest", {}).get("sha256")
+    if recorded is None:
+        raise RuntimeError(f"{EXPORT_MANIFEST} records no hash for {COHORT_MANIFEST}; rerun `adni-sexdiff export` (then analyze); nothing was written")
+    now = _sha256_file(path)
+    if recorded != now:
+        raise RuntimeError(
+            f"{COHORT_MANIFEST}: sha256 {now} now differs from the hash {EXPORT_MANIFEST} records ({recorded}); the "
+            "cohort was rerun after the export, rerun `adni-sexdiff export` (then analyze, then latent-sensitivity); "
+            "nothing was written"
+        )
+    manifest = json.loads(path.read_text())
+    return {
+        "manifest": manifest,
+        "descriptives": manifest.get("descriptives"),
+        "files": {COHORT_MANIFEST: {"sha256": now, "bytes": path.stat().st_size, "equals_export_manifest": True}},
+    }
+
+
+def _comparison_row(name: str, directory: Path, record: dict) -> dict:
+    """One row of ``latent_sensitivity.csv`` (``_LATENT_SENSITIVITY_COLUMNS``), every value read from ``record``.
+
+    ``directory`` is the primary's directory as read, and for the arm its
+    subdirectory name under the step's output root (``analysis``), so that
+    the table does not depend on where the root is and two runs into
+    different roots stay byte-identical; the manifests record the full paths.
+    """
+    latent = record["latent"]
+    adjustment = record.get("latent_adjustment") or {}
+    row: dict = {
+        "analysis": name,
+        "directory": str(directory),
+        "latent_adjustment": adjustment.get("conditioning"),
+        "selected_rank": latent["selected_lv"],
+        "component_selection": latent["component_selection"],
+        "cv_mean_auroc": latent.get("cv_mean_auroc"),
+        "cv_repeats_completed": latent.get("cv_repeats_completed"),
+        "eigengap": (record.get("config_spectrum", {}).get("pooled") or {}).get("relative_eigengap"),
+    }
+    for s in ANALYSIS_STATISTICS:
+        null = record["null_summary"].get(s, {})
+        p = record["p_values"].get(s)
+        row.update({
+            f"{s}_observed": record["statistics"].get(s),
+            f"{s}_p": p,
+            f"{s}_rejected": _rejected(p),
+            f"{s}_null_mean": null.get("mean"),
+            f"{s}_null_sd": null.get("sd"),
+            f"{s}_null_q95": null.get("q95"),
+        })
+    r2 = adjustment.get("feature_r2", {})
+    row.update({
+        "residual_df": adjustment.get("residual_df"),
+        "cv_min_training_df": adjustment.get("cv_min_training_df"),
+        **{f"feature_r2_{q}": r2.get(q) for q in _LATENT_SENSITIVITY_R2_KEYS},
+    })
+    return row
+
+
+def _comparison_statuses(primary_row: dict, arm_row: dict) -> dict[str, str]:
+    """``same`` when both rejections under ``ANALYSIS_REJECTION_RULE`` are equal, else ``differs (basis dependence)``."""
+    return {
+        s: _LATENT_SENSITIVITY_STATUS_SAME if primary_row[f"{s}_rejected"] == arm_row[f"{s}_rejected"]
+        else _LATENT_SENSITIVITY_STATUS_DIFFERS
+        for s in ANALYSIS_STATISTICS
+    }
+
+
+def _cohort_cell_findings(descriptives: dict | None, cell_sizes: dict) -> list[str]:
+    """A finding per sex × stage cell whose cohort-manifest ``n`` differs from the record's cell size (design D9)."""
+    cells = (descriptives or {}).get("cells", {})
+    findings = []
+    for g in GROUP_VALUES:
+        for st in STAGE_LABELS:
+            n_cohort = cells.get(g, {}).get(st, {}).get("n")
+            n_record = cell_sizes.get(g, {}).get(st)
+            if n_cohort != n_record:
+                findings.append(
+                    f"cohort manifest descriptives {g} {st}: n {n_cohort} differs from the record's cell size {n_record}; "
+                    "the covariate-roles table shows the cohort manifest's cells, the analysis the record's"
+                )
+    return findings
+
+
+def _rejection_text(value: bool | None) -> str:
+    return "no p-value" if value is None else ("rejected" if value else "not rejected")
+
+
+def _latent_sensitivity_findings(primary: dict, record: dict) -> list[str]:
+    """The findings of design D9 that read the arm's record: a rank that differs from the primary's, a status that differs."""
+    findings: list[str] = []
+    rank_p, rank_a = int(primary["latent"]["selected_lv"]), int(record["latent"]["selected_lv"])
+    if rank_a != rank_p:
+        findings.append(
+            f"the arm's CV-selected rank {rank_a} differs from the primary's {rank_p}: reported beside angle, not "
+            "ranked as better or worse (arm rule 3)"
+        )
+    for s in ANALYSIS_STATISTICS:
+        rp, ra = _rejected(primary["p_values"].get(s)), _rejected(record["p_values"].get(s))
+        if rp != ra:
+            findings.append(
+                f"{s}: the arm's status ({_rejection_text(ra)}) differs from the primary's ({_rejection_text(rp)}) "
+                f"at α = {ANALYSIS_ALPHA}: basis dependence, not a result of the arm; the primary's status stays "
+                "the result (arm rule 2)"
+            )
+    return findings
+
+
+def render_latent_sensitivity(
+    rows: list[dict],
+    *,
+    statuses: dict[str, str],
+    primary: dict,
+    arm: dict,
+    reference: dict,
+    arm_info: dict,
+    descriptives: dict | None,
+    findings: list[str],
+    n_jobs: int,
+    alpha: float = ANALYSIS_ALPHA,
+    rank_floor: int = ANALYSIS_RANK_FLOOR,
+) -> str:
+    """Render ``latent_sensitivity.md`` from the two records (design D6 of ``adni-latent-sensitivity``).
+
+    Parameters
+    ----------
+    rows:
+        The two rows of ``latent_sensitivity.csv`` (``_comparison_row``), the
+        primary first.
+    statuses:
+        Per statistic, ``_comparison_statuses``.
+    primary, arm:
+        The two parsed ``result.json`` records.
+    reference, arm_info:
+        Per analysis: ``dir`` and ``files`` (``result.json`` with its sha256).
+    descriptives:
+        The cohort manifest's ``descriptives`` block, copied, not recomputed.
+    findings:
+        The comparison's findings.
+    n_jobs:
+        This run's ``n_jobs``.
+    alpha, rank_floor:
+        ``ANALYSIS_ALPHA`` and ``ANALYSIS_RANK_FLOOR``.
+
+    Returns
+    -------
+    str
+        Markdown, in this order: the header (both directories with their
+        ``result.json`` sha256, the arm by constant name, ``n_jobs``); the
+        statistics table (primary row, arm row, status) with both ranks,
+        floors, eigengaps and null summaries beside ``angle``; the
+        latent-space table; the arm's latent-adjustment block; the covariate
+        roles beside the cohort manifest's per-cell descriptives; MOTCO's two
+        latent-adjustment decisions; the findings; ``READING_RULES`` then
+        ``LATENT_SENSITIVITY_READING_RULES``, both verbatim. Numbers carry
+        six significant digits.
+    """
+    p_row, a_row = rows[0], rows[1]
+    design = arm["design"]
+    stages = [str(st) for st in design["stage_levels"]]
+    groups = [str(g) for g in design["group_levels"]]
+    arm_name = LATENT_SENSITIVITY_ARM["name"]
+    adjustment = arm["latent_adjustment"]
+    lines = [
+        "# MOTCO latent-adjustment sensitivity: ADNI serum metabolomics, sex × stage",
+        "",
+        f"The primary analysis (`{reference['dir']}`, `result.json` sha256 `{reference['files'][ANALYSIS_RESULT]['sha256']}`) "
+        f"beside its predeclared sensitivity arm `{arm_name}` (`LATENT_SENSITIVITY_ARM`, change "
+        f"`{LATENT_SENSITIVITY_ARM['change']}`: `{LATENT_SENSITIVITY_ARM['setting']}` = `{adjustment['conditioning']}`, "
+        f"the same five covariates, every other setting the primary's; `{arm_info['dir']}`, `result.json` sha256 "
+        f"`{arm_info['files'][ANALYSIS_RESULT]['sha256']}`). MOTCO {arm['software']['motco']}; n = {design['n_samples']}; "
+        f"{arm['measurement']['permutations']} RRPP permutations, seed {arm['measurement']['seed']}; α = {alpha}, rejected "
+        f"when {ANALYSIS_REJECTION_RULE} (`ANALYSIS_REJECTION_RULE`); n_jobs {n_jobs}"
+        + ("" if n_jobs == REPORTED_N_JOBS else f" (not a reported run: reported runs use n_jobs = {REPORTED_N_JOBS})")
+        + ". The primary row comes first and its status is the result; the arm is read beside it and never replaces "
+        "it (arm rule 1). A status that differs is basis dependence, not a result of the arm (arm rule 2). Every value "
+        "below is read from the two `result.json` records.",
+        "",
+        "## Statistics",
+        "",
+        "| statistic | analysis | observed | p (RRPP) | rejected | null mean | null sd | null q95 | status |",
+        "|---|---|---:|---:|:---:|---:|---:|---:|---|",
+    ]
+    for s in ANALYSIS_STATISTICS:
+        for label, row in (("primary", p_row), (arm_name, a_row)):
+            rejected = row[f"{s}_rejected"]
+            lines.append(
+                f"| {s} | {label} | {_fmt(row[f'{s}_observed'])} | {_fmt(row[f'{s}_p'])} | "
+                f"{'n/a' if rejected is None else ('yes' if rejected else 'no')} | {_fmt(row[f'{s}_null_mean'])} | "
+                f"{_fmt(row[f'{s}_null_sd'])} | {_fmt(row[f'{s}_null_q95'])} | {statuses[s]} |"
+            )
+    lines += [
+        "",
+        f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected "
+        f"rank, floor, eigengap and null summary (reading rule 2, arm rule 3): primary rank {p_row['selected_rank']} "
+        f"(floor {rank_floor}, pooled relative eigengap {_fmt(p_row['eigengap'])}); {arm_name} rank "
+        f"{a_row['selected_rank']} (floor {rank_floor}, eigengap {_fmt(a_row['eigengap'])})"
+        + (
+            "; the ranks differ, which is reported, not ranked as better or worse (arm rule 3)."
+            if p_row["selected_rank"] != a_row["selected_rank"] else "; the ranks are equal."
+        ),
+        "",
+        "Status per statistic:",
+        "",
+    ]
+    for s in ANALYSIS_STATISTICS:
+        rp, ra = p_row[f"{s}_rejected"], a_row[f"{s}_rejected"]
+        text = f"- `{s}`: {statuses[s]} (primary {_rejection_text(rp)}, {arm_name} {_rejection_text(ra)}). "
+        if rp is None or ra is None:
+            text += "A missing p-value is recorded as a finding."
+        elif statuses[s] == _LATENT_SENSITIVITY_STATUS_SAME and not rp:
+            text += (
+                "Both are non-rejections; the arm's is weaker than the primary's (arm rule 5), and neither is evidence "
+                "that the sexes' trajectories agree"
+                + (" in this respect (reading rule 3: no power statement exists at this design)." if s != "delta" else
+                   " (no power statement exists at this design).")
+            )
+        elif statuses[s] == _LATENT_SENSITIVITY_STATUS_SAME:
+            text += (
+                "Both are rejections: evidence that the trajectories differ in this respect, with Type I controlled at "
+                "the validated designs (reading rules 3 and 4); the arm adds no claim of its own (arm rule 8)."
+            )
+        elif ra and not rp:
+            text += (
+                "The arm rejects where the primary does not: basis dependence, not a result of the arm; the primary's "
+                "non-rejection stays the result (arm rule 2)"
+                + (", and an arm-only `angle` rejection is read against MOTCO's translation control (arm rule 4)." if s == "angle" else ".")
+            )
+        else:
+            text += (
+                "The primary rejects where the arm does not: the primary's rejection stays the result (reading rule 1); "
+                "the arm's non-rejection is weaker than the primary's (arm rule 5)."
+            )
+        lines.append(text)
+    p_perm = (primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {})
+    a_perm = (arm.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {})
+    lines += [
+        "",
+        "## Latent space",
+        "",
+        f"| quantity | primary | {arm_name} |",
+        "|---|---:|---:|",
+        f"| PLS-DA rank (selection) | {p_row['selected_rank']} (`{p_row['component_selection']}`) | {a_row['selected_rank']} (`{a_row['component_selection']}`) |",
+        f"| rank floor (`ANALYSIS_RANK_FLOOR`) | {rank_floor} | {rank_floor} |",
+        f"| cv_mean_auroc | {_fmt(p_row['cv_mean_auroc'])} | {_fmt(a_row['cv_mean_auroc'])} |",
+        f"| CV repeats completed | {p_row['cv_repeats_completed']} | {a_row['cv_repeats_completed']} |",
+        f"| pooled relative eigengap | {_fmt(p_row['eigengap'])} | {_fmt(a_row['eigengap'])} |",
+        f"| eigengap permutation null q05 / q50 / q95 | {_fmt(p_perm.get('q05'))} / {_fmt(p_perm.get('q50'))} / {_fmt(p_perm.get('q95'))} "
+        f"| {_fmt(a_perm.get('q05'))} / {_fmt(a_perm.get('q50'))} / {_fmt(a_perm.get('q95'))} |",
+        "",
+        "The two analyses share the export, the covariates and their design, the cells, the CV folds (stratified on "
+        "the stage, as the primary's), the seed and the permutations; they differ only in the latent basis and the "
+        "CV-selected rank (arm rule 2).",
+    ]
+    design_cols = [str(c) for c in adjustment["design_columns"]]
+    stage_names = {f"stage[{k}]": st for k, st in enumerate(stages)}
+    n_cond = sum(c in stage_names for c in design_cols)
+    r2 = adjustment.get("feature_r2", {})
+    lines += [
+        "",
+        f"## Latent adjustment of the arm",
+        "",
+        f"- conditioning: `{adjustment['conditioning']}` (`{LATENT_SENSITIVITY_ARM['setting']}`): the basis is fitted on "
+        "the pooled-standardized features with the covariates regressed out given the intercept and the stage "
+        "indicators, per CV training set and on the full sample; the raw features are projected onto it; the "
+        "trajectory model, LS-means and RRPP are the primary's",
+        "- covariates residualized (in order): " + ", ".join(f"`{c}`" for c in adjustment["covariates"]),
+        f"- residualization design columns: {len(design_cols)} ("
+        + ", ".join(f"{c} = {stage_names[c]}" if c in stage_names else c for c in design_cols) + ")",
+        f"- samples {adjustment['n_samples']}; residual df {adjustment['residual_df']} (n − 1 − {n_cond} stage "
+        f"indicator(s) − {len(design_cols) - n_cond} design column(s)); smallest CV training df "
+        f"{adjustment.get('cv_min_training_df')}",
+        f"- feature scale: `{adjustment['feature_scale']}`",
+        "- feature R² of the covariates given the intercept and the stage indicators (the share of each feature's "
+        "variance the residualization removed; arm rule 6): q05 / q25 / q50 / q75 / q95 "
+        + " / ".join(_fmt(r2.get(q), ".3f") for q in ("q05", "q25", "q50", "q75", "q95"))
+        + f"; mean {_fmt(r2.get('mean'), '.3f')}; fraction above 0.5 {_fmt(r2.get('fraction_above_0.5'), '.3f')}",
+        "",
+        "## Covariates residualized by the arm",
+        "",
+        "Each covariate's relation to the stage effect (`LATENT_SENSITIVITY_COVARIATE_ROLES`, decided before any run; "
+        "no statistic or threshold is computed for it and nothing changes because of it). Residualizing a covariate "
+        "that mediates the stage effect removes real stage signal, and no data can tell a confounder from a mediator "
+        "(arm rule 7).",
+        "",
+        "| covariate | role | variable | justification |",
+        "|---|---|---|---|",
+    ]
+    for name, role in LATENT_SENSITIVITY_COVARIATE_ROLES.items():
+        lines.append(f"| `{name}` | {role['role']} | {role['variable']} | {role['justification']} |")
+    mediators = [name for name, role in LATENT_SENSITIVITY_COVARIATE_ROLES.items() if role["role"] == "mediator candidate"]
+    lines += [
+        "",
+        "The mediator candidate is " + ", ".join(f"`{m}`" for m in mediators) + ": a treatment that may follow "
+        "diagnosis, so the arm's basis may have removed stage signal that runs through treatment (arm rule 7). It "
+        "stays in the arm because the arm was predeclared with the five covariates.",
+        "",
+        "Per sex × stage cell of the analysis cohort, copied from `cohort_manifest.json` (`descriptives`, set "
+        f"`{(descriptives or {}).get('set')}`), not recomputed: n, age and education mean (sd), and counts per level "
+        "of `apoe4` (0 / 1 / 2), `phase` (ADNI1 / ADNI2GO) and `statin` (0 / 1).",
+        "",
+        "| sex | stage | n | age mean (sd) | education mean (sd) | apoe4 0 / 1 / 2 | phase ADNI1 / ADNI2GO | statin 0 / 1 |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    cells = (descriptives or {}).get("cells", {})
+    for g in groups:
+        for st in stages:
+            c = cells.get(g, {}).get(st)
+            if not c:
+                lines.append(f"| {g} | {st} | n/a | n/a | n/a | n/a | n/a | n/a |")
+                continue
+            lines.append(
+                f"| {g} | {st} | {c.get('n')} | {_fmt(c.get('age', {}).get('mean'))} ({_fmt(c.get('age', {}).get('sd'))}) | "
+                f"{_fmt(c.get('education', {}).get('mean'))} ({_fmt(c.get('education', {}).get('sd'))}) | "
+                + " / ".join(str(c.get("apoe4", {}).get(k, "n/a")) for k in ("0", "1", "2")) + " | "
+                + " / ".join(str(c.get("phase", {}).get(k, "n/a")) for k in ("ADNI1", "ADNI2GO")) + " | "
+                + " / ".join(str(c.get("statin", {}).get(k, "n/a")) for k in ("0", "1")) + " |"
+            )
+    lines += [
+        "",
+        "## MOTCO's latent-adjustment decisions",
+        "",
+        "Measured at one design (n = 80, the SEA-AD MTG structure, 498 features, eight covariates in nine design "
+        "columns), none at this one; the arm carries no Type I or power claim of its own (arm rule 8).",
+        "",
+    ]
+    for decision in _MOTCO_LATENT_ADJUSTMENT_DECISIONS:
+        lines.append(f"- `{decision['decision']}` (`{decision['report']}`): {decision['reading']}.")
+    lines += ["", "## Findings", ""]
+    lines += [f"- {msg}" for msg in findings] or ["None."]
+    lines += [
+        "",
+        "## Reading rules",
+        "",
+        "Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):",
+        "",
+    ]
+    lines += [f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)]
+    lines += [
+        "",
+        "## Reading rules of the arm",
+        "",
+        f"Binding for every reader of the arm (`LATENT_SENSITIVITY_READING_RULES`, decided by "
+        f"`{LATENT_SENSITIVITY_ARM['change']}` before any run), after `READING_RULES`:",
+        "",
+    ]
+    lines += [f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)]
+    return "\n".join(lines) + "\n"
+
+
+def run_latent_sensitivity(
+    *,
+    input_dir: str | Path | None = None,
+    analysis_dir: str | Path | None = None,
+    cohort_dir: str | Path | None = None,
+    out_dir: str | Path | None = None,
+    n_jobs: int = REPORTED_N_JOBS,
+    force: bool = False,
+) -> dict:
+    """Run the predeclared ``stage``-conditioned latent-adjustment arm beside the primary analysis.
+
+    Parameters
+    ----------
+    input_dir:
+        Output directory of ``export`` (default ``constants.MOTCO_INPUT_DIR``).
+        Read as ``analyze`` reads it: ``p180.csv``, ``nmr.csv``,
+        ``metadata.csv``, ``covariates.csv`` (each checked against the sha256
+        ``manifest.json`` records) and ``manifest.json``.
+    analysis_dir:
+        The primary's analysis directory (default
+        ``constants.MOTCO_ANALYSIS_DIR``); only ``result.json`` and
+        ``analysis_manifest.json`` are read, never written.
+    cohort_dir:
+        Output directory of ``cohort`` (default ``constants.COHORT_DIR``);
+        only ``cohort_manifest.json`` is read (its hash and its per-cell
+        descriptives), no ``cohort.csv``.
+    out_dir:
+        The output root (default ``constants.LATENT_SENSITIVITY_DIR``), with
+        the subdirectories ``LATENT_SENSITIVITY_SUBDIRS``: ``analysis/`` and
+        ``comparison/`` are written here; ``diagnostics/`` never is.
+    n_jobs:
+        MOTCO's CV and RRPP workers, as for ``analyze``; reported runs use
+        ``constants.REPORTED_N_JOBS`` (1) and another value is a finding.
+    force:
+        Replace existing ``analysis/`` and ``comparison/`` directories (after
+        both are complete).
+
+    Returns
+    -------
+    dict
+        ``{"dir": Path, "analysis": {...}, "comparison": {"rows": [...], "statuses": {...}, "manifest": dict}, "findings": [...]}``.
+
+    Notes
+    -----
+    The arm (``LATENT_SENSITIVITY_ARM``, decided by ``adni-latent-sensitivity``
+    and equal to the arm ``adni-analyze`` predeclared): one
+    ``analyze_trajectories`` call through ``_run_trajectory_analysis`` at the
+    primary's settings plus ``covariate_latent_adjustment = "stage"``, the
+    same five covariates, never assembled from MOTCO's primitives. The
+    primary is never rerun or written; it is read beside the arm as a
+    sensitivity, never replaced (MOTCO's power comparison returned
+    ``candidate_fails``). ``group_stage`` does not run; the arm and its
+    settings are constants, never flags.
+
+    Checks, in this order, before anything is written: the gates of
+    ``analyze`` (``check_motco_version``, ``check_motco_rank_floor``);
+    ``analysis/`` or ``comparison/`` existing without ``force``; the export
+    (``_load_analysis_inputs``); the primary as a chained, read-only
+    reference (``_check_primary_reference``: the directory and its two JSON
+    files exist, every ``inputs.files`` hash and the export-manifest hash
+    equal the export files now, no latent adjustment is recorded, the
+    recorded MOTCO version equals the installed one, ``ANALYSIS_SEED`` and
+    ``ANALYSIS_PERMUTATIONS`` equal the constants); the cohort manifest
+    against the export manifest's record (``_check_cohort_manifest``). A
+    failure stops the step naming the file or setting, both values and the
+    command to rerun, never a participant, and nothing is written. The
+    rare-level condition is MOTCO's: a residualization design that is not of
+    full rank, on the full sample or in a CV training set, stops the step
+    with MOTCO's message (naming the repeat and fold) and nothing written;
+    no level is merged and no setting changed.
+
+    Output contract (``results/motco_latent_sensitivity/``): ``analysis/``
+    (staged as ``analysis.tmp/``), the seven files ``analyze`` writes, laid
+    out as the primary's so that ``axis-diagnostics --analysis-dir`` reads
+    it unchanged: MOTCO's ``result.json`` (with its ``latent_adjustment``
+    block), ``latent_scores.csv``, ``pls_loadings.csv``, ``stage_means.csv``,
+    ``analysis_metadata.csv``, ``analysis_manifest.json`` (``step``
+    ``latent-sensitivity``; the five export files as its inputs; ``arm``,
+    the constant by name; ``reference``, the primary's directory, its two
+    hashes, rank, MOTCO version and ``n_jobs``; every setting as passed with
+    ``latent_adjustment`` ``stage``; ``cli_equivalent`` naming
+    ``--latent-adjustment stage``; the ``numerics`` block; the predeclared
+    ``LATENT_SENSITIVITY_EXPECTED_COUNTS`` beside the observed ones with
+    deviations; output hashes with a participant-level flag; findings) and
+    ``summary.md`` (``render_analysis_summary`` with the latent-adjustment
+    section and both sets of reading rules). ``comparison/`` (staged as
+    ``comparison.tmp/``): ``latent_sensitivity.csv`` (two rows, the primary
+    then the arm; ``_LATENT_SENSITIVITY_COLUMNS``: the latent adjustment,
+    the selected rank and selection mode, ``cv_mean_auroc``, CV repeats,
+    the eigengap, per statistic the observed value, p, rejection under
+    ``ANALYSIS_REJECTION_RULE`` and the null mean, SD and q95, and for the
+    arm the residual df, the smallest CV training df and the ``feature_r2``
+    quantiles and mean; every value read from the two records, no runtime
+    column, so a rerun is byte-identical), ``latent_sensitivity.md``
+    (``render_latent_sensitivity``) and ``latent_sensitivity_manifest.json``
+    (versions, ``numerics``, git revision; the eight inputs with sha256 and
+    the chain results; ``LATENT_SENSITIVITY_ARM``,
+    ``LATENT_SENSITIVITY_COVARIATE_ROLES``, ``ANALYSIS_ALPHA`` with the
+    rule, ``n_jobs``; ``reference`` and ``arm``; the counts: statuses,
+    ranks, CV AUROC, the latent-adjustment block, the cohort manifest's
+    cells against the record's; the arm's ``expected`` and ``deviations``,
+    copied; output hashes; findings). Both directories are renamed together
+    when both are complete; a failure leaves both as they were.
+    ``analysis/latent_scores.csv`` and ``analysis/analysis_metadata.csv``
+    are participant-level (matched by the existing ``results/**`` ignore
+    patterns); every other file is aggregate and committed.
+    ``diagnostics/`` is never touched: when ``analysis/`` is replaced while
+    it exists, a finding says the arm diagnostic must be rerun; the step
+    tests the directory's existence and opens nothing under it.
+
+    Findings, recorded and printed, never a stop: every finding condition
+    of ``analyze`` (count deviations, ``n_jobs`` not 1, a rank at the floor,
+    fewer CV repeats, a non-finite statistic or p-value, a moved MOTCO
+    default, a clamped CV setting, a run that is not pinned); an arm rank
+    that differs from the primary's (both named); a statistic whose
+    rejection status differs from the primary's, named as basis dependence;
+    a primary read with ``n_jobs`` not 1; cohort-manifest cells that differ
+    from the record's cell sizes; a replaced arm whose ``diagnostics/``
+    exists. No finding names a participant. No arm value changes a
+    constant, selects a covariate, reruns the primary or defines a variant.
+    """
+    step = "latent-sensitivity"
+    log = f"[{step}]"
+    conditioning = LATENT_SENSITIVITY_ARM["conditioning"]
+    motco_version = check_motco_version()
+    rank_floor = check_motco_rank_floor()
+    input_dir = Path(input_dir) if input_dir is not None else Path(MOTCO_INPUT_DIR)
+    primary_dir = Path(analysis_dir) if analysis_dir is not None else Path(MOTCO_ANALYSIS_DIR)
+    cohort_path = Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR)
+    root = Path(out_dir) if out_dir is not None else Path(LATENT_SENSITIVITY_DIR)
+    analysis_final = root / LATENT_SENSITIVITY_SUBDIRS["analysis"]
+    comparison_final = root / LATENT_SENSITIVITY_SUBDIRS["comparison"]
+    diagnostics_final = root / LATENT_SENSITIVITY_SUBDIRS["diagnostics"]
+    existing = [str(d) for d in (analysis_final, comparison_final) if d.exists()]
+    if existing and not force:
+        raise FileExistsError(
+            " and ".join(existing) + (" exist" if len(existing) > 1 else " exists")
+            + f"; pass --force to replace the arm and its comparison ({diagnostics_final} is never touched)"
+        )
+    print(
+        f"{log} MOTCO {motco_version}; rank floor {rank_floor} equals MOTCO's default; arm "
+        f"{LATENT_SENSITIVITY_ARM['name']} (LATENT_SENSITIVITY_ARM: {LATENT_SENSITIVITY_ARM['setting']} = "
+        f"{conditioning!r}, the primary's five covariates and settings), read beside the primary"
+    )
+
+    # --- the export, the primary as a reference, the cohort manifest -------------------
+    loaded = _load_analysis_inputs(input_dir, step=step)
+    reference = _check_primary_reference(primary_dir, loaded, motco_version=motco_version)
+    primary, p_manifest = reference["record"], reference["manifest"]
+    primary_n_jobs = reference["n_jobs"]
+    print(
+        f"{log} {primary_dir}: the primary (rank {reference['rank']}, latent adjustment none, n_jobs {primary_n_jobs}, "
+        f"MOTCO {reference['motco']}); the hashes it records for {len(reference['chain'])} export files and "
+        f"{EXPORT_MANIFEST} equal the files now; its {ANALYSIS_RESULT} and {ANALYSIS_MANIFEST} are read, never written"
+    )
+    cohort = _check_cohort_manifest(cohort_path, loaded["export_manifest"])
+    cells = (cohort["descriptives"] or {}).get("cells", {})
+    n_cells = sum(len(v) for v in cells.values()) if isinstance(cells, dict) else 0
+    print(
+        f"{log} {cohort_path / COHORT_MANIFEST}: equals the hash {EXPORT_MANIFEST} records; descriptives for "
+        f"{n_cells} sex × stage cells read (no {COHORT_TABLE})"
+    )
+
+    # --- the findings that do not depend on the arm's record (design D9) --------------------
+    static_findings: list[str] = []
+    if primary_n_jobs != REPORTED_N_JOBS:
+        static_findings.append(
+            f"the primary read ran with n_jobs = {primary_n_jobs}: its permutation draws are not the reported ones "
+            f"(REPORTED_N_JOBS = {REPORTED_N_JOBS}), so the reference is not a reported run"
+        )
+    if analysis_final.exists() and diagnostics_final.exists():
+        static_findings.append(
+            f"{diagnostics_final} exists and was computed from the arm this run replaces; rerun `adni-sexdiff "
+            f"axis-diagnostics --analysis-dir {analysis_final} --out-dir {diagnostics_final} --force` (the directory "
+            "is neither read nor written here)"
+        )
+
+    def arm_extra(record: dict) -> dict:
+        return {
+            "arm": {"constant": "LATENT_SENSITIVITY_ARM", **LATENT_SENSITIVITY_ARM},
+            "reference": {
+                "dir": str(primary_dir),
+                "files": reference["files"],
+                "selected_rank": reference["rank"],
+                "latent_adjustment": None,
+                "n_jobs": primary_n_jobs,
+                "motco": reference["motco"],
+                "git_revision": p_manifest.get("git_revision"),
+                "created_at": p_manifest.get("created_at"),
+            },
+            "findings": [*static_findings, *_latent_sensitivity_findings(primary, record)],
+        }
+
+    # --- the arm, then the comparison, staged together (design D5) ------------------------
+    root_existed = root.exists()
+    try:
+        return _run_latent_sensitivity_outputs(
+            log=log, step=step, conditioning=conditioning, n_jobs=n_jobs, force=force, input_dir=input_dir,
+            primary_dir=primary_dir, cohort_path=cohort_path, root=root, analysis_final=analysis_final,
+            comparison_final=comparison_final, diagnostics_final=diagnostics_final, loaded=loaded,
+            reference=reference, cohort=cohort, arm_extra=arm_extra,
+        )
+    except BaseException:
+        # a run that fails before writing leaves no output root behind (nothing is kept for inspection in an empty one)
+        if not root_existed and root.is_dir() and not any(root.iterdir()):
+            root.rmdir()
+        raise
+
+
+def _run_latent_sensitivity_outputs(
+    *,
+    log: str,
+    step: str,
+    conditioning: str,
+    n_jobs: int,
+    force: bool,
+    input_dir: Path,
+    primary_dir: Path,
+    cohort_path: Path,
+    root: Path,
+    analysis_final: Path,
+    comparison_final: Path,
+    diagnostics_final: Path,
+    loaded: dict,
+    reference: dict,
+    cohort: dict,
+    arm_extra: Callable[[dict], dict],
+) -> dict:
+    """The arm and the comparison of ``run_latent_sensitivity``, staged as ``analysis.tmp/`` and ``comparison.tmp/`` and renamed together."""
+    primary, p_manifest = reference["record"], reference["manifest"]
+    primary_n_jobs = reference["n_jobs"]
+    cells = (cohort["descriptives"] or {}).get("cells", {})
+    with _finalize_output_dir(analysis_final, force=force) as a_tmp:
+        arm = _run_trajectory_analysis(
+            input_dir=input_dir,
+            final=analysis_final,
+            n_jobs=n_jobs,
+            force=force,
+            step=step,
+            latent_adjustment=conditioning,
+            expected=LATENT_SENSITIVITY_EXPECTED_COUNTS,
+            manifest_extra=arm_extra,
+            loaded=loaded,
+            staging=a_tmp,
+        )
+        record, a_manifest = arm["record"], arm["manifest"]
+        rows = [
+            _comparison_row("primary", primary_dir, primary),
+            _comparison_row(LATENT_SENSITIVITY_ARM["name"], Path(LATENT_SENSITIVITY_SUBDIRS["analysis"]), record),
+        ]
+        statuses = _comparison_statuses(rows[0], rows[1])
+        table = pd.DataFrame(rows, columns=list(_LATENT_SENSITIVITY_COLUMNS), dtype=object)
+        cell_findings = _cohort_cell_findings(cohort["descriptives"], record["design"]["cell_sizes"])
+        findings: list[str] = [*arm_extra(record)["findings"], *cell_findings]
+        if n_jobs != REPORTED_N_JOBS:
+            findings.append(
+                f"n_jobs = {n_jobs}: MOTCO seeds one RRPP stream per worker, so the arm's permutation draws, p-values "
+                f"and null summaries differ from an n_jobs = {REPORTED_N_JOBS} run; the arm is not reported "
+                f"(REPORTED_N_JOBS = {REPORTED_N_JOBS})"
+            )
+        for s in ANALYSIS_STATISTICS:
+            print(
+                f"{log} {s}: primary {_fmt(rows[0][f'{s}_observed'])} (p {_fmt(rows[0][f'{s}_p'])}, "
+                f"{_rejection_text(rows[0][f'{s}_rejected'])}); {LATENT_SENSITIVITY_ARM['name']} "
+                f"{_fmt(rows[1][f'{s}_observed'])} (p {_fmt(rows[1][f'{s}_p'])}, {_rejection_text(rows[1][f'{s}_rejected'])}); "
+                f"status {statuses[s]}"
+            )
+        print(
+            f"{log} rank: primary {rows[0]['selected_rank']}, {LATENT_SENSITIVITY_ARM['name']} {rows[1]['selected_rank']}; "
+            f"cv_mean_auroc {_fmt(rows[0]['cv_mean_auroc'], '.4f')} / {_fmt(rows[1]['cv_mean_auroc'], '.4f')}; eigengap "
+            f"{_fmt(rows[0]['eigengap'], '.4f')} / {_fmt(rows[1]['eigengap'], '.4f')}"
+        )
+        numerics, numerics_findings = _numerics(log)
+        findings += numerics_findings
+        arm_files = {
+            name: {"sha256": _sha256_file(a_tmp / name), "bytes": (a_tmp / name).stat().st_size}
+            for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST)
+        }
+        arm_info = {
+            "dir": str(analysis_final),
+            "files": arm_files,
+            "constant": "LATENT_SENSITIVITY_ARM",
+            "name": LATENT_SENSITIVITY_ARM["name"],
+            "latent_adjustment": conditioning,
+            "selected_rank": int(record["latent"]["selected_lv"]),
+            "n_jobs": n_jobs,
+            "findings": a_manifest["findings"],
+        }
+        versions = _software_versions((*_MANIFEST_PACKAGES, "motco", "scikit-learn"))
+        manifest = {
+            "step": step,
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "versions": versions,
+            "numerics": numerics,
+            "git_revision": _git_revision(),
+            "inputs": {
+                "export": {
+                    "dir": str(input_dir),
+                    "files": loaded["inputs"],
+                    "export_manifest": {"name": EXPORT_MANIFEST, "sha256": loaded["inputs"][EXPORT_MANIFEST]["sha256"]},
+                    "export_git_revision": loaded["export_manifest"].get("git_revision"),
+                    "export_created_at": loaded["export_manifest"].get("created_at"),
+                },
+                "primary": {
+                    "dir": str(primary_dir),
+                    "files": reference["files"],
+                    "chain": reference["chain"],
+                    "export_manifest_equals": reference["export_manifest_equals"],
+                    "primary_records_export": True,
+                    "latent_adjustment": None,
+                    "n_jobs": primary_n_jobs,
+                    "selected_rank": reference["rank"],
+                    "motco": reference["motco"],
+                    "seed_and_permutations_equal_constants": True,
+                    "git_revision": p_manifest.get("git_revision"),
+                    "created_at": p_manifest.get("created_at"),
+                },
+                "cohort": {
+                    "dir": str(cohort_path),
+                    "files": cohort["files"],
+                    "cohort_manifest_equals_export_record": True,
+                    "descriptives_set": (cohort["descriptives"] or {}).get("set"),
+                },
+            },
+            "settings": {
+                "LATENT_SENSITIVITY_ARM": LATENT_SENSITIVITY_ARM,
+                "LATENT_SENSITIVITY_COVARIATE_ROLES": LATENT_SENSITIVITY_COVARIATE_ROLES,
+                "ANALYSIS_ALPHA": ANALYSIS_ALPHA,
+                "ANALYSIS_REJECTION_RULE": ANALYSIS_REJECTION_RULE,
+                "ANALYSIS_RANK_FLOOR": ANALYSIS_RANK_FLOOR,
+                "n_jobs": n_jobs,
+                "REPORTED_N_JOBS": REPORTED_N_JOBS,
+                "status_rule": (
+                    f"{_LATENT_SENSITIVITY_STATUS_SAME!r} when both rejections under ANALYSIS_REJECTION_RULE are "
+                    f"equal, else {_LATENT_SENSITIVITY_STATUS_DIFFERS!r}; the primary's status is the result either way"
+                ),
+                "columns": list(_LATENT_SENSITIVITY_COLUMNS),
+                "motco_latent_adjustment_decisions": list(_MOTCO_LATENT_ADJUSTMENT_DECISIONS),
+            },
+            "reference": arm_extra(record)["reference"],
+            "arm": arm_info,
+            "counts": {
+                "rows": len(rows),
+                "statuses": statuses,
+                "ranks": {"primary": rows[0]["selected_rank"], LATENT_SENSITIVITY_ARM["name"]: rows[1]["selected_rank"]},
+                "cv_mean_auroc": {"primary": rows[0]["cv_mean_auroc"], LATENT_SENSITIVITY_ARM["name"]: rows[1]["cv_mean_auroc"]},
+                "eigengap": {"primary": rows[0]["eigengap"], LATENT_SENSITIVITY_ARM["name"]: rows[1]["eigengap"]},
+                "rejected": {
+                    "primary": {s: rows[0][f"{s}_rejected"] for s in ANALYSIS_STATISTICS},
+                    LATENT_SENSITIVITY_ARM["name"]: {s: rows[1][f"{s}_rejected"] for s in ANALYSIS_STATISTICS},
+                },
+                "latent_adjustment": record["latent_adjustment"],
+                "cohort_cells": cells,
+                "record_cells": record["design"]["cell_sizes"],
+                "cohort_cells_equal_record": not cell_findings,
+            },
+            "expected": a_manifest["expected"],
+            "deviations": a_manifest["deviations"],
+            "findings": findings,
+        }
+        with _finalize_output_dir(comparison_final, force=force) as c_tmp:
+            table.to_csv(c_tmp / LATENT_SENSITIVITY_TABLE, index=False)
+            (c_tmp / LATENT_SENSITIVITY_SUMMARY).write_text(
+                render_latent_sensitivity(
+                    rows, statuses=statuses, primary=primary, arm=record,
+                    reference={"dir": str(primary_dir), "files": reference["files"]}, arm_info=arm_info,
+                    descriptives=cohort["descriptives"], findings=findings, n_jobs=n_jobs,
+                )
+            )
+            written = [LATENT_SENSITIVITY_TABLE, LATENT_SENSITIVITY_SUMMARY]
+            manifest["outputs"] = {
+                name: {"sha256": _sha256_file(c_tmp / name), "bytes": (c_tmp / name).stat().st_size, "participant_level": False}
+                for name in written
+            }
+            _write_manifest(c_tmp / LATENT_SENSITIVITY_MANIFEST, manifest)
+
+    print(f"{log} wrote {analysis_final}/ ({', '.join([*arm['names'], ANALYSIS_MANIFEST])})")
+    print(f"{log} wrote {comparison_final}/ ({', '.join([*written, LATENT_SENSITIVITY_MANIFEST])})")
+    if a_manifest["deviations"]:
+        print(f"{log} {len(a_manifest['deviations'])} count deviation(s) from the predeclared counts (see the arm's findings above)")
+    else:
+        print(f"{log} counts reproduce the predeclared ones")
+    for msg in findings:
+        print(f"{log} FINDING: {msg}")
+    print(
+        f"{log} the primary stays primary; next: `adni-sexdiff axis-diagnostics --analysis-dir {analysis_final} "
+        f"--out-dir {diagnostics_final}`"
+    )
+    return {
+        "dir": root,
+        "analysis": arm,
+        "comparison": {"rows": rows, "statuses": statuses, "manifest": manifest},
+        "findings": findings,
+    }
+
+
 def run_report(
     *,
     analysis_dir: str | Path | None = None,
@@ -4092,6 +5293,18 @@ def run_report(
     flagged rows and ``READING_RULES`` (decided by ``adni-analyze``); it quotes only
     aggregate values and reads no participant-level file. The report is
     committed under ``reports/`` after ``--check`` passes.
+
+    Its inputs also include the sensitivity step's outputs under
+    ``constants.LATENT_SENSITIVITY_DIR`` (change ``adni-latent-sensitivity``):
+    the comparison (``comparison/latent_sensitivity.csv``,
+    ``latent_sensitivity.md``, ``latent_sensitivity_manifest.json``), the
+    arm's ``analysis/result.json``, ``summary.md`` and
+    ``analysis_manifest.json``, and the arm's diagnostics under
+    ``diagnostics/``. The report pastes the comparison and the arm's
+    diagnostics beside the primary's, keeps the primary's status as the
+    result, and carries ``LATENT_SENSITIVITY_READING_RULES`` after
+    ``READING_RULES`` wherever it quotes the arm. The implementing change
+    (``adni-report``) adds the flags that name those directories.
     """
     raise NotImplementedError("run_report is a stub; implemented by the report change")
 
@@ -4117,5 +5330,7 @@ __all__ = [
     "run_export",
     "run_analysis",
     "run_axis_diagnostics",
+    "render_latent_sensitivity",
+    "run_latent_sensitivity",
     "run_report",
 ]
