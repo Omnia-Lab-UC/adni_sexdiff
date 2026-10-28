@@ -65,7 +65,13 @@ The pinned settings (`NUMERIC_SETTINGS`) are a reproducibility convention, not a
 
 ## 5. Commit hygiene
 
-- [ ] 5.1 Commit the implementation first. Then rerun 3.2's `axis-diagnostics --force` on the clean tree at that commit, so the manifest records it, on the same data machine. Commit only `results/motco_diagnostics/block_pcs.csv` and `results/motco_diagnostics/diagnostics_manifest.json`, naming each in the message with why it is aggregate (per block and PC, no `rid`) and why it changed (1 BLAS thread; the largest difference). Verify that `git status` shows no other change under `results/`, that `git check-ignore -q` fails for both files, and that `openspec validate adni-portable-numerics --strict` passes.
+- [x] 5.1 Commit the implementation first. Then rerun 3.2's `axis-diagnostics --force` on the clean tree at that commit, so the manifest records it, on the same data machine. Commit only `results/motco_diagnostics/block_pcs.csv` and `results/motco_diagnostics/diagnostics_manifest.json`, naming each in the message with why it is aggregate (per block and PC, no `rid`) and why it changed (1 BLAS thread; the largest difference). Verify that `git status` shows no other change under `results/`, that `git check-ignore -q` fails for both files, and that `openspec validate adni-portable-numerics --strict` passes.
+  Done 2026-10-28 on nixos-office.
+  - The implementation was committed first (`35a1b62`), and the two files re-issued in 3.2 were restored to HEAD.
+  - `axis-diagnostics --force` was rerun from a shell with the four variables unset. The user's uncommitted `.idea/modules.xml` was stashed for the run and popped after, so the tracked tree was clean.
+  - `diagnostics_manifest.json` records `35a1b62`, `dirty` false and `numerics.pinned` true (host nixos-office). The five outputs equal 3.2's byte for byte.
+  - `git status` shows only `block_pcs.csv` and `diagnostics_manifest.json` modified under `results/`. `git check-ignore -q` fails for both, the `rid` / `RID` grep finds nothing in them, and `openspec validate --strict` passes.
+  - The outputs commit adds those two files and this task file only.
 
 ## Workflow follow-up
 
