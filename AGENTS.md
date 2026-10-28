@@ -16,12 +16,15 @@ file says otherwise.
 
 Status (2026-10-28): `clean` (change `adni-metabolomics-clean`), `cohort`
 (change `adni-cohort`), `export` (change `adni-export`), `analyze`
-(change `adni-analyze`) and `axis-diagnostics` (change
-`adni-axis-diagnostics`) are implemented, and so is the sensitivity step
-`latent-sensitivity` (change `adni-latent-sensitivity`: the predeclared
-`stage`-conditioned latent-adjustment arm, read beside the primary and
-never replacing it). They run on a data machine; the cluster copy and
-clone do not exist yet. A data machine is any of the user's machines whose
+(change `adni-analyze`), `axis-diagnostics` (change
+`adni-axis-diagnostics`) and `report` (change `adni-report`) are
+implemented, and so is the sensitivity step `latent-sensitivity` (change
+`adni-latent-sensitivity`: the predeclared `stage`-conditioned
+latent-adjustment arm, read beside the primary and never replacing it).
+The first six run on a data machine; `report` reads committed aggregate
+files only and runs on any clone; the first report is committed under
+`reports/`. The cluster copy and clone do not exist yet. A data machine is
+any of the user's machines whose
 local participant-level files under `results/` (the export CSVs,
 `cohort.csv`, the primary's `latent_scores.csv` and
 `analysis_metadata.csv`) hash to the values the committed manifests
@@ -31,9 +34,7 @@ a data root becomes one by a pinned rebuild from it (`clean` → `cohort` →
 output the committed manifests record, and copying the participant-level
 files into the gitignored paths under `results/`. The manifests written
 before `adni-portable-numerics` record no machine, but their outputs
-reproduce pinned on any machine. `report` is a stub whose body raises
-`NotImplementedError`; its docstring in `data.py` states the inputs, the
-outputs and the output contract. Decided scientific constants:
+reproduce pinned on any machine. Decided scientific constants:
 `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`,
 `EXPORT_FEATURE_RULE`, the analysis settings (`ANALYSIS_PERMUTATIONS`,
 `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with `ANALYSIS_REJECTION_RULE`,
@@ -245,15 +246,51 @@ implemented by its own OpenSpec change, in order.
      whose `diagnostics/` exists. The primary stays primary in every output
      and no arm value changes a constant, selects a covariate, reruns the
      primary or defines a variant.
-6. `report` – from the generated files only (`result.json`, `summary.md`,
-   the manifests, `stage_counts.csv`, the diagnostics, and the sensitivity
-   step's comparison, arm record and arm diagnostics under
-   `results/motco_latent_sensitivity/`): writes
-   `reports/motco-adni-<date>.md`, or with `--check` compares every number
-   of an existing report with the generated files and fails naming the
-   cell. Reports quote aggregate values only and carry
-   `LATENT_SENSITIVITY_READING_RULES` after `READING_RULES` wherever they
-   quote the arm.
+6. `report` – from the kept aggregate outputs only (`REPORT_INPUT_FILES`,
+   26 committed files: the two `clean_manifest.json`; `stage_counts.csv`
+   and `cohort_manifest.json`; the export `manifest.json`; the primary's
+   `result.json`, `analysis_manifest.json` and `summary.md`; the primary
+   diagnostics' six files; under `results/motco_latent_sensitivity/` the
+   arm's three aggregate analysis files, the comparison's three files and
+   the arm diagnostics' six files), nothing else: no participant-level
+   file is opened or required (their hashes are quoted from the
+   manifests), no data root, no MOTCO call, no pinned numerics, so it runs
+   on any clone. Gates before anything is written, each naming the file or
+   setting, both values and the step to rerun: every input present; every
+   aggregate file hashes to the value its own manifest records; the primary
+   is the primary and the arm is `LATENT_SENSITIVITY_ARM` (`is_primary` in
+   the two diagnostics manifests); the primary and the arm are reported
+   runs (`n_jobs = REPORTED_N_JOBS`), every `numerics` block present is
+   pinned and every manifest records the same MOTCO, scikit-learn and
+   metabo_adni versions; the chain holds link by link from the clean
+   manifests to the arm diagnostics (31 links). Writes
+   `reports/motco-adni-<date>.md` (the date from the file name, in the
+   title line only; an existing file stops it unless `--force`; staged as
+   `<out>.tmp`, parsed back and renamed): the ten sections of
+   `REPORT_SECTIONS` (summary; provenance, the report's manifest; cohort;
+   export; primary analysis; axis diagnostics of the primary;
+   latent-adjustment sensitivity; findings; reading rules; reproduction),
+   every table titled by a level-3 heading and keyed by its first column,
+   every number copied from a record, a manifest or a CSV at the digits of
+   the summary it belongs to (no statistic, correlation, mean or count of
+   its own), every reading sentence from `_statistic_reading_line` and
+   `_arm_status_line` (the code of `summary.md` and
+   `latent_sensitivity.md`, string-equal across the three), `READING_RULES`
+   then `LATENT_SENSITIVITY_READING_RULES` verbatim and both named beside
+   every table that quotes the arm, the primary's status the result in
+   every table; the body depends on the inputs and the file name only, so
+   two runs are byte-identical. With `--check` (default: the newest report
+   under `reports/` by the date in its name) it reruns the gates,
+   regenerates the report and compares every table cell by cell and every
+   other line line by line, printing each mismatch (section, table, row
+   key, column, both values; or the line with both texts), exits 1 on any
+   and writes nothing; a regenerated results directory fails it on the
+   provenance hashes until a new report is written and checked. Findings,
+   never stops: every deviation and finding of every input manifest,
+   verbatim under its step; a dirty recorded revision; a manifest without
+   a `numerics` block. A report is committed alone after `--check` passes
+   on the clean tree; it quotes aggregate values only and holds no
+   participant identifier.
 
 `README.md` documents the layout and the pipeline; keep it in sync when
 behavior or defaults change.
@@ -395,7 +432,8 @@ behavior or defaults change.
   `os.environ` on import, before any module imports numpy.
 - `src/adni_sexdiff/cli.py` – argparse CLI (`build_parser`, `main`); thin
   layer that calls into `data.py` and prints `[command]`-prefixed progress
-  messages.
+  messages; `report` takes nine flags (the six directories, `--out`,
+  `--check`, `--force`) and `main` returns 1 on a `--check` mismatch.
 - `src/adni_sexdiff/constants.py` – named constants (it imports no numpy):
   conventions (paths, environment variables, platforms, columns, output
   names, pins, the pinned numeric environment `NUMERIC_SETTINGS`, the
@@ -424,10 +462,16 @@ behavior or defaults change.
   `LATENT_SENSITIVITY_MANIFEST` and the predeclared
   `LATENT_SENSITIVITY_EXPECTED_COUNTS`; two import-time assertions tie the
   arm to `ANALYSIS_PREDECLARED_LATENT_SENSITIVITY` and the roles to
-  `ANALYSIS_COVARIATES`).
+  `ANALYSIS_COVARIATES`); the report's conventions (`DIAGNOSTICS_FILES`,
+  `REPORT_INPUT_FILES` keyed by directory role, `REPORT_SECTIONS`; no
+  scientific constant, change `adni-report`).
 - `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`,
-  `export`, `analyze` and `axis-diagnostics` implemented, `report` a stub)
-  and the sensitivity step `latent-sensitivity` (`run_latent_sensitivity`,
+  `export`, `analyze`, `axis-diagnostics` and `report`: `run_report` with
+  the loader and gates `_load_report_inputs`, the renderer `render_report`
+  and its table builders, the parser `parse_report` and the checker
+  `check_report`; the shared reading sentences `_statistic_reading_line`
+  and `_arm_status_line` that `summary.md`, `latent_sensitivity.md` and the
+  report print) and the sensitivity step `latent-sensitivity` (`run_latent_sensitivity`,
   with the reference checks `_check_primary_reference` and
   `_check_cohort_manifest`, the comparison rows and
   `render_latent_sensitivity`), `resolve_data_root`, the version gates
@@ -459,7 +503,9 @@ behavior or defaults change.
   sensitivity step's `analysis/` (the arm, laid out as
   `results/motco_analysis/`), `comparison/` and `diagnostics/`.
 - `reports/` – committed case-study reports (`motco-adni-<date>.md`),
-  numbers pasted from generated outputs and checked by `report --check`.
+  generated in full by `report` from the aggregate outputs (every number
+  copied, every sentence a constant or a renderer's) and checked by
+  `report --check`; aggregate, no participant identifier.
 - `openspec/` – OpenSpec change proposals/specs (see below).
 
 ## Environment & commands
@@ -472,6 +518,9 @@ behavior or defaults change.
   commands through `nix develop -c ...` there.
 - Run the CLI:
   `uv run adni-sexdiff <clean|cohort|export|analyze|axis-diagnostics|latent-sensitivity|report> [options]`.
+  `report` and `report --check` read committed aggregate files only, so
+  they run on any clone (no data root, no data machine, no MOTCO call);
+  every real-input check of the report change runs on the committed tree.
 - Dependencies: `motco` (git tag, constraint 4), `metabo_adni==0.5.8`
   (constraint 3), `pandas`, `numpy`, `threadpoolctl` (the numeric-state
   record). Add dependencies with `uv add <pkg>` so `pyproject.toml` and
