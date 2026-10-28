@@ -3,9 +3,8 @@
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
 ``report``) and one per sensitivity step (``latent-sensitivity``), each
-printing ``[command]``-prefixed progress messages. ``clean``, ``cohort``,
-``export``, ``analyze``, ``axis-diagnostics`` and ``latent-sensitivity`` are
-implemented; ``report`` is a stub that raises ``NotImplementedError``.
+printing ``[command]``-prefixed progress messages that name files and
+counts, never a participant. ``report --check`` exits 1 on any mismatch.
 """
 
 from __future__ import annotations
@@ -24,7 +23,9 @@ from .constants import (
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
     PLATFORMS,
+    REPORT_NAME,
     REPORTED_N_JOBS,
+    REPORTS_DIR,
 )
 from .data import (
     run_analysis,
@@ -149,12 +150,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_force(p)
 
-    p = sub.add_parser("report", help="Write the case-study report from the generated files, or check one against them")
-    p.add_argument("--analysis-dir", type=Path, default=None, help=f"Output directory of analyze (default: {MOTCO_ANALYSIS_DIR})")
+    p = sub.add_parser(
+        "report",
+        help="Write the case-study report from the kept aggregate outputs (no participant-level file is read), or check "
+        f"one against them cell by cell -> {REPORTS_DIR}/{REPORT_NAME.format(date='<date>')}",
+    )
+    p.add_argument("--cleaned-dir", type=Path, default=None, help=f"Output root of clean; the clean manifests are read (default: {CLEANED_DIR})")
     p.add_argument("--cohort-dir", type=Path, default=None, help=f"Output directory of cohort (default: {COHORT_DIR})")
-    p.add_argument("--diagnostics-dir", type=Path, default=None, help=f"Output directory of axis-diagnostics (default: {DIAGNOSTICS_DIR})")
-    p.add_argument("--out", type=Path, default=None, help="Report path (default: reports/motco-adni-<date>.md)")
-    p.add_argument("--check", action="store_true", help="Check the numbers of the report at --out against the generated files instead of writing it")
+    p.add_argument("--input-dir", type=Path, default=None, help=f"Output directory of export; its manifest is read (default: {MOTCO_INPUT_DIR})")
+    p.add_argument("--analysis-dir", type=Path, default=None, help=f"The primary's analysis directory (default: {MOTCO_ANALYSIS_DIR})")
+    p.add_argument("--diagnostics-dir", type=Path, default=None, help=f"The primary's diagnostics directory (default: {DIAGNOSTICS_DIR})")
+    p.add_argument(
+        "--sensitivity-dir", type=Path, default=None,
+        help=f"Root of latent-sensitivity, read as {'/, '.join(LATENT_SENSITIVITY_SUBDIRS.values())}/ (default: {LATENT_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
+        "--out", type=Path, default=None,
+        help=f"Report path, named {REPORT_NAME.format(date='<date>')}; the date is read from the name (default: "
+        f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there)",
+    )
+    p.add_argument(
+        "--check", action="store_true",
+        help="Compare the report at --out with the one the outputs now generate, every table cell by cell and every other "
+        "line line by line, instead of writing it; exits 1 on any mismatch and writes nothing",
+    )
+    p.add_argument("--force", action="store_true", help="Replace an existing report at --out")
 
     return parser
 
@@ -199,13 +219,19 @@ def main(argv: list[str] | None = None) -> int:
             force=args.force,
         )
     elif args.command == "report":
-        run_report(
-            analysis_dir=args.analysis_dir,
+        result = run_report(
+            cleaned_dir=args.cleaned_dir,
             cohort_dir=args.cohort_dir,
+            input_dir=args.input_dir,
+            analysis_dir=args.analysis_dir,
             diagnostics_dir=args.diagnostics_dir,
+            sensitivity_dir=args.sensitivity_dir,
             out=args.out,
             check=args.check,
+            force=args.force,
         )
+        if result["mismatches"]:
+            return 1
     else:  # pragma: no cover - argparse enforces the choices
         raise SystemExit(f"Unknown command {args.command!r}")
     return 0

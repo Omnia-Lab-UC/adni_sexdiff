@@ -3,22 +3,24 @@
 ``clean`` (change ``adni-metabolomics-clean``), ``cohort`` (change
 ``adni-cohort``), ``export`` (change ``adni-export``), ``analyze`` (change
 ``adni-analyze``) and ``axis-diagnostics`` (change
-``adni-axis-diagnostics``) are implemented, and so is the sensitivity step
+``adni-axis-diagnostics``) and ``report`` (change ``adni-report``: the
+case-study report generated in full from the kept aggregate outputs, and
+its cell-by-cell check) are implemented, and so is the sensitivity step
 ``latent-sensitivity`` (change ``adni-latent-sensitivity``: the predeclared
 ``stage``-conditioned latent-adjustment arm, read beside the primary and
-never replacing it). ``report`` is a stub: its docstring states the inputs
-it reads, the files it writes and the contract of those files, and its body
-raises ``NotImplementedError`` until an OpenSpec change implements it. Every
-scientific constant the steps need is decided and lives in ``constants``; a
-variant or arm enters only through a proposal.
+never replacing it). Every scientific constant the steps need is decided
+and lives in ``constants``; a variant or arm enters only through a
+proposal.
 
 The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_known_repairs``), the version gates (``check_metabo_adni_version``,
 ``check_motco_version``, ``check_motco_rank_floor``), the shared analysis
 function (``_run_trajectory_analysis``, the body of ``analyze`` that the arm
-calls with its one differing setting) and the manifest and output-directory
-helpers (``_git_revision``, ``_software_versions``, ``_write_manifest``,
-``_finalize_output_dir``) are shared by every step.
+calls with its one differing setting), the shared reading sentences
+(``_statistic_reading_line``, ``_arm_status_line``: the code of
+``summary.md``, ``latent_sensitivity.md`` and the report) and the manifest
+and output-directory helpers (``_git_revision``, ``_software_versions``,
+``_write_manifest``, ``_finalize_output_dir``) are shared by every step.
 
 ADNI is controlled-access. Every table keyed by ``RID`` is participant-level:
 it stays under the ignored paths of ``constants.PARTICIPANT_LEVEL_PATTERNS``,
@@ -38,7 +40,8 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Sequence
+from datetime import date as date_type
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -75,6 +78,7 @@ from .constants import (
     CLEAN_MANIFEST,
     CLEAN_MEDICATION_FILE,
     CLEAN_OPTIONS,
+    CLEAN_P180_FILES,
     CLEAN_RUNS_TABLE,
     CLEAN_TABLES,
     CLEANED_DIR,
@@ -131,7 +135,11 @@ from .constants import (
     PLATFORMS,
     RAW_INPUT_SHA256,
     READING_RULES,
+    REPORT_INPUT_FILES,
+    REPORT_NAME,
+    REPORT_SECTIONS,
     REPORTED_N_JOBS,
+    REPORTS_DIR,
     SAMPLE_COLUMN,
     STAGE_COLUMN,
     STAGE_LABELS,
@@ -2331,6 +2339,61 @@ def _analysis_cli_equivalent(input_dir: Path, metadata_path: Path, params, n_job
     }
 
 
+def _statistic_reading_line(statistic: str, rejected: bool | None, *, stages: list, arm: bool = False) -> str:
+    """The reading sentence of one statistic's status, shared by ``summary.md`` and the report (design D5 of ``adni-report``).
+
+    Parameters
+    ----------
+    statistic:
+        ``delta``, ``angle`` or ``shape``.
+    rejected:
+        The status under ``ANALYSIS_REJECTION_RULE`` (``_rejected``); ``None``
+        when the record holds no p-value.
+    stages:
+        The record's stage levels (``angle`` names the endpoint stages).
+    arm:
+        ``True`` for the latent-adjustment arm: the sentence carries the
+        arm's note (a rejection the primary does not make is basis
+        dependence, a non-rejection is weaker than the primary's).
+
+    Returns
+    -------
+    str
+        The sentence without its list marker, string-equal wherever it is
+        printed (``summary.md`` of the primary and of the arm, the report).
+    """
+    if rejected is None:
+        return f"`{statistic}`: no p-value in the record."
+    readings = {
+        "delta": (
+            "`delta` is rejected: evidence that the sexes' trajectories differ, not specifically that they "
+            "differ in size (reading rule 4).",
+            "`delta` is not rejected: no evidence of a difference between the sexes' trajectories at this design.",
+        ),
+        "angle": (
+            f"`angle` is rejected: evidence that the sexes' net displacements ({stages[0]} to {stages[-1]}) differ "
+            "in orientation, with Type I controlled at the validated designs (reading rule 3).",
+            "`angle` is not rejected: uninformative about orientation, not evidence that the sexes' directions "
+            "agree (reading rule 3: no power statement exists at this design).",
+        ),
+        "shape": (
+            "`shape` is rejected: evidence that the sexes' trajectories differ in shape, with Type I controlled "
+            "at the validated designs (reading rule 3).",
+            "`shape` is not rejected: uninformative about shape, not evidence that the sexes' trajectory shapes "
+            "agree (reading rule 3: no power statement exists at this design).",
+        ),
+    }
+    line = readings[statistic][0 if rejected else 1]
+    if arm and rejected:
+        line += (
+            " In the arm, a rejection the primary does not make is basis dependence, not a result of the arm (arm "
+            "rule 2" + ("; an arm-only `angle` rejection is read against MOTCO's controls, arm rule 4)." if statistic == "angle" else ").")
+        )
+    elif arm:
+        line += " In the arm this non-rejection is weaker than the primary's (arm rule 5)."
+    return line
+
+
 def render_analysis_summary(
     record: dict,
     *,
@@ -2436,39 +2499,10 @@ def render_analysis_summary(
             f"| {s} | {_fmt(record['statistics'].get(s))} | {_fmt(p)} | {rejected} | "
             f"{_fmt(null.get('mean'))} | {_fmt(null.get('sd'))} | {_fmt(null.get('q95'))} | {note} |"
         )
-    readings = {
-        "delta": (
-            "`delta` is rejected: evidence that the sexes' trajectories differ, not specifically that they "
-            "differ in size (reading rule 4).",
-            "`delta` is not rejected: no evidence of a difference between the sexes' trajectories at this design.",
-        ),
-        "angle": (
-            f"`angle` is rejected: evidence that the sexes' net displacements ({stages[0]} to {stages[-1]}) differ "
-            "in orientation, with Type I controlled at the validated designs (reading rule 3).",
-            "`angle` is not rejected: uninformative about orientation, not evidence that the sexes' directions "
-            "agree (reading rule 3: no power statement exists at this design).",
-        ),
-        "shape": (
-            "`shape` is rejected: evidence that the sexes' trajectories differ in shape, with Type I controlled "
-            "at the validated designs (reading rule 3).",
-            "`shape` is not rejected: uninformative about shape, not evidence that the sexes' trajectory shapes "
-            "agree (reading rule 3: no power statement exists at this design).",
-        ),
-    }
     lines += ["", "Reading, under the rules below:", ""]
-    for s in ANALYSIS_STATISTICS:
-        if status[s] is None:
-            lines.append(f"- `{s}`: no p-value in the record.")
-            continue
-        line = "- " + readings[s][0 if status[s] else 1]
-        if adjustment and status[s]:
-            line += (
-                " In the arm, a rejection the primary does not make is basis dependence, not a result of the arm (arm "
-                "rule 2" + ("; an arm-only `angle` rejection is read against MOTCO's controls, arm rule 4)." if s == "angle" else ").")
-            )
-        elif adjustment:
-            line += " In the arm this non-rejection is weaker than the primary's (arm rule 5)."
-        lines.append(line)
+    lines += [
+        "- " + _statistic_reading_line(s, status[s], stages=stages, arm=bool(adjustment)) for s in ANALYSIS_STATISTICS
+    ]
     lines += [
         "",
         "## Cell sizes",
@@ -4615,6 +4649,61 @@ def _latent_sensitivity_findings(primary: dict, record: dict) -> list[str]:
     return findings
 
 
+def _arm_status_line(statistic: str, status: str, rejected_primary: bool | None, rejected_arm: bool | None) -> str:
+    """The status sentence of one statistic in the comparison, shared by ``latent_sensitivity.md`` and the report (design D5 of ``adni-report``).
+
+    Parameters
+    ----------
+    statistic:
+        ``delta``, ``angle`` or ``shape``.
+    status:
+        ``_comparison_statuses`` for the statistic: ``same`` or
+        ``differs (basis dependence)``.
+    rejected_primary, rejected_arm:
+        The two statuses under ``ANALYSIS_REJECTION_RULE`` (``_rejected``);
+        ``None`` when a record holds no p-value.
+
+    Returns
+    -------
+    str
+        The sentence without its list marker: the status with both
+        rejection texts, then the reading the pair implies (both
+        non-rejections, the arm's weaker; both rejections; the arm rejects
+        where the primary does not, basis dependence; or the reverse), the
+        primary's status the result in every case. String-equal wherever it
+        is printed.
+    """
+    arm_name = LATENT_SENSITIVITY_ARM["name"]
+    rp, ra = rejected_primary, rejected_arm
+    text = f"`{statistic}`: {status} (primary {_rejection_text(rp)}, {arm_name} {_rejection_text(ra)}). "
+    if rp is None or ra is None:
+        text += "A missing p-value is recorded as a finding."
+    elif status == _LATENT_SENSITIVITY_STATUS_SAME and not rp:
+        text += (
+            "Both are non-rejections; the arm's is weaker than the primary's (arm rule 5), and neither is evidence "
+            "that the sexes' trajectories agree"
+            + (" in this respect (reading rule 3: no power statement exists at this design)." if statistic != "delta" else
+               " (no power statement exists at this design).")
+        )
+    elif status == _LATENT_SENSITIVITY_STATUS_SAME:
+        text += (
+            "Both are rejections: evidence that the trajectories differ in this respect, with Type I controlled at "
+            "the validated designs (reading rules 3 and 4); the arm adds no claim of its own (arm rule 8)."
+        )
+    elif ra and not rp:
+        text += (
+            "The arm rejects where the primary does not: basis dependence, not a result of the arm; the primary's "
+            "non-rejection stays the result (arm rule 2)"
+            + (", and an arm-only `angle` rejection is read against MOTCO's translation control (arm rule 4)." if statistic == "angle" else ".")
+        )
+    else:
+        text += (
+            "The primary rejects where the arm does not: the primary's rejection stays the result (reading rule 1); "
+            "the arm's non-rejection is weaker than the primary's (arm rule 5)."
+        )
+    return text
+
+
 def render_latent_sensitivity(
     rows: list[dict],
     *,
@@ -4712,35 +4801,9 @@ def render_latent_sensitivity(
         "Status per statistic:",
         "",
     ]
-    for s in ANALYSIS_STATISTICS:
-        rp, ra = p_row[f"{s}_rejected"], a_row[f"{s}_rejected"]
-        text = f"- `{s}`: {statuses[s]} (primary {_rejection_text(rp)}, {arm_name} {_rejection_text(ra)}). "
-        if rp is None or ra is None:
-            text += "A missing p-value is recorded as a finding."
-        elif statuses[s] == _LATENT_SENSITIVITY_STATUS_SAME and not rp:
-            text += (
-                "Both are non-rejections; the arm's is weaker than the primary's (arm rule 5), and neither is evidence "
-                "that the sexes' trajectories agree"
-                + (" in this respect (reading rule 3: no power statement exists at this design)." if s != "delta" else
-                   " (no power statement exists at this design).")
-            )
-        elif statuses[s] == _LATENT_SENSITIVITY_STATUS_SAME:
-            text += (
-                "Both are rejections: evidence that the trajectories differ in this respect, with Type I controlled at "
-                "the validated designs (reading rules 3 and 4); the arm adds no claim of its own (arm rule 8)."
-            )
-        elif ra and not rp:
-            text += (
-                "The arm rejects where the primary does not: basis dependence, not a result of the arm; the primary's "
-                "non-rejection stays the result (arm rule 2)"
-                + (", and an arm-only `angle` rejection is read against MOTCO's translation control (arm rule 4)." if s == "angle" else ".")
-            )
-        else:
-            text += (
-                "The primary rejects where the arm does not: the primary's rejection stays the result (reading rule 1); "
-                "the arm's non-rejection is weaker than the primary's (arm rule 5)."
-            )
-        lines.append(text)
+    lines += [
+        "- " + _arm_status_line(s, statuses[s], p_row[f"{s}_rejected"], a_row[f"{s}_rejected"]) for s in ANALYSIS_STATISTICS
+    ]
     p_perm = (primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {})
     a_perm = (arm.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {})
     lines += [
@@ -5253,60 +5316,1621 @@ def _run_latent_sensitivity_outputs(
     }
 
 
-def run_report(
+# --- report ----------------------------------------------------------------------
+
+#: The report's title; the date of the file name follows it (design D2 of ``adni-report``).
+_REPORT_TITLE = "MOTCO case-study report: ADNI serum metabolomics, sex × stage"
+#: ``REPORT_NAME`` as a pattern on the file name, the date captured.
+_REPORT_NAME_RE = re.compile(
+    "^" + re.escape(REPORT_NAME.split("{date}")[0]) + r"(\d{4}-\d{2}-\d{2})" + re.escape(REPORT_NAME.split("{date}")[1]) + "$"
+)
+#: The nine manifests the report reads, in pipeline order: (label, role in
+#: ``REPORT_INPUT_FILES``, file name in that role). The label names the step
+#: in every provenance table and under "Findings".
+_REPORT_MANIFESTS: tuple[tuple[str, str, str], ...] = (
+    *((f"clean {platform}", "cleaned", f"{platform}/{CLEAN_MANIFEST}") for platform in PLATFORMS),
+    ("cohort", "cohort", COHORT_MANIFEST),
+    ("export", "export", EXPORT_MANIFEST),
+    ("analyze", "analysis", ANALYSIS_MANIFEST),
+    ("axis-diagnostics", "diagnostics", DIAGNOSTICS_MANIFEST),
+    ("latent-sensitivity (analysis)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}", ANALYSIS_MANIFEST),
+    ("latent-sensitivity (comparison)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}", LATENT_SENSITIVITY_MANIFEST),
+    ("axis-diagnostics (arm)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}", DIAGNOSTICS_MANIFEST),
+)
+#: The packages whose versions every manifest that records them must agree on.
+_REPORT_PINNED_PACKAGES: tuple[str, ...] = ("motco", "scikit-learn", "metabo_adni")
+#: The packages of the versions table, in order.
+_REPORT_VERSION_PACKAGES: tuple[str, ...] = (
+    "python", "adni-sexdiff", "metabo_adni", "motco", "scikit-learn", "numpy", "scipy", "pandas", "statsmodels",
+    "pingouin", "openpyxl",
+)
+_REPORT_NO_NUMERICS = "no block (written before `adni-portable-numerics`)"
+
+
+def _report_date(path: Path) -> str:
+    """The date in a report's file name (``REPORT_NAME``); stops naming the file and the pattern otherwise."""
+    m = _REPORT_NAME_RE.match(Path(path).name)
+    if m is None:
+        raise ValueError(f"{path}: the report's name must match {REPORT_NAME.format(date='<YYYY-MM-DD>')} (the date is read from it)")
+    return m.group(1)
+
+
+def _report_dirs(
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir
+) -> dict[str, Path]:
+    """The directory of every role of ``REPORT_INPUT_FILES`` from the six flags (design D7)."""
+    sensitivity = Path(sensitivity_dir) if sensitivity_dir is not None else Path(LATENT_SENSITIVITY_DIR)
+    dirs = {
+        "cleaned": Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR),
+        "cohort": Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR),
+        "export": Path(input_dir) if input_dir is not None else Path(MOTCO_INPUT_DIR),
+        "analysis": Path(analysis_dir) if analysis_dir is not None else Path(MOTCO_ANALYSIS_DIR),
+        "diagnostics": Path(diagnostics_dir) if diagnostics_dir is not None else Path(DIAGNOSTICS_DIR),
+    }
+    for sub in LATENT_SENSITIVITY_SUBDIRS.values():
+        dirs[f"sensitivity/{sub}"] = sensitivity / sub
+    return dirs
+
+
+def _report_rerun(role: str, name: str, dirs: dict[str, Path]) -> str:
+    """The command that writes a file of ``role`` (the hint of every gate message)."""
+    if role == "cleaned":
+        return f"`adni-sexdiff clean --platform {name.split('/')[0]}`"
+    if role == "cohort":
+        return "`adni-sexdiff cohort`"
+    if role == "export":
+        return "`adni-sexdiff export`"
+    if role == "analysis":
+        return "`adni-sexdiff analyze`"
+    if role == "diagnostics":
+        return "`adni-sexdiff axis-diagnostics`"
+    if role == f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}":
+        return (
+            f"`adni-sexdiff axis-diagnostics --analysis-dir {dirs[f'sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}']} "
+            f"--out-dir {dirs[role]}`"
+        )
+    return "`adni-sexdiff latent-sensitivity`"
+
+
+def _get(manifest: dict, keys: str | Sequence[str], *, where: str):
+    """A nested manifest value by its keys (a dotted string, or a sequence when a key holds a dot); stops naming the manifest and the key when it is absent."""
+    keys = keys.split(".") if isinstance(keys, str) else list(keys)
+    node = manifest
+    for key in keys:
+        if not isinstance(node, dict) or key not in node:
+            raise RuntimeError(
+                f"{where} has no key {'.'.join(keys)!r}: the chain map of `report` (change adni-report) expects it; a later step "
+                "change moved it and the report change that follows updates the map; nothing was written"
+            )
+        node = node[key]
+    return node
+
+
+def _load_report_inputs(
     *,
-    analysis_dir: str | Path | None = None,
-    cohort_dir: str | Path | None = None,
-    diagnostics_dir: str | Path | None = None,
-    out: str | Path | None = None,
-    check: bool = False,
+    cleaned_dir=None,
+    cohort_dir=None,
+    input_dir=None,
+    analysis_dir=None,
+    diagnostics_dir=None,
+    sensitivity_dir=None,
+    log: str = "[report]",
 ) -> dict:
-    """Write the case-study report from the generated files, or check one against them.
+    """Read and gate every input of ``report`` (design D3 of ``adni-report``), before anything is written.
 
     Parameters
     ----------
-    analysis_dir:
-        Output directory of ``analyze``; ``result.json``, ``summary.md`` and
-        ``analysis_manifest.json`` are read.
-    cohort_dir:
-        Output directory of ``cohort``; ``stage_counts.csv`` is read.
-    diagnostics_dir:
-        Output directory of ``axis-diagnostics``, when present.
-    out:
-        Report path (default ``reports/motco-adni-<date>.md``).
-    check:
-        Instead of writing, read the report at ``out`` and compare every
-        number in its generated tables with the generated files; a mismatch
-        is an error naming the cell.
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir:
+        The six directories (``_report_dirs``); ``None`` is the pipeline's.
+    log:
+        The progress prefix.
 
     Returns
     -------
     dict
-        ``{"path": Path, "tables": {name: DataFrame}, "checked": bool, "mismatches": [...]}``.
+        ``dirs`` (role → directory), ``files`` (role → name → ``path``,
+        ``sha256``, ``bytes``), ``manifests`` and ``manifest_paths`` (label →
+        parsed manifest and its path, in ``_REPORT_MANIFESTS`` order),
+        ``records`` (``primary`` and ``arm``: the two ``result.json``),
+        ``tables`` (``stage_counts``, ``comparison``, ``diagnostics`` and
+        ``arm_diagnostics``, each CSV read as text), ``provenance`` (one row
+        per input file: path, sha256, bytes, where it is recorded),
+        ``chain`` (one row per link: the manifest key, the upstream value,
+        the hash, ``ok``, the step to rerun), ``versions`` (the consistent
+        versions of ``_REPORT_PINNED_PACKAGES``) and ``findings`` (design
+        D8: dirty revisions, manifests without ``numerics``).
 
     Notes
     -----
-    Report numbers are pasted from the generated files and checked by this
-    step, never retyped. The report carries the design cells, the statistics
-    with their p-values and null summaries, the CV-selected rank beside
-    ``angle``, the covariate block, the feature counts, the diagnostics'
-    flagged rows and ``READING_RULES`` (decided by ``adni-analyze``); it quotes only
-    aggregate values and reads no participant-level file. The report is
-    committed under ``reports/`` after ``--check`` passes.
-
-    Its inputs also include the sensitivity step's outputs under
-    ``constants.LATENT_SENSITIVITY_DIR`` (change ``adni-latent-sensitivity``):
-    the comparison (``comparison/latent_sensitivity.csv``,
-    ``latent_sensitivity.md``, ``latent_sensitivity_manifest.json``), the
-    arm's ``analysis/result.json``, ``summary.md`` and
-    ``analysis_manifest.json``, and the arm's diagnostics under
-    ``diagnostics/``. The report pastes the comparison and the arm's
-    diagnostics beside the primary's, keeps the primary's status as the
-    result, and carries ``LATENT_SENSITIVITY_READING_RULES`` after
-    ``READING_RULES`` wherever it quotes the arm. The implementing change
-    (``adni-report``) adds the flags that name those directories.
+    Gates, in this order, each stopping before anything is written and
+    naming the file or setting, both values where there are two and the
+    step to rerun, never a participant: (1) every file of
+    ``REPORT_INPUT_FILES`` present; (2) every aggregate file hashes to the
+    value its own manifest records under ``outputs`` (manifests are hashed
+    for the chain, not checked against themselves); (3) the primary is the
+    primary (no latent adjustment recorded or in the record, ``is_primary``
+    in its diagnostics) and the arm is ``LATENT_SENSITIVITY_ARM`` (its
+    conditioning and name, ``is_primary`` false in its diagnostics); (4)
+    reported runs: the primary and the arm record ``n_jobs =
+    REPORTED_N_JOBS`` in manifest and record, every ``numerics`` block
+    present records ``pinned`` true, and every manifest that records MOTCO,
+    scikit-learn or metabo_adni records the same version; (5) the chain,
+    link by link from the clean manifests to the arm diagnostics. The
+    identity and reported-run gates read a manifest's own content, so they
+    run before the chain: an arm given as the primary, an unreported run or
+    an unpinned manifest is named as such, not as a broken link. No
+    participant-level file is opened or hashed: the hashes of ``cohort.csv``,
+    the export CSVs, ``latent_scores.csv`` and ``analysis_metadata.csv`` are
+    the ones the manifests recorded (``equals_*`` flags are read, not
+    recomputed).
     """
-    raise NotImplementedError("run_report is a stub; implemented by the report change")
+    dirs = _report_dirs(cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir)
+
+    # (1) every input present
+    absent = []
+    for role, names in REPORT_INPUT_FILES.items():
+        for name in names:
+            if not (dirs[role] / name).is_file():
+                absent.append(f"{dirs[role] / name} (run {_report_rerun(role, name, dirs)})")
+    if absent:
+        raise FileNotFoundError(
+            f"{len(absent)} report input(s) absent: " + "; ".join(absent) + "; nothing was written"
+        )
+
+    # hashes, parsed manifests, records and tables
+    files: dict[str, dict[str, dict]] = {}
+    for role, names in REPORT_INPUT_FILES.items():
+        files[role] = {}
+        for name in names:
+            path = dirs[role] / name
+            files[role][name] = {"path": path, "sha256": _sha256_file(path), "bytes": path.stat().st_size}
+    manifests: dict[str, dict] = {}
+    manifest_paths: dict[str, Path] = {}
+    manifest_of_role: dict[str, dict[str, str]] = {}
+    for label, role, name in _REPORT_MANIFESTS:
+        manifest_paths[label] = files[role][name]["path"]
+        manifests[label] = json.loads(manifest_paths[label].read_text())
+        manifest_of_role.setdefault(role, {})[name] = label
+    n_files = sum(len(v) for v in files.values())
+    print(f"{log} inputs: {n_files} files hashed under {len(dirs)} directories; {len(manifests)} manifests read")
+
+    # (2) every aggregate file against its own manifest
+    provenance: list[dict] = []
+    checked = 0
+    for role, names in REPORT_INPUT_FILES.items():
+        role_manifests = manifest_of_role[role]
+        for name in names:
+            entry = files[role][name]
+            if name in role_manifests:
+                provenance.append({**entry, "role": role, "name": name, "recorded_in": "hashed for the chain (recorded by the manifests downstream)"})
+                continue
+            (label,) = role_manifests.values()
+            recorded = manifests[label].get("outputs", {}).get(name, {}).get("sha256")
+            if recorded is None:
+                raise RuntimeError(
+                    f"{manifest_paths[label]} records no hash for {name} under outputs; rerun "
+                    f"{_report_rerun(role, name, dirs)}; nothing was written"
+                )
+            if recorded != entry["sha256"]:
+                raise RuntimeError(
+                    f"{entry['path']}: sha256 {entry['sha256']} differs from the hash {manifest_paths[label]} records "
+                    f"({recorded}); rerun {_report_rerun(role, name, dirs)} (then every step after it); nothing was written"
+                )
+            checked += 1
+            provenance.append({**entry, "role": role, "name": name, "recorded_in": f"{label}: outputs.{name}.sha256"})
+    print(f"{log} {checked} aggregate files hash to the values their manifests record; {len(manifests)} manifests hashed for the chain")
+
+    a_role = "analysis"
+    s_role = f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}"
+    primary = json.loads(files[a_role][ANALYSIS_RESULT]["path"].read_text())
+    arm = json.loads(files[s_role][ANALYSIS_RESULT]["path"].read_text())
+    p_manifest, d_manifest = manifests["analyze"], manifests["axis-diagnostics"]
+    a_manifest, c_manifest, ad_manifest = (
+        manifests["latent-sensitivity (analysis)"], manifests["latent-sensitivity (comparison)"], manifests["axis-diagnostics (arm)"]
+    )
+
+    # (3) identity: the primary is the primary, the arm is the predeclared arm
+    latent = p_manifest.get("settings", {}).get("latent_adjustment")
+    if latent is not None or "latent_adjustment" in primary:
+        raise RuntimeError(
+            f"{dirs[a_role]} is not the primary: {ANALYSIS_MANIFEST} records latent adjustment {latent!r}"
+            + (f" and {ANALYSIS_RESULT} carries a latent_adjustment block" if "latent_adjustment" in primary else "")
+            + " (the primary records None); point --analysis-dir at the primary (`adni-sexdiff analyze`); nothing was written"
+        )
+    if _get(d_manifest, "inputs.analysis.is_primary", where=str(manifest_paths["axis-diagnostics"])) is not True:
+        raise RuntimeError(
+            f"{manifest_paths['axis-diagnostics']} records inputs.analysis.is_primary false: --diagnostics-dir must name the "
+            "primary's diagnostics (`adni-sexdiff axis-diagnostics`); nothing was written"
+        )
+    conditioning = (arm.get("latent_adjustment") or {}).get("conditioning")
+    arm_name = a_manifest.get("arm", {}).get("name")
+    if conditioning != LATENT_SENSITIVITY_ARM["conditioning"] or arm_name != LATENT_SENSITIVITY_ARM["name"]:
+        raise RuntimeError(
+            f"{dirs[s_role]} is not the predeclared arm: {ANALYSIS_RESULT} records latent adjustment {conditioning!r} and "
+            f"{ANALYSIS_MANIFEST} the arm {arm_name!r}, but LATENT_SENSITIVITY_ARM is {LATENT_SENSITIVITY_ARM['name']!r} "
+            f"({LATENT_SENSITIVITY_ARM['setting']} = {LATENT_SENSITIVITY_ARM['conditioning']!r}); rerun "
+            "`adni-sexdiff latent-sensitivity`; nothing was written"
+        )
+    if _get(ad_manifest, "inputs.analysis.is_primary", where=str(manifest_paths["axis-diagnostics (arm)"])) is not False:
+        raise RuntimeError(
+            f"{manifest_paths['axis-diagnostics (arm)']} records inputs.analysis.is_primary true: the arm's diagnostics must "
+            f"read the arm ({_report_rerun(f'sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}', '', dirs)}); nothing was written"
+        )
+    print(
+        f"{log} primary: {dirs[a_role]} (rank {primary['latent']['selected_lv']}, latent adjustment none); arm: "
+        f"{dirs[s_role]} ({arm_name}, `{conditioning}`-conditioned, rank {arm['latent']['selected_lv']})"
+    )
+
+    # (4) reported runs: n_jobs, pinned numerics, consistent versions
+    arm_rerun = "`adni-sexdiff latent-sensitivity`"
+    for label, record, rerun in (("analyze", primary, "`adni-sexdiff analyze`"), ("latent-sensitivity (analysis)", arm, arm_rerun)):
+        for where, value in ((f"{manifest_paths[label]} (settings.n_jobs)", manifests[label].get("settings", {}).get("n_jobs")),
+                             (f"{manifest_paths[label].parent / ANALYSIS_RESULT} (measurement.n_jobs)", record.get("measurement", {}).get("n_jobs"))):
+            if value != REPORTED_N_JOBS:
+                raise RuntimeError(
+                    f"{where} records n_jobs = {value}: not a reported run (reported runs use n_jobs = {REPORTED_N_JOBS}, "
+                    f"REPORTED_N_JOBS); rerun {rerun} without --n-jobs; nothing was written"
+                )
+    numerics_absent = []
+    for label, manifest in manifests.items():
+        numerics = manifest.get("numerics")
+        if numerics is None:
+            numerics_absent.append(label)
+        elif numerics.get("pinned") is not True:
+            raise RuntimeError(
+                f"{manifest_paths[label]} records numerics.pinned {numerics.get('pinned')!r}: the run is not pinned "
+                "(constants.NUMERIC_SETTINGS) and is not reported; rerun the step under the pinned environment; nothing was written"
+            )
+    versions: dict[str, str] = {}
+    for pkg in _REPORT_PINNED_PACKAGES:
+        first: tuple[str, str] | None = None
+        for label, manifest in manifests.items():
+            seen = manifest.get("versions", {}).get(pkg)
+            if seen is None:
+                continue
+            if first is None:
+                first = (label, seen)
+            elif seen != first[1]:
+                raise RuntimeError(
+                    f"versions.{pkg} differs between {manifest_paths[first[0]]} ({first[1]}) and {manifest_paths[label]} "
+                    f"({seen}); the pipeline must be rerun from the step whose pin moved (AGENTS.md constraints 3 and 4); "
+                    "nothing was written"
+                )
+        if first is not None:
+            versions[pkg] = first[1]
+    print(
+        f"{log} reported runs: primary and arm n_jobs {REPORTED_N_JOBS}; numerics pinned in {len(manifests) - len(numerics_absent)} "
+        f"manifests, absent in {len(numerics_absent)}; versions consistent ("
+        + ", ".join(f"{k} {v}" for k, v in versions.items()) + ")"
+    )
+
+    # (5) the chain, link by link
+    sha = {role: {name: entry["sha256"] for name, entry in names.items()} for role, names in files.items()}
+    c_role = f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}"
+    ad_role = f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}"
+    export_sha = sha["export"][EXPORT_MANIFEST]
+    cohort_sha = sha["cohort"][COHORT_MANIFEST]
+    primary_sha = {ANALYSIS_RESULT: sha[a_role][ANALYSIS_RESULT], ANALYSIS_MANIFEST: sha[a_role][ANALYSIS_MANIFEST]}
+    arm_sha = {ANALYSIS_RESULT: sha[s_role][ANALYSIS_RESULT], ANALYSIS_MANIFEST: sha[s_role][ANALYSIS_MANIFEST]}
+    export_outputs = manifests["export"].get("outputs", {})
+    chain: list[dict] = []
+
+    def link(label: str, keys: list[str], upstream: str, now: str, rerun: str) -> None:
+        recorded = _get(manifests[label], keys, where=str(manifest_paths[label]))
+        chain.append({"link": f"{label}: {'.'.join(keys)}", "upstream": upstream, "sha256": now, "recorded": recorded, "ok": recorded == now, "rerun": rerun})
+
+    def export_file_links(label: str, rerun: str) -> None:
+        link(label, ["inputs", "export_manifest", "sha256"], f"sha256({files['export'][EXPORT_MANIFEST]['path']})", export_sha, rerun)
+        for name in ANALYSIS_INPUT_FILES:
+            if name == EXPORT_MANIFEST:
+                continue
+            link(label, ["inputs", "files", name, "recorded"], f"export: outputs.{name}.sha256", export_outputs.get(name, {}).get("sha256"), rerun)
+
+    def diagnostics_links(label: str, analysis_label: str, analysis_sha: dict, rerun: str) -> None:
+        link(label, ["inputs", "analysis", "analysis_manifest", "sha256"], f"sha256({manifest_paths[analysis_label]})", analysis_sha[ANALYSIS_MANIFEST], rerun)
+        link(label, ["inputs", "analysis", "files", ANALYSIS_RESULT, "sha256"], f"{analysis_label}: outputs.{ANALYSIS_RESULT}.sha256",
+             manifests[analysis_label].get("outputs", {}).get(ANALYSIS_RESULT, {}).get("sha256"), rerun)
+        link(label, ["inputs", "export", "export_manifest", "sha256"], f"sha256({files['export'][EXPORT_MANIFEST]['path']})", export_sha, rerun)
+        link(label, ["inputs", "cohort", "files", COHORT_MANIFEST, "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, rerun)
+
+    for platform in PLATFORMS:
+        clean_path = files["cleaned"][f"{platform}/{CLEAN_MANIFEST}"]["path"]
+        link("cohort", ["inputs", "clean", platform, "manifest", "sha256"], f"sha256({clean_path})", sha["cleaned"][f"{platform}/{CLEAN_MANIFEST}"], "`adni-sexdiff cohort`")
+    for platform in PLATFORMS:
+        clean_path = files["cleaned"][f"{platform}/{CLEAN_MANIFEST}"]["path"]
+        link("export", ["inputs", "clean", platform, "manifest", "sha256"], f"sha256({clean_path})", sha["cleaned"][f"{platform}/{CLEAN_MANIFEST}"], "`adni-sexdiff export`")
+    link("export", ["inputs", "cohort", "manifest", "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, "`adni-sexdiff export`")
+    export_file_links("analyze", "`adni-sexdiff analyze`")
+    diagnostics_links("axis-diagnostics", "analyze", primary_sha, "`adni-sexdiff axis-diagnostics`")
+    export_file_links("latent-sensitivity (analysis)", arm_rerun)
+    for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+        link("latent-sensitivity (analysis)", ["reference", "files", name, "sha256"], f"sha256({files[a_role][name]['path']})", primary_sha[name], arm_rerun)
+    for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+        link("latent-sensitivity (comparison)", ["reference", "files", name, "sha256"], f"sha256({files[a_role][name]['path']})", primary_sha[name], arm_rerun)
+    for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+        link("latent-sensitivity (comparison)", ["arm", "files", name, "sha256"], f"sha256({files[s_role][name]['path']})", arm_sha[name], arm_rerun)
+    link("latent-sensitivity (comparison)", ["inputs", "export", "export_manifest", "sha256"], f"sha256({files['export'][EXPORT_MANIFEST]['path']})", export_sha, arm_rerun)
+    link("latent-sensitivity (comparison)", ["inputs", "cohort", "files", COHORT_MANIFEST, "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, arm_rerun)
+    diagnostics_links("axis-diagnostics (arm)", "latent-sensitivity (analysis)", arm_sha, _report_rerun(ad_role, "", dirs))
+    for row in chain:
+        if not row["ok"]:
+            label = row["link"].split(":")[0]
+            raise RuntimeError(
+                f"{manifest_paths[label]}: {row['link'].split(': ', 1)[1]} records {row['recorded']} but {row['upstream']} is "
+                f"{row['sha256']}; the upstream output was regenerated after this step, rerun {row['rerun']} (then every "
+                "step after it); nothing was written"
+            )
+    print(f"{log} chain: {len(chain)} links hold from the clean manifests to the arm diagnostics")
+
+    # findings of the report itself (design D8)
+    findings: list[str] = []
+    for label, manifest in manifests.items():
+        revision = manifest.get("git_revision") or {}
+        if revision.get("dirty"):
+            findings.append(f"{label} ({manifest_paths[label]}): the recorded revision {revision.get('commit')} is dirty")
+    for label in numerics_absent:
+        findings.append(f"{label} ({manifest_paths[label]}): no `numerics` block, written before `adni-portable-numerics`")
+    for msg in findings:
+        print(f"{log} FINDING: {msg}")
+
+    def read_csv(role: str, name: str) -> pd.DataFrame:
+        return pd.read_csv(files[role][name]["path"], dtype=object, keep_default_na=False)
+
+    def diagnostics_tables(role: str) -> dict[str, pd.DataFrame]:
+        return {
+            "axis": read_csv(role, DIAGNOSTICS_AXIS_CORRELATIONS),
+            "block_pcs": read_csv(role, DIAGNOSTICS_BLOCK_PCS),
+            "geometry": read_csv(role, DIAGNOSTICS_GEOMETRY_SHARES),
+            "components": read_csv(role, DIAGNOSTICS_COMPONENTS),
+        }
+
+    return {
+        "dirs": dirs,
+        "files": files,
+        "manifests": manifests,
+        "manifest_paths": manifest_paths,
+        "records": {"primary": primary, "arm": arm},
+        "tables": {
+            "stage_counts": read_csv("cohort", COHORT_COUNTS),
+            "comparison": read_csv(c_role, LATENT_SENSITIVITY_TABLE),
+            "diagnostics": diagnostics_tables("diagnostics"),
+            "arm_diagnostics": diagnostics_tables(ad_role),
+        },
+        "provenance": provenance,
+        "chain": chain,
+        "versions": versions,
+        "numerics_absent": numerics_absent,
+        "findings": findings,
+    }
+
+
+# --- report: rendering ------------------------------------------------------------
+
+def _md_escape(value) -> str:
+    return str(value).replace("|", "\\|")
+
+
+def _markdown_table(df: pd.DataFrame, align: str | None = None) -> list[str]:
+    """A Markdown table from a frame of strings; ``align`` is one ``l``/``r`` per column (left by default)."""
+    columns = [str(c) for c in df.columns]
+    align = align or "l" * len(columns)
+    lines = [
+        "| " + " | ".join(_md_escape(c) for c in columns) + " |",
+        "|" + "|".join("---:" if a == "r" else "---" for a in align) + "|",
+    ]
+    for row in df.itertuples(index=False):
+        lines.append("| " + " | ".join(_md_escape(v) for v in row) + " |")
+    return lines
+
+
+def _num(value, spec: str = ".6g") -> str:
+    """A number read from a CSV as text (or a record value) for a report cell; ``n/a`` for an empty cell, None or NaN."""
+    if value is None or value == "":
+        return "n/a"
+    return _fmt_nan(float(value), spec)
+
+
+def _count(value) -> str:
+    """An integer count for a report cell; ``n/a`` for None or an empty cell."""
+    if value is None or value == "":
+        return "n/a"
+    return str(int(float(value)))
+
+
+def _yes_no(value) -> str:
+    if value in (None, ""):
+        return "n/a"
+    if isinstance(value, str):
+        return "yes" if value == "True" else ("no" if value == "False" else value)
+    return "yes" if value else "no"
+
+
+def _text(value) -> str:
+    """A text cell: strings as they are, None or empty as ``n/a``, everything else through ``str``."""
+    if value is None or value == "":
+        return "n/a"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(_text(v) for v in value)
+    return str(value)
+
+
+def _flatten(node, prefix: str = "") -> dict[str, object]:
+    """Nested scalars of a dict as ``a.b.c`` keys, in order."""
+    out: dict[str, object] = {}
+    if isinstance(node, dict):
+        for k, v in node.items():
+            out.update(_flatten(v, f"{prefix}{k}." if prefix or True else k))
+    else:
+        out[prefix[:-1]] = node
+    return out
+
+
+class _ReportBuilder:
+    """The lines and the titled tables of the report, section by section (design D4 of ``adni-report``)."""
+
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+        self.tables: dict[str, pd.DataFrame] = {}
+        self.section_title = ""
+
+    def section(self, title: str) -> None:
+        self.lines += ["", f"## {title}"]
+        self.section_title = title
+
+    def para(self, *text: str) -> None:
+        self.lines += ["", *text]
+
+    def bullets(self, items: list[str]) -> None:
+        self.lines += ["", *(f"- {item}" for item in items)]
+
+    def heading(self, title: str) -> None:
+        self.lines += ["", f"### {title}"]
+
+    def code(self, *commands: str) -> None:
+        self.lines += ["", "```", *commands, "```"]
+
+    def table(self, title: str, rows: list[dict], columns: list[str], *, align: str | None = None) -> None:
+        df = pd.DataFrame([[str(r[c]) for c in columns] for r in rows], columns=columns, dtype=object)
+        key = f"{self.section_title} › {title}"
+        if key in self.tables:
+            raise ValueError(f"report table {key!r} is defined twice")
+        self.tables[key] = df
+        self.lines += ["", f"### {title}", "", *_markdown_table(df, align)]
+
+    def text(self) -> str:
+        return "\n".join(self.lines) + "\n"
+
+
+def _statistics_rows(record: dict, *, rank_floor: int = ANALYSIS_RANK_FLOOR, alpha: float = ANALYSIS_ALPHA) -> list[dict]:
+    """The rows of the statistics table as ``summary.md`` prints them (observed, p, rejected, null summary, note)."""
+    design, meas, latent = record["design"], record["measurement"], record["latent"]
+    stages = design["stage_levels"]
+    selected = latent["selected_lv"]
+    floor_binding = latent["component_selection"] == "cv" and selected == rank_floor
+    eigengap = (record.get("config_spectrum", {}).get("pooled") or {}).get("relative_eigengap")
+    rows = []
+    for s in ANALYSIS_STATISTICS:
+        p = record["p_values"].get(s)
+        null = record["null_summary"].get(s, {})
+        status = _rejected(p, alpha)
+        note = ""
+        if s == "angle":
+            note = (
+                f"degrees, endpoint stages {stages[0]} and {stages[-1]}; CV-selected rank {selected} "
+                f"(rank floor {rank_floor}); pooled relative eigengap {_fmt(eigengap)}"
+            )
+            if floor_binding:
+                note += "; the floor is binding: the CV selected the floor rank"
+        elif s == "shape":
+            note = "not available at fewer than three stages" if not meas.get("shape_available", True) else ""
+        rows.append({
+            "statistic": s, "observed": _fmt(record["statistics"].get(s)), "p (RRPP)": _fmt(p),
+            "rejected": "n/a" if status is None else ("yes" if status else "no"),
+            "null mean": _fmt(null.get("mean")), "null sd": _fmt(null.get("sd")), "null q95": _fmt(null.get("q95")), "note": note,
+        })
+    return rows
+
+
+def _latent_adjustment_lines(adjustment: dict, stages: list) -> list[str]:
+    """The bullet lines of an arm's ``latent_adjustment`` block, as ``summary.md`` and ``latent_sensitivity.md`` print them."""
+    design_cols = [str(c) for c in adjustment["design_columns"]]
+    stage_names = {f"stage[{k}]": st for k, st in enumerate(stages)}
+    n_cond = sum(c in stage_names for c in design_cols)
+    r2 = adjustment.get("feature_r2", {})
+    return [
+        f"conditioning: `{adjustment['conditioning']}` (`{LATENT_SENSITIVITY_ARM['setting']}`, `LATENT_SENSITIVITY_ARM`): "
+        "the basis is fitted on the pooled-standardized features with the covariates regressed out given the intercept "
+        "and the stage indicators, per CV training set and on the full sample; the raw features are projected onto it; "
+        "the trajectory model, LS-means and RRPP are the primary's",
+        "covariates residualized (in order): " + ", ".join(f"`{c}`" for c in adjustment["covariates"]),
+        f"residualization design columns: {len(design_cols)} ("
+        + ", ".join(f"{c} = {stage_names[c]}" if c in stage_names else c for c in design_cols) + ")",
+        f"samples {adjustment['n_samples']}; residual df {adjustment['residual_df']} (n − 1 − {n_cond} stage indicator(s) − "
+        f"{len(design_cols) - n_cond} design column(s)); smallest CV training df {adjustment.get('cv_min_training_df')}",
+        f"feature scale: `{adjustment['feature_scale']}`",
+        "feature R² of the covariates given the intercept and the stage indicators (the share of each feature's variance "
+        "the residualization removed; arm rule 6): q05 / q25 / q50 / q75 / q95 "
+        + " / ".join(_fmt(r2.get(q), ".3f") for q in ("q05", "q25", "q50", "q75", "q95"))
+        + f"; mean {_fmt(r2.get('mean'), '.3f')}; fraction above 0.5 {_fmt(r2.get('fraction_above_0.5'), '.3f')}",
+    ]
+
+
+def _flagged_axis_rows(axis: pd.DataFrame, variables: list[str]) -> list[dict]:
+    """The flagged latent-component rows of ``axis_correlations.csv`` in the order ``diagnostics.md`` lists them (by |rho|)."""
+    comps = list(dict.fromkeys(axis["component"]))
+    flagged = axis[(axis["flag_raw"] == "True") | (axis["flag_partial"] == "True")].copy()
+    if not len(flagged):
+        return []
+    rho = pd.to_numeric(flagged["spearman"].replace("", np.nan))
+    partial = pd.to_numeric(flagged["partial_spearman"].replace("", np.nan))
+    flagged["abs"] = rho.abs().fillna(partial.abs())
+    flagged["c"] = flagged["component"].map({c: i for i, c in enumerate(comps)})
+    flagged["v"] = flagged["variable"].map({v: i for i, v in enumerate(variables)})
+    flagged = flagged.sort_values(["abs", "c", "v"], ascending=[False, True, True])
+    return [
+        {
+            "row": f"{r.component} · {r.variable}", "component": r.component, "sd": _num(r.component_sd, ".4g"),
+            "variable": f"`{r.variable}`", "source": r.source, "n": r.n, "rho": _num(r.spearman, ".3f"),
+            "rho | design": _num(r.partial_spearman, ".3f"),
+            "flag": "+".join(f for f, on in (("raw", r.flag_raw == "True"), ("partial", r.flag_partial == "True")) if on),
+        }
+        for r in flagged.itertuples(index=False)
+    ]
+
+
+def _flagged_block_rows(pcs: pd.DataFrame, variables: list[str]) -> list[dict]:
+    """The flagged block-PC rows of ``block_pcs.csv`` in the order ``diagnostics.md`` lists them (by |rho|)."""
+    flagged = pcs[(pcs["flag_raw"] == "True") | (pcs["flag_partial"] == "True")].copy()
+    if not len(flagged):
+        return []
+    rho = pd.to_numeric(flagged["spearman"].replace("", np.nan))
+    partial = pd.to_numeric(flagged["partial_spearman"].replace("", np.nan))
+    flagged["abs"] = rho.abs().fillna(partial.abs())
+    flagged["b"] = flagged["block"].map({b: i for i, b in enumerate(EXPORT_BLOCKS)})
+    flagged["v"] = flagged["variable"].map({v: i for i, v in enumerate(variables)})
+    flagged = flagged.sort_values(["abs", "b", "component", "v"], ascending=[False, True, True, True])
+    return [
+        {
+            "row": f"{r.block} {r.component} · {r.variable}", "block": r.block, "component": r.component,
+            "variance share": _num(r.variance_share, ".3f"), "variable": f"`{r.variable}`", "source": r.source, "n": r.n,
+            "rho": _num(r.spearman, ".3f"), "rho | design": _num(r.partial_spearman, ".3f"),
+            "flag": "+".join(f for f, on in (("raw", r.flag_raw == "True"), ("partial", r.flag_partial == "True")) if on),
+        }
+        for r in flagged.itertuples(index=False)
+    ]
+
+
+def _components_rows(components: pd.DataFrame) -> tuple[list[dict], list[str]]:
+    """The rows of ``components.csv`` as ``diagnostics.md`` prints them, with the table's columns."""
+    share_cols = [c for c in components.columns if c.startswith("loading_share_")]
+    columns = ["component", "sd", *(f"share {c.removeprefix('loading_share_')}" for c in share_cols),
+               "flagged raw", "flagged partial", "top variable", "top rho"]
+    rows = []
+    for r in components.to_dict("records"):
+        rows.append({
+            "component": r["component"], "sd": _num(r["sd"], ".4g"),
+            **{f"share {c.removeprefix('loading_share_')}": _num(r[c], ".3f") for c in share_cols},
+            "flagged raw": r["n_flagged_raw"], "flagged partial": r["n_flagged_partial"],
+            "top variable": f"`{r['top_variable']}`" if r["top_variable"] else "n/a", "top rho": _num(r["top_spearman"], ".3f"),
+        })
+    return rows, columns
+
+
+def _diagnostics_section(b: _ReportBuilder, tables: dict, manifest: dict, *, prefix: str = "") -> None:
+    """The flagged rows, the components table and the block PCs of one diagnostics run (sections 6 and 7)."""
+    counts = manifest.get("counts", {})
+    variables = [v["name"] if isinstance(v, dict) else v for v in manifest.get("settings", {}).get("DIAGNOSTIC_VARIABLES", [])]
+    threshold = manifest.get("settings", {}).get("DIAGNOSTIC_CORRELATION_THRESHOLD")
+    flagged = counts.get("flagged", {})
+    b.para(
+        f"Rows with |rho| ≥ {threshold} (`DIAGNOSTIC_CORRELATION_THRESHOLD`, raw and partial separately) are flagged: a "
+        "reporting threshold, not an adoption rule; no p-value is attached to any correlation. Flagged rows recorded: "
+        f"latent components {_count(flagged.get('axis_raw'))} raw and {_count(flagged.get('axis_partial'))} partial; block "
+        f"principal components {_count(flagged.get('block_pcs_raw'))} raw and {_count(flagged.get('block_pcs_partial'))} partial."
+    )
+    axis_rows = _flagged_axis_rows(tables["axis"], variables)
+    axis_columns = ["row", "component", "sd", "variable", "source", "n", "rho", "rho | design", "flag"]
+    b.table(f"{prefix}Flagged latent components", axis_rows, axis_columns, align="llrllrrrl")
+    if not axis_rows:
+        b.para(f"No latent-component correlation reaches |rho| ≥ {threshold}.")
+    pc_rows = _flagged_block_rows(tables["block_pcs"], variables)
+    pc_columns = ["row", "block", "component", "variance share", "variable", "source", "n", "rho", "rho | design", "flag"]
+    b.table(f"{prefix}Flagged block principal components", pc_rows, pc_columns, align="lllrllrrrl")
+    if not pc_rows:
+        b.para(f"No block principal component correlation reaches |rho| ≥ {threshold}.")
+    comp_rows, comp_columns = _components_rows(tables["components"])
+    b.para(
+        "Per latent component: the score SD, the share of its squared `pls_loadings.csv` entries (MOTCO's rotation weights "
+        "on the z-scored joint features; the blocks enter unweighted) held by each block, the variables flagged on the raw "
+        "and on the partial correlation, and the variable with the largest |rho|."
+    )
+    b.table(f"{prefix}Components", comp_rows, comp_columns, align="lr" + "r" * (len(comp_columns) - 6) + "rrlr")
+    block_rows = []
+    blocks = counts.get("blocks", {})
+    for block in sorted(blocks, key=lambda x: (EXPORT_BLOCKS.index(x) if x in EXPORT_BLOCKS else len(EXPORT_BLOCKS), x)):
+        info = blocks[block]
+        shares = info.get("variance_shares", {})
+        pc1 = info.get("pc1_phase", {})
+        block_rows.append({
+            "block": block, "features": _count(info.get("features")),
+            **{f"variance share {pc}": _num(shares.get(pc), ".3f") for pc in shares},
+            "pc1 against phase: Spearman (here)": _num(pc1.get("spearman"), ".3f"),
+            "|Pearson| recorded by export": _num(pc1.get("export_abs_corr_pearson"), ".3f"),
+        })
+    block_columns = list(block_rows[0]) if block_rows else ["block"]
+    b.para(
+        "Per z-scored block: the variance share of each of its first principal components and its pc1 against `phase` "
+        "(Spearman here; the export manifest's |Pearson| of the first left-singular vector against the ADNI1 indicator, "
+        "`counts.phase_offset.<block>.abs_corr_pc1_phase`)."
+    )
+    b.table(f"{prefix}Block principal components", block_rows, block_columns, align="l" + "r" * (len(block_columns) - 1))
+    rows = counts.get("rows", {})
+    b.para(
+        "The full tables are referenced by hash (section 2): "
+        + ", ".join(f"`{name}` ({_count(rows.get(key))} rows)" for name, key in (
+            (DIAGNOSTICS_AXIS_CORRELATIONS, "axis_correlations"), (DIAGNOSTICS_BLOCK_PCS, "block_pcs"),
+            (DIAGNOSTICS_GEOMETRY_SHARES, "geometry_shares"), (DIAGNOSTICS_COMPONENTS, "components")))
+        + "."
+    )
+
+
+def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
+    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``).
+
+    Parameters
+    ----------
+    inputs:
+        ``_load_report_inputs``.
+    date:
+        The date of the report's file name, written in the title line only.
+
+    Returns
+    -------
+    tuple
+        The Markdown text and every table it prints as a frame of strings,
+        keyed ``"<section> › <title>"``.
+
+    Notes
+    -----
+    The ten sections of ``REPORT_SECTIONS``, in order, each table titled by
+    a level-3 heading and keyed by its first column. Every number is read
+    from a record, a manifest or a CSV and formatted with the digits of the
+    summary it belongs to (``_fmt`` with six significant digits for record
+    values, p-values as recorded, counts as integers, correlations and
+    shares as ``diagnostics.md`` prints them); no statistic, correlation,
+    mean or count is computed here. The reading sentences are
+    ``_statistic_reading_line`` and ``_arm_status_line``, the ones
+    ``summary.md`` and ``latent_sensitivity.md`` print; the reading rules are
+    the constants, verbatim. The body depends on the inputs and ``date``
+    only: no revision, host, time or runtime of the report run is written.
+    """
+    b = _ReportBuilder()
+    dirs, files, manifests, paths = inputs["dirs"], inputs["files"], inputs["manifests"], inputs["manifest_paths"]
+    primary, arm = inputs["records"]["primary"], inputs["records"]["arm"]
+    s_role = f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}"
+    p_manifest, e_manifest, c_manifest = manifests["analyze"], manifests["export"], manifests["cohort"]
+    a_manifest, cmp_manifest = manifests["latent-sensitivity (analysis)"], manifests["latent-sensitivity (comparison)"]
+    d_manifest, ad_manifest = manifests["axis-diagnostics"], manifests["axis-diagnostics (arm)"]
+    design = primary["design"]
+    stages, groups = [str(s) for s in design["stage_levels"]], [str(g) for g in design["group_levels"]]
+    arm_name = LATENT_SENSITIVITY_ARM["name"]
+    comparison = inputs["tables"]["comparison"]
+    cmp_rows = {r["analysis"]: r for r in comparison.to_dict("records")}
+    p_row, a_row = cmp_rows["primary"], cmp_rows[arm_name]
+    statuses = cmp_manifest.get("counts", {}).get("statuses", {})
+    p_status = {s: _rejected(primary["p_values"].get(s)) for s in ANALYSIS_STATISTICS}
+    a_status = {s: _rejected(arm["p_values"].get(s)) for s in ANALYSIS_STATISTICS}
+    sections = iter(REPORT_SECTIONS)
+
+    b.lines.append(f"# {_REPORT_TITLE} — {date}")
+    b.para(
+        "Generated in full by `adni-sexdiff report` (change `adni-report`) from the kept aggregate outputs of the pipeline: "
+        "every number is copied from a record, a manifest or a CSV and formatted with the digits of the summary it belongs "
+        "to, every reading sentence is the one `summary.md` or `latent_sensitivity.md` prints, and the reading rules are "
+        "the constants, verbatim. The primary analysis stays primary in every table; the arm is read beside it under "
+        "`READING_RULES` and `LATENT_SENSITIVITY_READING_RULES` (section 9). `adni-sexdiff report --check` compares this "
+        "file with the outputs cell by cell. No value here is participant-level."
+    )
+
+    # 1. Summary ---------------------------------------------------------------------------
+    b.section(next(sections))
+    cells = design["cell_sizes"]
+    cell_text = "; ".join(f"{g} " + " / ".join(f"{st} {cells[g][st]}" for st in stages) for g in groups)
+    meas, latent = primary["measurement"], primary["latent"]
+    eigengap = (primary.get("config_spectrum", {}).get("pooled") or {}).get("relative_eigengap")
+    b.para(
+        f"The primary analysis (`{dirs['analysis']}`: one `motco.analysis.analyze_trajectories` call on the covariate-blind "
+        f"basis with the five covariates `{'`, `'.join(primary['covariates']['columns'])}`; MOTCO {primary['software']['motco']}): "
+        f"n = {design['n_samples']} in the sex × stage cells {cell_text}; CV-selected PLS-DA rank {latent['selected_lv']} "
+        f"(`{latent['component_selection']}`; rank floor `ANALYSIS_RANK_FLOOR` = {ANALYSIS_RANK_FLOOR}; pooled relative "
+        f"eigengap {_fmt(eigengap)}); {meas['permutations']} RRPP permutations, seed {meas['seed']}; α = {ANALYSIS_ALPHA}, "
+        f"rejected when {ANALYSIS_REJECTION_RULE} (`ANALYSIS_REJECTION_RULE`). "
+        + " ".join(
+            f"`{s}` {_fmt(primary['statistics'].get(s))} (p {_fmt(primary['p_values'].get(s))}, {_rejection_text(p_status[s])})"
+            + ("." if s == ANALYSIS_STATISTICS[-1] else ";")
+            for s in ANALYSIS_STATISTICS
+        )
+    )
+    b.para("Reading, under `READING_RULES` (section 9):")
+    b.bullets([_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS])
+    b.para(
+        f"The predeclared sensitivity arm `{arm_name}` (`LATENT_SENSITIVITY_ARM`: `{LATENT_SENSITIVITY_ARM['setting']}` = "
+        f"`{LATENT_SENSITIVITY_ARM['conditioning']}`, the same five covariates, every other setting the primary's; section 7) "
+        f"selected rank {arm['latent']['selected_lv']}. Status per statistic (`same` when the rejection under "
+        "`ANALYSIS_REJECTION_RULE` equals the primary's, else `differs (basis dependence)`; the primary's status is the "
+        "result either way), read under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`:"
+    )
+    b.bullets([_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
+
+    def flagged_components(manifest: dict) -> str:
+        per = manifest.get("counts", {}).get("per_component", {})
+        names = [c for c, info in per.items() if info.get("flagged_variables")]
+        return ", ".join(f"`{c}`" for c in names) if names else "none"
+
+    d_flagged, ad_flagged = d_manifest.get("counts", {}).get("flagged", {}), ad_manifest.get("counts", {}).get("flagged", {})
+    b.para(
+        f"Axis diagnostics (|rho| ≥ {d_manifest.get('settings', {}).get('DIAGNOSTIC_CORRELATION_THRESHOLD')} flagged, a "
+        "reporting threshold, not an adoption rule): in the primary, "
+        f"{_count(d_flagged.get('axis_raw'))} latent-component rows flagged on the raw correlation and "
+        f"{_count(d_flagged.get('axis_partial'))} on the partial, the flagged components {flagged_components(d_manifest)} "
+        f"(section 6); in the arm, {_count(ad_flagged.get('axis_raw'))} and {_count(ad_flagged.get('axis_partial'))}, the "
+        f"flagged components {flagged_components(ad_manifest)} (section 7). A flagged row is a measurement-space finding, "
+        "never a change of a statistic."
+    )
+
+    # 2. Provenance ------------------------------------------------------------------------
+    b.section(next(sections))
+    b.para(
+        "This section is the report's manifest: what each step recorded, every input with its sha256, and the chain the "
+        "step checked before writing. The hashes of participant-level files are the ones the manifests record; the report "
+        "opened none of them."
+    )
+    version_rows = [
+        {"step": label, **{pkg: _text(m.get("versions", {}).get(pkg)) for pkg in _REPORT_VERSION_PACKAGES}}
+        for label, m in manifests.items()
+    ]
+    b.table("Versions per step", version_rows, ["step", *_REPORT_VERSION_PACKAGES])
+    revision_rows = []
+    for label, m in manifests.items():
+        rev, num = m.get("git_revision") or {}, m.get("numerics")
+        revision_rows.append({
+            "step": label, "manifest": str(paths[label]), "created at": _text(m.get("created_at")),
+            "commit": _text(rev.get("commit")), "dirty": _text(rev.get("dirty")),
+            "numerics": _REPORT_NO_NUMERICS if num is None else ("pinned" if num.get("pinned") else "not pinned"),
+            "host": _text((num or {}).get("host")), "cpu": _text((num or {}).get("cpu_model")),
+        })
+    b.table("Revisions and numerics per step", revision_rows, ["step", "manifest", "created at", "commit", "dirty", "numerics", "host", "cpu"])
+    input_rows = [
+        {"file": str(r["path"]), "sha256": r["sha256"], "bytes": str(r["bytes"]), "recorded in": r["recorded_in"]}
+        for r in inputs["provenance"]
+    ]
+    b.table("Inputs", input_rows, ["file", "sha256", "bytes", "recorded in"], align="llrl")
+    raw: dict[str, list[tuple[str, dict]]] = {}
+    for label, entries in ((f"clean {p}", manifests[f"clean {p}"].get("inputs", [])) for p in PLATFORMS):
+        for e in entries:
+            raw.setdefault(e["name"], []).append((label, e))
+    for e in c_manifest.get("inputs", {}).get("raw", []):
+        raw.setdefault(e["name"], []).append(("cohort", e))
+    raw_rows = []
+    for name, entries in raw.items():
+        by_hash: dict[str, list[tuple[str, dict]]] = {}
+        for label, e in entries:
+            by_hash.setdefault(e.get("sha256"), []).append((label, e))
+        for digest, group in by_hash.items():
+            label0, e0 = group[0]
+            repair = e0.get("repair")
+            raw_rows.append({
+                "file": name if len(by_hash) == 1 else f"{name} ({label0})", "sha256": _text(digest), "bytes": _count(e0.get("bytes")),
+                "predeclared": _text(e0.get("predeclared")),
+                "repair": "none" if not repair else f"repaired {repair.get('repaired_on')}: {repair.get('repair')} (defect: {repair.get('defect')})",
+                "recorded in": ", ".join(lbl for lbl, _ in group),
+            })
+    b.table("Raw LONI inputs", raw_rows, ["file", "sha256", "bytes", "predeclared", "repair", "recorded in"], align="llrlll")
+    chain_rows = [
+        {"link": r["link"], "upstream": r["upstream"], "sha256": _text(r["sha256"]), "ok": "yes" if r["ok"] else "no", "rerun on failure": r["rerun"]}
+        for r in inputs["chain"]
+    ]
+    b.table("Chain links checked", chain_rows, ["link", "upstream", "sha256", "ok", "rerun on failure"])
+
+    # 3. Cohort ----------------------------------------------------------------------------
+    b.section(next(sections))
+    cs, cc = c_manifest.get("settings", {}), c_manifest.get("counts", {})
+    rule, stage_rule = cs.get("COHORT_RULE", {}), cs.get("STAGE_RULE", {})
+    reading = cs.get("stage_source_reading", {})
+    stage_source = cc.get("intersection", {}).get("stage_source", {})
+    b.bullets([
+        f"`COHORT_RULE` as `{paths['cohort']}` records it: clinical table `{rule.get('clinical_file')}`, one row per participant "
+        f"from its `{rule.get('baseline_visit')}` row; a cleaned participant enters a platform's set only if every raw record "
+        f"on that platform has visit `{rule.get('sample_visit')}` ("
+        + ", ".join(f"`{f}` column `{c}`" for f, c in rule.get("sample_visit_columns", {}).items())
+        + f"; runs without a visit column count as baseline: {', '.join(rule.get('runs_without_visit', []))}) and it has a "
+        f"baseline row; the analysis cohort is the intersection of the sets of {', '.join(rule.get('platforms', []))}; no other "
+        "exclusion.",
+        f"`STAGE_RULE`: `{stage_rule.get('source')}` on the baseline row, "
+        + ", ".join(f"{k} → {v}" for k, v in stage_rule.get("map", {}).items()) + ".",
+        f"Stage source agreement (`{reading.get('column')}` on the baseline row read as "
+        + ", ".join(f"{k} → {v}" for k, v in reading.get("map", {}).items())
+        + f"; {reading.get('note')}): agree {_count(stage_source.get('agree'))}, differ {_count(stage_source.get('differ'))}, "
+        f"missing {_count(stage_source.get('missing'))}.",
+        f"Statin users in the intersection: {_count(cc.get('intersection', {}).get('statin_users'))}; missing covariate values: "
+        f"{_count(cc.get('intersection', {}).get('missing_covariate_values'))}; phase-against-run disagreements: "
+        f"{_count(cc.get('intersection', {}).get('phase_vs_run_disagreements'))}.",
+    ])
+    expected = c_manifest.get("expected", {})
+    cascade_rows = [
+        {
+            "set": p, "cleaned": _count(cc.get(p, {}).get("cascade", {}).get("cleaned")),
+            "excluded: sample not bl": _count(cc.get(p, {}).get("cascade", {}).get("excluded_sample_not_bl")),
+            "excluded: no clinical bl row": _count(cc.get(p, {}).get("cascade", {}).get("excluded_no_clinical_bl_row")),
+            "set size": _count(cc.get(p, {}).get("cascade", {}).get("set")),
+            "expected set size": _count(expected.get(p, {}).get("cascade", {}).get("set")),
+        }
+        for p in rule.get("platforms", PLATFORMS)
+    ]
+    b.table("Cascade per platform set", cascade_rows, ["set", "cleaned", "excluded: sample not bl", "excluded: no clinical bl row", "set size", "expected set size"], align="lrrrrr")
+    inter, union = cc.get("intersection", {}).get("cascade", {}), cc.get("union", {})
+    e_inter, e_union = expected.get("intersection", {}).get("cascade", {}), expected.get("union", {})
+    iu_rows = [
+        {"quantity": "cleaned on both platforms", "n": _count(inter.get("cleaned_on_both")), "expected": _count(e_inter.get("cleaned_on_both"))},
+        {"quantity": "intersection (the analysis cohort)", "n": _count(inter.get("set")), "expected": _count(e_inter.get("set"))},
+        {"quantity": "union (rows of cohort.csv)", "n": _count(union.get("participants")), "expected": _count(e_union.get("participants"))},
+        {"quantity": "union: both platforms", "n": _count(union.get("both")), "expected": _count(e_union.get("both"))},
+        {"quantity": "union: p180 only", "n": _count(union.get("p180_only")), "expected": _count(e_union.get("p180_only"))},
+        {"quantity": "union: nmr only", "n": _count(union.get("nmr_only")), "expected": _count(e_union.get("nmr_only"))},
+    ]
+    b.table("Intersection and union", iu_rows, ["quantity", "n", "expected"], align="lrr")
+    visit_rows = [
+        {"platform set · visit": f"{p} {k.replace('.', ' · ')}", "n": _count(v)}
+        for p in rule.get("platforms", PLATFORMS) for k, v in _flatten(cc.get(p, {}).get("sample_visits", {})).items()
+    ]
+    b.table("Sample visits of the cleaned participants", visit_rows, ["platform set · visit", "n"], align="lr")
+    sc = inputs["tables"]["stage_counts"]
+    sexes, stage_cols = [*GROUP_VALUES, "all"], [*STAGE_LABELS, "all"]
+    for set_name, title in (("p180", "Sex × stage: p180 set"), ("nmr", "Sex × stage: nmr set"), ("intersection", "Sex × stage: intersection")):
+        sub = sc[(sc["set"] == set_name) & (sc["dx_bl"] == "all") & (sc["phase"] == "all")]
+        lookup = {(r["sex"], r["stage"]): r["n"] for r in sub.to_dict("records")}
+        rows = [{"sex": g, **{st: lookup.get((g, st), "n/a") for st in stage_cols}} for g in sexes]
+        b.table(title, rows, ["sex", *stage_cols], align="l" + "r" * len(stage_cols))
+    comp = sc[(sc["set"] == "intersection") & (sc["dx_bl"] != "all")]
+    comp_rows = [
+        {"cell": f"{r['sex']} {r['stage']} {r['dx_bl']} {r['phase']}", "sex": r["sex"], "stage": r["stage"], "DX.bl": r["dx_bl"], "phase": r["phase"], "n": r["n"]}
+        for r in comp.to_dict("records")
+    ]
+    b.table("Intersection: sex × stage × DX.bl × phase", comp_rows, ["cell", "sex", "stage", "DX.bl", "phase", "n"], align="lllllr")
+    descriptives = c_manifest.get("descriptives") or {}
+    d_cells = descriptives.get("cells", {})
+    b.para(
+        f"Per sex × stage cell of the analysis cohort, copied from `{COHORT_MANIFEST}` (`descriptives`, set "
+        f"`{descriptives.get('set')}`), not recomputed: n, age and education mean (sd), and counts per level of `apoe4` "
+        "(0 / 1 / 2), `phase` (ADNI1 / ADNI2GO) and `statin` (0 / 1). The covariate roles of the arm (section 7) are read "
+        "beside this table."
+    )
+    desc_rows = []
+    for g in groups:
+        for st in stages:
+            c = d_cells.get(g, {}).get(st)
+            if not c:
+                desc_rows.append({"cell": f"{g} {st}", "n": "n/a", "age mean (sd)": "n/a", "education mean (sd)": "n/a",
+                                  "apoe4 0 / 1 / 2": "n/a", "phase ADNI1 / ADNI2GO": "n/a", "statin 0 / 1": "n/a"})
+                continue
+            desc_rows.append({
+                "cell": f"{g} {st}", "n": _count(c.get("n")),
+                "age mean (sd)": f"{_fmt(c.get('age', {}).get('mean'))} ({_fmt(c.get('age', {}).get('sd'))})",
+                "education mean (sd)": f"{_fmt(c.get('education', {}).get('mean'))} ({_fmt(c.get('education', {}).get('sd'))})",
+                "apoe4 0 / 1 / 2": " / ".join(str(c.get("apoe4", {}).get(k, "n/a")) for k in ("0", "1", "2")),
+                "phase ADNI1 / ADNI2GO": " / ".join(str(c.get("phase", {}).get(k, "n/a")) for k in ("ADNI1", "ADNI2GO")),
+                "statin 0 / 1": " / ".join(str(c.get("statin", {}).get(k, "n/a")) for k in ("0", "1")),
+            })
+    b.table("Per-cell covariate descriptives", desc_rows, ["cell", "n", "age mean (sd)", "education mean (sd)", "apoe4 0 / 1 / 2", "phase ADNI1 / ADNI2GO", "statin 0 / 1"], align="lrrrrrr")
+    pvr = cc.get("phase_vs_run", {})
+    pvr_rows = [
+        {
+            "set": name, "ADNI1 → ADNI1": _count(info.get("table", {}).get("ADNI1", {}).get("ADNI1")),
+            "ADNI2GO → ADNI2GO": _count(info.get("table", {}).get("ADNI2GO", {}).get("ADNI2GO")),
+            "disagreements": _count(info.get("disagreements")),
+        }
+        for name, info in pvr.items()
+    ]
+    b.para("The `phase` covariate (ADNIMERGE `ORIGPROT`, ADNI-GO and ADNI-2 merged) against the p180 run of `p180_runs.csv`:")
+    b.table("Phase against the p180 run", pvr_rows, ["set", "ADNI1 → ADNI1", "ADNI2GO → ADNI2GO", "disagreements"], align="lrrr")
+    option_keys = list(dict.fromkeys(k for p in PLATFORMS for k in CLEAN_OPTIONS[p]))
+    option_rows = [
+        {"option": k, **{p: _text(manifests[f"clean {p}"].get("settings", {}).get("options", {}).get(k)) for p in PLATFORMS}}
+        for k in option_keys
+    ]
+    b.para("Cleaning (`clean`, metabo_adni " + _text(inputs["versions"].get("metabo_adni")) + "; `CLEAN_OPTIONS` as each `clean_manifest.json` records them):")
+    b.table("Cleaning options", option_rows, ["option", *PLATFORMS])
+    b.bullets([f"`clean --platform {p}` ran metabo_adni as `{manifests[f'clean {p}'].get('settings', {}).get('cli_equivalent')}`" for p in PLATFORMS])
+    table_order = [*CLEAN_P180_FILES, *CLEAN_TABLES.values()]
+    for p in PLATFORMS:
+        m = manifests[f"clean {p}"]
+        observed, exp = m.get("counts", {}).get("observed", {}), m.get("counts", {}).get("expected", {})
+        steps = m.get("settings", {}).get("metabo_adni_steps", list(observed.get("cells", {})))
+        names = list(dict.fromkeys(t for step in steps for t in observed.get("cells", {}).get(step, {})))
+        names.sort(key=lambda t: (table_order.index(t) if t in table_order else len(table_order), t))
+        rows = []
+        for step in steps:
+            row = {"metabo_adni step": step}
+            for t in names:
+                o, e = observed.get("cells", {}).get(step, {}).get(t), exp.get("cells", {}).get(step, {}).get(t)
+                row[t] = f"{o[0]} × {o[1]}" if o else "n/a"
+                row[f"{t} expected"] = f"{e[0]} × {e[1]}" if e else "n/a"
+            rows.append(row)
+        columns = ["metabo_adni step", *(c for t in names for c in (t, f"{t} expected"))]
+        b.table(f"Cleaning: {p} participants × metabolites per metabo_adni step", rows, columns)
+    count_rows = []
+    flat = {p: _flatten({k: v for k, v in manifests[f"clean {p}"].get("counts", {}).get("observed", {}).items() if k != "cells"}) for p in PLATFORMS}
+    flat_e = {p: _flatten({k: v for k, v in manifests[f"clean {p}"].get("counts", {}).get("expected", {}).items() if k != "cells"}) for p in PLATFORMS}
+    for key in dict.fromkeys(k for p in PLATFORMS for k in flat[p]):
+        count_rows.append({"quantity": key, **{c: _text(src[p].get(key)) for p in PLATFORMS for c, src in ((p, flat), (f"{p} expected", flat_e))}})
+    b.table("Cleaning counts", count_rows, ["quantity", *(c for p in PLATFORMS for c in (p, f"{p} expected"))], align="l" + "r" * (2 * len(PLATFORMS)))
+
+    # 4. Export ----------------------------------------------------------------------------
+    b.section(next(sections))
+    es, ec, ee = e_manifest.get("settings", {}), e_manifest.get("counts", {}), e_manifest.get("expected", {})
+    scale = es.get("EXPORT_FEATURE_RULE", {}).get("scale", {})
+    membership = es.get("EXPORT_FEATURE_RULE", {}).get("membership", {})
+    marks = "; ".join(
+        f"{p}: " + (", ".join(f"{family} ({test} `{mark}`)" for family, (test, mark) in spec.get("derived", {}).items()) or "none")
+        for p, spec in membership.items()
+    )
+    b.bullets([
+        f"`EXPORT_FEATURE_RULE` as `{paths['export']}` records it: units `{es.get('units')}` (the floor of a metabolite its "
+        f"{scale.get('floor_quantile')} quantile, `{scale.get('floor_method')}` interpolation, over the exported participants, "
+        f"computed without sex, stage or a covariate); MOTCO transform `{es.get('motco_transform')}`; derived marks excluded "
+        f"from the blocks: {marks}. Nothing imputed, replaced, winsorized, removed or centred per run.",
+        f"Blocks in MOTCO order: {', '.join(es.get('blocks', []))}; sample column `{es.get('sample_column')}`, group `{es.get('group_column')}` "
+        f"({', '.join(es.get('group_values', []))}), stage `{es.get('stage_column')}` ({' → '.join(es.get('stage_order', []))}); "
+        f"covariate columns exported, not applied (`covariates_applied` {_text(es.get('covariates_applied'))}): "
+        + ", ".join(f"`{c}`" for c in es.get("covariate_columns", [])) + ".",
+        f"Participants {_count(ec.get('participants'))} (expected {_count(ee.get('participants'))}); joint features "
+        f"{_count(ec.get('joint_features'))}; missing covariate values {_count(ec.get('missing_covariate_values'))}.",
+    ])
+    feat_rows = []
+    for p in es.get("blocks", EXPORT_BLOCKS):
+        f, e = ec.get("features", {}).get(p, {}), ee.get("features", {}).get(p, {})
+        feat_rows.append({
+            "block": p, "cleaned": _count(f.get("cleaned")), "kept": _count(f.get("kept")),
+            **{f"derived {fam}": _count(f.get("derived", {}).get(fam)) for fam in ("percentage", "ratio", "degree", "size")},
+            "share of the joint features": _num(ec.get("block_shares", {}).get(p), ".3f"), "expected kept": _count(e.get("kept")),
+        })
+    b.table("Features per block", feat_rows, ["block", "cleaned", "kept", "derived percentage", "derived ratio", "derived degree", "derived size", "share of the joint features", "expected kept"], align="lrrrrrrrr")
+    offset_rows = []
+    for p in es.get("blocks", EXPORT_BLOCKS):
+        o = ec.get("phase_offset", {}).get(p, {})
+        offset_rows.append({
+            "block": p, "median |d|": _num(o.get("median_abs_d"), ".2f"), "max |d|": _num(o.get("max_abs_d"), ".2f"),
+            "|d| > 0.5": _count(o.get("abs_d_gt_0_5")), "|d| > 1": _count(o.get("abs_d_gt_1")),
+            "|corr(PC1, phase)|": _num(o.get("abs_corr_pc1_phase"), ".2f"), "|corr(PC2, phase)|": _num(o.get("abs_corr_pc2_phase"), ".2f"),
+            "expected |d| > 1": _count(ee.get("phase_offset", {}).get(p, {}).get("abs_d_gt_1")),
+            "contrast": _text(o.get("contrast")),
+        })
+    b.para(
+        "The p180 run offset (`phase`, ADNI1 against ADNI2GO, on the rule's scale over the exported participants), recorded "
+        "by `export` and not corrected: the runs differ in stage composition, so per-run centring would move stage signal "
+        "between runs; `phase` enters the analysis as a covariate of the stage means."
+    )
+    b.table("Run offset per block (phase)", offset_rows, ["block", "median |d|", "max |d|", "|d| > 0.5", "|d| > 1", "|corr(PC1, phase)|", "|corr(PC2, phase)|", "expected |d| > 1", "contrast"], align="lrrrrrrrl")
+    cell_rows = [
+        {"quantity": label, **{c: _count(src.get(key, {}).get(p)) for p in es.get("blocks", EXPORT_BLOCKS) for c, src in ((p, ec), (f"{p} expected", ee))}}
+        for label, key in (("zero cells", "zero_cells"), ("metabolites with zeros", "metabolites_with_zeros"),
+                           ("floors not positive", "floors_not_positive"), ("non-finite cells", "non_finite"))
+    ]
+    b.table("Cells per block", cell_rows, ["quantity", *(c for p in es.get("blocks", EXPORT_BLOCKS) for c in (p, f"{p} expected"))], align="l" + "r" * (2 * len(es.get("blocks", EXPORT_BLOCKS))))
+    ss = ec.get("sex_stage", {})
+    b.table("Exported participants per sex × stage", [{"sex": g, **{st: _count(ss.get(g, {}).get(st)) for st in stages}} for g in groups], ["sex", *stages], align="l" + "r" * len(stages))
+
+    # 5. Primary analysis ------------------------------------------------------------------
+    b.section(next(sections))
+    ps = p_manifest.get("settings", {})
+    setting_rows = [
+        {"setting": "`ANALYSIS_PERMUTATIONS`", "value": _text(ps.get("ANALYSIS_PERMUTATIONS")), "note": "RRPP permutations; the p-value (1 + b) / (1 + B) is exact in size at any count"},
+        {"setting": "`ANALYSIS_SEED`", "value": _text(ps.get("ANALYSIS_SEED")), "note": "the RRPP seed (one stream per worker)"},
+        {"setting": "`ANALYSIS_ALPHA`", "value": _text(ps.get("ANALYSIS_ALPHA")), "note": f"rejected when {ps.get('ANALYSIS_REJECTION_RULE')} (`ANALYSIS_REJECTION_RULE`)"},
+        {"setting": "`ANALYSIS_RANK_FLOOR`", "value": _text(ps.get("ANALYSIS_RANK_FLOOR")), "note": f"`min_components` {_text(ps.get('min_components'))}, checked equal to MOTCO's default before any input is read"},
+        {"setting": "`ANALYSIS_LATENT_ADJUSTMENT`", "value": "none" if ps.get("ANALYSIS_LATENT_ADJUSTMENT") is None else _text(ps.get("ANALYSIS_LATENT_ADJUSTMENT")), "note": "the covariate-blind basis of MOTCO's validated path; the `stage`-conditioned arm is section 7"},
+        {"setting": "`ANALYSIS_MISSING_COVARIATES`", "value": _text(ps.get("ANALYSIS_MISSING_COVARIATES")), "note": "nothing imputed; a missing value stops the step"},
+        {"setting": "`n_jobs`", "value": _text(ps.get("n_jobs")), "note": f"reported runs use `REPORTED_N_JOBS` = {_text(ps.get('REPORTED_N_JOBS'))}"},
+        {"setting": "entry point", "value": f"`{ps.get('entry_point')}`", "note": "one call; never assembled from `motco plsr` + `motco de`"},
+        {"setting": "group order", "value": ", ".join(_text(g) for g in ps.get("group_order", [])), "note": f"`{ps.get('group_column')}`"},
+        {"setting": "stage order", "value": " → ".join(_text(s) for s in ps.get("stage_order", [])), "note": f"`{ps.get('stage_column')}`"},
+        {"setting": "categorical covariates", "value": ", ".join(f"`{c}`" for c in ps.get("ANALYSIS_CATEGORICAL_COVARIATES", [])), "note": "`ANALYSIS_CATEGORICAL_COVARIATES`; the others numeric"},
+    ]
+    b.table("Settings", setting_rows, ["setting", "value", "note"])
+    defaults = ps.get("motco_defaults_used", {})
+    stated = defaults.get("stated_by_proposal", {})
+    default_rows = [
+        {"default": k, "as run": _text(defaults.get(k)), "stated by proposal": _text(stated.get(k)) if k in stated else "n/a"}
+        for k in ("orientation_estimator", "cv1_splits", "cv2_splits", "n_repeats", "max_components", "random_state", "forced_components", "attribution")
+    ]
+    b.para("MOTCO's other settings stay its defaults and are read back from the record; a moved default is a finding:")
+    b.table("MOTCO defaults used", default_rows, ["default", "as run", "stated by proposal"])
+    b.para(
+        f"MOTCO {primary['software']['motco']}; orientation `{meas['orientation_estimator']}`; {meas['permutations']} RRPP "
+        f"permutations, seed {meas['seed']}; n_jobs {meas['n_jobs']}; α = {ANALYSIS_ALPHA}, rejected when {ANALYSIS_REJECTION_RULE}."
+    )
+    stat_columns = ["statistic", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "note"]
+    b.table("Statistics", _statistics_rows(primary), stat_columns, align="lrrlrrrl")
+    b.para("Reading, under the rules of section 9:")
+    b.bullets([_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS])
+    b.table("Cell sizes", [{"group": g, **{f"stage {st}": _count(cells[g][st]) for st in stages}} for g in groups], ["group", *(f"stage {st}" for st in stages)], align="l" + "r" * len(stages))
+    cv = latent.get("integration_params", {})
+    permuted = primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {}
+    blocks_text = ", ".join(f"{bl['name']} ({bl['n_features']} features, {bl['transform']})" for bl in primary["blocks"])
+    latent_rows = [
+        {"quantity": "PLS-DA rank (selection)", "value": f"{latent['selected_lv']} (`{latent['component_selection']}`)"},
+        {"quantity": "rank floor (`ANALYSIS_RANK_FLOOR`)", "value": _count(cv.get("min_components", 1))},
+        {"quantity": "floor binding", "value": "yes" if latent["component_selection"] == "cv" and latent["selected_lv"] == ANALYSIS_RANK_FLOOR else "no"},
+        {"quantity": "cv_mean_auroc", "value": _fmt(latent.get("cv_mean_auroc"))},
+        {"quantity": "CV repeats completed / requested", "value": f"{_count(latent.get('cv_repeats_completed'))} / {_count(cv.get('n_repeats'))}"},
+        {"quantity": "pooled relative eigengap of the stage-mean configuration", "value": _fmt(eigengap)},
+        {"quantity": "eigengap permutation null q05 / q50 / q95", "value": f"{_fmt(permuted.get('q05'))} / {_fmt(permuted.get('q50'))} / {_fmt(permuted.get('q95'))}"},
+        {"quantity": "CV settings", "value": f"cv2_splits {cv.get('cv2_splits')}, cv1_splits {cv.get('cv1_splits')}, n_repeats {cv.get('n_repeats')}, max_components {cv.get('max_components')}, random_state {cv.get('random_state')}"},
+        {"quantity": "blocks", "value": blocks_text + "; features z-scored by MOTCO (pooled per-feature scalers)"},
+    ]
+    b.table("Latent space", latent_rows, ["quantity", "value"])
+    cov = primary.get("covariates") or {}
+    b.bullets([
+        "entered (in order, additively): " + ", ".join(f"`{c}` ({cov['kinds'][c]})" for c in cov.get("columns", [])),
+        f"design columns: {len(cov.get('design_columns', []))} (" + ", ".join(cov.get("design_columns", [])) + ")",
+        "reference levels: " + ", ".join(f"`{c}` {lvl}" for c, lvl in cov.get("reference_levels", {}).items()),
+        f"missing policy: `{cov.get('missing_policy')}`; dropped participants: {_count(cov.get('n_dropped'))}",
+        f"LS-means evaluated at the reference row (`{cov.get('lsmean_reference')}`); no sex × covariate or stage × covariate term",
+    ])
+    b.table("Reference row", [{"design column": c, "reference value": _fmt(v)} for c, v in cov.get("reference_row", {}).items()], ["design column", "reference value"], align="lr")
+    level_rows = [
+        {"level": f"`{c}` = {lvl}", "n": _count(n)}
+        for c, levels in p_manifest.get("counts", {}).get("covariate_levels", {}).items() for lvl, n in levels.items()
+    ]
+    b.table("Covariate levels", level_rows, ["level", "n"], align="lr")
+    b.para("The `motco analyze` command that reproduces the directory from its inputs (`cli_equivalent`; " + _text(ps.get("cli_equivalent", {}).get("note")) + "):")
+    b.code(_text(ps.get("cli_equivalent", {}).get("command")))
+
+    # 6. Axis diagnostics of the primary ---------------------------------------------------
+    b.section(next(sections))
+    ds, dc = d_manifest.get("settings", {}), d_manifest.get("counts", {})
+    b.para(
+        f"`{dirs['diagnostics']}` (`axis-diagnostics` on `{dirs['analysis']}`, rank {_count(dc.get('components'))}, n = "
+        f"{_count(dc.get('participants'))}): Spearman correlations of every latent component with the "
+        f"{len(ds.get('DIAGNOSTIC_VARIABLES', []))} predeclared variables, the partial Spearman correlations given the "
+        f"{len(ds.get('conditioning_columns', []))} design columns of the record (" + ", ".join(ds.get("conditioning_columns", []))
+        + f"), the same for the first {_count(ds.get('DIAGNOSTIC_N_BLOCK_PCS'))} principal components of each z-scored block, "
+        "and the block composition of each component. Nothing here chooses a variant or an arm; the statistics keep their "
+        "recorded status."
+    )
+    b.table("Variables (`DIAGNOSTIC_VARIABLES`)", [
+        {"variable": f"`{v['name']}`", "source": v["file"], "derivation": v["derivation"]} for v in ds.get("DIAGNOSTIC_VARIABLES", [])
+    ], ["variable", "source", "derivation"])
+    _diagnostics_section(b, inputs["tables"]["diagnostics"], d_manifest)
+
+    # 7. Latent-adjustment sensitivity ----------------------------------------------------
+    b.section(next(sections))
+    cmp_ref, cmp_arm = cmp_manifest.get("reference", {}), cmp_manifest.get("arm", {})
+    adjustment = arm["latent_adjustment"]
+    b.para(
+        f"The primary (`{dirs['analysis']}`, `{ANALYSIS_RESULT}` sha256 `{cmp_ref.get('files', {}).get(ANALYSIS_RESULT, {}).get('sha256')}`) beside "
+        f"its predeclared sensitivity arm `{arm_name}` (`LATENT_SENSITIVITY_ARM`, change `{LATENT_SENSITIVITY_ARM['change']}`: "
+        f"`{LATENT_SENSITIVITY_ARM['setting']}` = `{adjustment['conditioning']}`, the same five covariates, every other setting "
+        f"the primary's; `{dirs[s_role]}`, `{ANALYSIS_RESULT}` sha256 `{cmp_arm.get('files', {}).get(ANALYSIS_RESULT, {}).get('sha256')}`), "
+        f"as `{paths['latent-sensitivity (comparison)']}` records them. Every table in this section quotes the arm and is read "
+        "under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES` (section 9): the primary row comes first and its status "
+        "is the result; the arm never replaces it (arm rule 1), and a status that differs is basis dependence (arm rule 2)."
+    )
+    cmp_table_rows = []
+    for s in ANALYSIS_STATISTICS:
+        for label, row in (("primary", p_row), (arm_name, a_row)):
+            cmp_table_rows.append({
+                "row": f"{s} {label}", "statistic": s, "analysis": label, "observed": _num(row[f"{s}_observed"]),
+                "p (RRPP)": _num(row[f"{s}_p"]), "rejected": _yes_no(row[f"{s}_rejected"]),
+                "null mean": _num(row[f"{s}_null_mean"]), "null sd": _num(row[f"{s}_null_sd"]), "null q95": _num(row[f"{s}_null_q95"]),
+                "status": _text(statuses.get(s)),
+            })
+    b.table("Statistics: primary and arm", cmp_table_rows, ["row", "statistic", "analysis", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "status"], align="lllrrlrrrl")
+    b.para(
+        f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected rank, "
+        f"floor, eigengap and null summary (reading rule 2, arm rule 3): primary rank {_count(p_row['selected_rank'])} (floor "
+        f"{ANALYSIS_RANK_FLOOR}, pooled relative eigengap {_num(p_row['eigengap'])}); {arm_name} rank {_count(a_row['selected_rank'])} "
+        f"(floor {ANALYSIS_RANK_FLOOR}, eigengap {_num(a_row['eigengap'])})"
+        + ("; the ranks differ, which is reported, not ranked as better or worse (arm rule 3)." if p_row["selected_rank"] != a_row["selected_rank"] else "; the ranks are equal.")
+    )
+    b.para("Status per statistic:")
+    b.bullets([_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
+    p_perm = primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {}
+    a_perm = arm.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {}
+    space_rows = [
+        {"quantity": "PLS-DA rank (selection)", "primary": f"{_count(p_row['selected_rank'])} (`{p_row['component_selection']}`)", arm_name: f"{_count(a_row['selected_rank'])} (`{a_row['component_selection']}`)"},
+        {"quantity": "rank floor (`ANALYSIS_RANK_FLOOR`)", "primary": str(ANALYSIS_RANK_FLOOR), arm_name: str(ANALYSIS_RANK_FLOOR)},
+        {"quantity": "cv_mean_auroc", "primary": _num(p_row["cv_mean_auroc"]), arm_name: _num(a_row["cv_mean_auroc"])},
+        {"quantity": "CV repeats completed", "primary": _count(p_row["cv_repeats_completed"]), arm_name: _count(a_row["cv_repeats_completed"])},
+        {"quantity": "pooled relative eigengap", "primary": _num(p_row["eigengap"]), arm_name: _num(a_row["eigengap"])},
+        {"quantity": "eigengap permutation null q05 / q50 / q95",
+         "primary": f"{_fmt(p_perm.get('q05'))} / {_fmt(p_perm.get('q50'))} / {_fmt(p_perm.get('q95'))}",
+         arm_name: f"{_fmt(a_perm.get('q05'))} / {_fmt(a_perm.get('q50'))} / {_fmt(a_perm.get('q95'))}"},
+        {"quantity": "latent adjustment", "primary": "none", arm_name: f"`{_text(a_row['latent_adjustment'])}`"},
+        {"quantity": "residual df", "primary": "n/a", arm_name: _count(a_row["residual_df"])},
+        {"quantity": "smallest CV training df", "primary": "n/a", arm_name: _count(a_row["cv_min_training_df"])},
+    ]
+    b.table("Latent space: primary and arm", space_rows, ["quantity", "primary", arm_name], align="lrr")
+    b.para(
+        "The two analyses share the export, the covariates and their design, the cells, the CV folds (stratified on the "
+        "stage, as the primary's), the seed and the permutations; they differ only in the latent basis and the CV-selected "
+        "rank (arm rule 2)."
+    )
+    b.heading("Latent adjustment of the arm")
+    b.bullets(_latent_adjustment_lines(adjustment, stages))
+    b.para(
+        "Each covariate's relation to the stage effect (`LATENT_SENSITIVITY_COVARIATE_ROLES`, decided before any run; no "
+        "statistic or threshold is computed for it and nothing changes because of it), read beside the per-cell "
+        "descriptives of section 3. Residualizing a covariate that mediates the stage effect removes real stage signal, and "
+        "no data can tell a confounder from a mediator (arm rule 7)."
+    )
+    b.table("Covariate roles", [
+        {"covariate": f"`{name}`", "role": role["role"], "variable": role["variable"], "justification": role["justification"]}
+        for name, role in LATENT_SENSITIVITY_COVARIATE_ROLES.items()
+    ], ["covariate", "role", "variable", "justification"])
+    decisions = cmp_manifest.get("settings", {}).get("motco_latent_adjustment_decisions", [])
+    b.para(
+        "MOTCO's two latent-adjustment decisions, as the comparison manifest records them (measured at one design, n = 80, "
+        "none at this one; the arm carries no Type I or power claim of its own, arm rule 8):"
+    )
+    b.bullets([f"`{d.get('decision')}` (`{d.get('report')}`): {d.get('reading')}." for d in decisions])
+    b.para(
+        f"Axis diagnostics of the arm (`{dirs[f'sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}']}`, rank "
+        f"{_count(ad_manifest.get('counts', {}).get('components'))}, `is_primary` {_text(ad_manifest.get('inputs', {}).get('analysis', {}).get('is_primary'))}): "
+        "a component of the arm that tracks a variable here is a measurement-space finding about the arm; it never "
+        "reinterprets either analysis' statistics and is never grounds to adopt the arm (arm rule 9)."
+    )
+    _diagnostics_section(b, inputs["tables"]["arm_diagnostics"], ad_manifest, prefix="Arm: ")
+    first_rows = []
+    for label, tables in (("primary", inputs["tables"]["diagnostics"]), (arm_name, inputs["tables"]["arm_diagnostics"])):
+        axis = tables["axis"]
+        comps = list(dict.fromkeys(axis["component"]))
+        sub = axis[(axis["component"] == comps[0]) & (axis["variable"] == "phase")] if comps else axis.iloc[0:0]
+        r = sub.iloc[0] if len(sub) else None
+        first_rows.append({
+            "analysis": label, "component": comps[0] if comps else "n/a", "sd": _num(r["component_sd"], ".4g") if r is not None else "n/a",
+            "rho with phase": _num(r["spearman"], ".3f") if r is not None else "n/a",
+            "rho | design": _num(r["partial_spearman"], ".3f") if r is not None else "n/a",
+            "flag": ("+".join(f for f, on in (("raw", r["flag_raw"] == "True"), ("partial", r["flag_partial"] == "True")) if on) or "none") if r is not None else "n/a",
+        })
+    b.table("First component against phase", first_rows, ["analysis", "component", "sd", "rho with phase", "rho | design", "flag"], align="llrrrl")
+    a_settings = a_manifest.get("settings", {})
+    b.para("The `motco analyze` command that reproduces the arm's directory (`cli_equivalent`; " + _text(a_settings.get("cli_equivalent", {}).get("note")) + "):")
+    b.code(_text(a_settings.get("cli_equivalent", {}).get("command")))
+
+    # 8. Findings --------------------------------------------------------------------------
+    b.section(next(sections))
+    b.para("Every deviation from the predeclared counts and every finding of every input manifest, verbatim, under its step; then the report's own.")
+    for label, m in manifests.items():
+        b.heading(f"{m.get('step')} — {paths[label]}")
+        items = [f"deviation: {d}" for d in m.get("deviations", [])] + [f"finding: {f}" for f in m.get("findings", [])]
+        if items:
+            b.bullets(items)
+        else:
+            b.para("None.")
+    b.heading("report")
+    if inputs["findings"]:
+        b.bullets(inputs["findings"])
+    else:
+        b.para("None.")
+
+    # 9. Reading rules ---------------------------------------------------------------------
+    b.section(next(sections))
+    b.heading("READING_RULES")
+    b.para("Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):")
+    b.para(*(f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)))
+    b.heading("LATENT_SENSITIVITY_READING_RULES")
+    b.para(
+        f"Binding for every reader of the arm (`LATENT_SENSITIVITY_READING_RULES`, decided by "
+        f"`{LATENT_SENSITIVITY_ARM['change']}` before any run), after `READING_RULES`:"
+    )
+    b.para(*(f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)))
+
+    # 10. Reproduction ---------------------------------------------------------------------
+    b.section(next(sections))
+    sens_dir = dirs[s_role].parent
+    b.para(
+        "The pipeline, in order, each step reading the previous steps' outputs and checking their manifests' hashes; "
+        "`clean` and `cohort` need the data root (`--data-root`, `ADNI_DATA_ROOT` or `data/`), the others read "
+        "`results/` only, and `report` reads committed aggregate files only, so it runs on any clone:"
+    )
+    b.code(
+        "uv run adni-sexdiff clean --platform all",
+        "uv run adni-sexdiff cohort",
+        "uv run adni-sexdiff export",
+        "uv run adni-sexdiff analyze",
+        "uv run adni-sexdiff axis-diagnostics",
+        "uv run adni-sexdiff latent-sensitivity",
+        f"uv run adni-sexdiff axis-diagnostics --analysis-dir {dirs[s_role]} --out-dir {sens_dir / LATENT_SENSITIVITY_SUBDIRS['diagnostics']}",
+        "uv run adni-sexdiff report",
+        "uv run adni-sexdiff report --check",
+    )
+    b.para(
+        f"`report --check` reads the newest `{REPORTS_DIR}/{REPORT_NAME.format(date='<date>')}` (or the file `--out` names), "
+        "reruns every gate, regenerates the report from the outputs now on disk with the date taken from the file name and "
+        "compares every table cell by cell and every other line line by line; a regenerated results directory fails it on "
+        "the provenance hashes until a new report is written and checked."
+    )
+    b.para("MOTCO's CLI equivalents of the two analyses (`cli_equivalent` of the two analysis manifests):")
+    b.code(_text(ps.get("cli_equivalent", {}).get("command")), _text(a_settings.get("cli_equivalent", {}).get("command")))
+    return b.text(), b.tables
+
+
+# --- report: the parser and the check ----------------------------------------------
+
+_TABLE_CELL_RE = re.compile(r"(?<!\\)\|")
+
+
+def _split_cells(line: str) -> list[str]:
+    parts = _TABLE_CELL_RE.split(line.strip())
+    if parts and parts[0].strip() == "":
+        parts = parts[1:]
+    if parts and parts[-1].strip() == "":
+        parts = parts[:-1]
+    return [p.strip().replace("\\|", "|") for p in parts]
+
+
+def parse_report(text: str) -> dict:
+    """Split a report into its level-2 sections, their titled tables and their other lines (design D6 of ``adni-report``).
+
+    Parameters
+    ----------
+    text:
+        The report's Markdown.
+
+    Returns
+    -------
+    dict
+        ``sections``: a list of ``{"title", "tables", "lines"}`` in order,
+        the preamble titled ``title``; each table ``{"title", "columns",
+        "rows", "lineno"}`` (cells unescaped and stripped, the title the
+        nearest preceding level-3 heading or bold lead line, else ``table
+        <k>``); ``lines`` the non-table lines as ``(lineno, text)`` pairs.
+        Fenced code blocks are never parsed as tables.
+    """
+    sections: list[dict] = [{"title": "title", "tables": [], "lines": []}]
+    in_fence = False
+    table: list[tuple[int, str]] = []
+    last_title: str | None = None
+
+    def flush() -> None:
+        nonlocal table
+        if not table:
+            return
+        rows = [_split_cells(t) for _, t in table]
+        columns = rows[0] if rows else []
+        body = rows[2:] if len(rows) > 2 else []
+        section = sections[-1]
+        section["tables"].append({
+            "title": last_title if last_title is not None else f"table {len(section['tables']) + 1}",
+            "columns": columns, "rows": body, "lineno": table[0][0],
+        })
+        table = []
+
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if line.startswith("```"):
+            flush()
+            in_fence = not in_fence
+            sections[-1]["lines"].append((lineno, line))
+            continue
+        if in_fence:
+            sections[-1]["lines"].append((lineno, line))
+            continue
+        if line.startswith("## "):
+            flush()
+            sections.append({"title": line[3:].strip(), "tables": [], "lines": [(lineno, line)]})
+            last_title = None
+            continue
+        if line.startswith("|"):
+            table.append((lineno, line))
+            continue
+        flush()
+        if line.startswith("### "):
+            last_title = line[4:].strip()
+        elif line.startswith("**") and line.rstrip().endswith("**"):
+            last_title = line.strip().strip("*").strip()
+        sections[-1]["lines"].append((lineno, line))
+    flush()
+    return {"sections": sections}
+
+
+def _table_index(section: dict) -> dict[str, dict]:
+    """A section's tables by title (a repeated title gets ``#k``)."""
+    out: dict[str, dict] = {}
+    for t in section["tables"]:
+        key = t["title"]
+        k = 2
+        while key in out:
+            key = f"{t['title']} #{k}"
+            k += 1
+        out[key] = t
+    return out
+
+
+def _row_index(table: dict) -> dict[str, list[str]]:
+    """A table's rows by first cell (a repeated key gets ``#k``)."""
+    out: dict[str, list[str]] = {}
+    for row in table["rows"]:
+        key = row[0] if row else ""
+        k = 2
+        while key in out:
+            key = f"{row[0]} #{k}"
+            k += 1
+        out[key] = row
+    return out
+
+
+def _compare_parsed(report: dict, generated: dict) -> list[str]:
+    """Every difference between two parsed reports: tables cell by cell, other lines line by line (design D6)."""
+    mismatches: list[str] = []
+    r_sections = {s["title"]: s for s in report["sections"]}
+    g_sections = {s["title"]: s for s in generated["sections"]}
+    for title in g_sections:
+        if title not in r_sections:
+            mismatches.append(f"{title}: section absent from the report")
+    for title in r_sections:
+        if title not in g_sections:
+            mismatches.append(f"{title}: section not generated")
+    r_titles = [s["title"] for s in report["sections"] if s["title"] in g_sections]
+    g_titles = [s["title"] for s in generated["sections"] if s["title"] in r_sections]
+    if r_titles != g_titles:
+        mismatches.append(f"section order: report {r_titles}, generated {g_titles}")
+    for title, g in g_sections.items():
+        r = r_sections.get(title)
+        if r is None:
+            continue
+        r_tables, g_tables = _table_index(r), _table_index(g)
+        for t in g_tables:
+            if t not in r_tables:
+                mismatches.append(f"{title} › table \"{t}\": absent from the report")
+        for t in r_tables:
+            if t not in g_tables:
+                mismatches.append(f"{title} › table \"{t}\": not generated")
+        for t, gt in g_tables.items():
+            rt = r_tables.get(t)
+            if rt is None:
+                continue
+            if rt["columns"] != gt["columns"]:
+                mismatches.append(f"{title} › table \"{t}\" › columns: report {rt['columns']}, generated {gt['columns']}")
+            r_rows, g_rows = _row_index(rt), _row_index(gt)
+            for key in g_rows:
+                if key not in r_rows:
+                    mismatches.append(f"{title} › table \"{t}\" › row {key}: absent from the report")
+            for key in r_rows:
+                if key not in g_rows:
+                    mismatches.append(f"{title} › table \"{t}\" › row {key}: not generated")
+            for key, g_row in g_rows.items():
+                r_row = r_rows.get(key)
+                if r_row is None:
+                    continue
+                for j, column in enumerate(gt["columns"]):
+                    a = r_row[j] if j < len(r_row) else None
+                    bb = g_row[j] if j < len(g_row) else None
+                    if a != bb:
+                        mismatches.append(f"{title} › table \"{t}\" › row {key} › {column}: report {a!r}, generated {bb!r}")
+        r_lines, g_lines = r["lines"], g["lines"]
+        for (r_no, r_text), (_, g_text) in zip(r_lines, g_lines):
+            if r_text != g_text:
+                mismatches.append(f"{title} › line {r_no}: report {r_text!r}, generated {g_text!r}")
+        if len(r_lines) > len(g_lines):
+            extra = r_lines[len(g_lines):]
+            mismatches.append(f"{title} › line {extra[0][0]}: the report has {len(extra)} line(s) more than generated, from {extra[0][1]!r}")
+        elif len(g_lines) > len(r_lines):
+            extra = g_lines[len(r_lines):]
+            mismatches.append(f"{title}: the report has {len(extra)} line(s) fewer than generated, from {extra[0][1]!r}")
+    return mismatches
+
+
+def _parse_back(text: str, tables: dict[str, pd.DataFrame]) -> tuple[int, int]:
+    """Parse a written report and check that its tables equal the generated frames; returns (tables, cells) parsed."""
+    parsed = parse_report(text)
+    found: dict[str, dict] = {}
+    for section in parsed["sections"]:
+        for title, t in _table_index(section).items():
+            found[f"{section['title']} › {title}"] = t
+    n_cells = 0
+    for key, df in tables.items():
+        t = found.get(key)
+        if t is None:
+            raise RuntimeError(f"parse-back: the written report has no table {key!r} (the parser or the renderer is defective)")
+        if t["columns"] != [str(c) for c in df.columns]:
+            raise RuntimeError(f"parse-back: table {key!r} columns differ: written {t['columns']}, generated {list(df.columns)}")
+        rows = [list(r) for r in df.itertuples(index=False)]
+        if t["rows"] != rows:
+            raise RuntimeError(f"parse-back: table {key!r} rows differ after parsing (the parser or the renderer is defective)")
+        n_cells += len(rows) * len(df.columns)
+    if len(found) != len(tables):
+        raise RuntimeError(f"parse-back: {len(found)} tables parsed, {len(tables)} generated")
+    return len(tables), n_cells
+
+
+def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> dict:
+    """Compare an existing report with the one the inputs generate (design D6 of ``adni-report``); writes nothing.
+
+    Parameters
+    ----------
+    path:
+        The report; the date is read from its name.
+    inputs:
+        ``_load_report_inputs`` (its gates have run).
+    log:
+        The progress prefix.
+
+    Returns
+    -------
+    dict
+        ``path``, ``tables`` (the generated frames), ``checked`` ``True`` and
+        ``mismatches``: one string per difference (section, table, row key
+        and column with both values; or section and line with both texts;
+        or an absent or extra section, table, row or line).
+    """
+    path = Path(path)
+    date = _report_date(path)
+    text = path.read_text()
+    generated, tables = render_report(inputs, date=date)
+    report_parsed, generated_parsed = parse_report(text), parse_report(generated)
+    mismatches = _compare_parsed(report_parsed, generated_parsed)
+    n_tables = sum(len(s["tables"]) for s in generated_parsed["sections"])
+    n_cells = sum(len(t["rows"]) * len(t["columns"]) for s in generated_parsed["sections"] for t in s["tables"])
+    n_lines = sum(len(s["lines"]) for s in generated_parsed["sections"])
+    for msg in mismatches:
+        print(f"{log} MISMATCH: {msg}")
+    if mismatches:
+        print(f"{log} {path}: {len(mismatches)} mismatch(es) against the generated report ({n_tables} tables, {n_cells} cells, {n_lines} other lines compared); nothing was written")
+    else:
+        print(f"{log} {path}: {n_tables} tables, {n_cells} cells and {n_lines} other lines compared; no mismatch; nothing was written")
+    return {"path": path, "tables": tables, "checked": True, "mismatches": mismatches}
+
+
+def _newest_report(reports_dir: Path) -> Path:
+    """The newest ``REPORT_NAME`` under ``reports_dir`` by the date in its name; stops naming the directory and the pattern."""
+    candidates = [(m.group(1), p) for p in reports_dir.glob("*") if (m := _REPORT_NAME_RE.match(p.name)) and p.is_file()]
+    if not candidates:
+        raise FileNotFoundError(
+            f"{reports_dir} holds no report matching {REPORT_NAME.format(date='<YYYY-MM-DD>')}; pass --out or write one with "
+            "`adni-sexdiff report`"
+        )
+    return max(candidates)[1]
+
+
+def run_report(
+    *,
+    cleaned_dir: str | Path | None = None,
+    cohort_dir: str | Path | None = None,
+    input_dir: str | Path | None = None,
+    analysis_dir: str | Path | None = None,
+    diagnostics_dir: str | Path | None = None,
+    sensitivity_dir: str | Path | None = None,
+    out: str | Path | None = None,
+    check: bool = False,
+    force: bool = False,
+) -> dict:
+    """Write the case-study report from the kept aggregate outputs, or check an existing one against them.
+
+    Parameters
+    ----------
+    cleaned_dir:
+        Output root of ``clean`` (default ``constants.CLEANED_DIR``); the two
+        ``clean_manifest.json`` are read.
+    cohort_dir:
+        Output directory of ``cohort`` (default ``constants.COHORT_DIR``);
+        ``stage_counts.csv`` and ``cohort_manifest.json`` are read.
+    input_dir:
+        Output directory of ``export`` (default ``constants.MOTCO_INPUT_DIR``);
+        ``manifest.json`` is read.
+    analysis_dir:
+        The primary's analysis directory (default
+        ``constants.MOTCO_ANALYSIS_DIR``); ``result.json``,
+        ``analysis_manifest.json`` and ``summary.md`` are read.
+    diagnostics_dir:
+        The primary's diagnostics (default ``constants.DIAGNOSTICS_DIR``); its
+        six files are read.
+    sensitivity_dir:
+        The root of the sensitivity step (default
+        ``constants.LATENT_SENSITIVITY_DIR``), read through
+        ``LATENT_SENSITIVITY_SUBDIRS``: the arm's three aggregate analysis
+        files, the comparison's three files and the arm diagnostics' six.
+    out:
+        The report path, whose name must match ``constants.REPORT_NAME``
+        (``reports/motco-adni-<date>.md``); the date is read from it. Write
+        mode defaults to today's date; ``check`` to the newest report under
+        ``constants.REPORTS_DIR`` by the date in its name.
+    check:
+        Instead of writing, read the report at ``out``, run every gate,
+        regenerate the report and compare every table cell by cell and every
+        other line line by line; every mismatch is named (section, table,
+        row key, column, both values; or the line with both texts) and the
+        CLI exits non-zero on any. Nothing is written.
+    force:
+        Replace an existing report at ``out`` (write mode).
+
+    Returns
+    -------
+    dict
+        ``{"path": Path, "tables": {name: DataFrame}, "checked": bool, "mismatches": [...]}``;
+        ``tables`` holds every table the report prints, as frames of
+        strings keyed ``"<section> › <title>"``.
+
+    Notes
+    -----
+    Inputs are the 26 kept aggregate files of ``REPORT_INPUT_FILES`` and
+    nothing else: no participant-level file is opened or required, and the
+    hashes the report quotes for one are the values the manifests record.
+    So the step runs on any clone with the committed tree, needs no data
+    root, no MOTCO call and no pinned numeric environment, and records no
+    numerics. Gates (``_load_report_inputs``), before anything is written
+    and each naming the file or setting, both values and the step to
+    rerun: every input present; every aggregate file hashes to the value
+    its own manifest records; the primary is the primary and the arm is
+    ``LATENT_SENSITIVITY_ARM``; the chain holds link by link from the clean
+    manifests to the arm diagnostics; the primary and the arm are reported
+    runs (``n_jobs = REPORTED_N_JOBS``), every ``numerics`` block present
+    is pinned and every manifest records the same MOTCO, scikit-learn and
+    metabo_adni versions. Write mode also stops on an existing ``out``
+    without ``force``.
+
+    Output contract (``render_report``): one Markdown file with the ten
+    sections of ``REPORT_SECTIONS`` in order (summary; provenance;
+    cohort; export; primary analysis; axis diagnostics of the primary;
+    latent-adjustment sensitivity; findings; reading rules;
+    reproduction), every table titled by a level-3 heading and keyed by
+    its first column, every number copied from a record, a manifest or a
+    CSV at the digits of the summary it belongs to, every reading sentence
+    produced by ``_statistic_reading_line`` and ``_arm_status_line`` (the
+    code of ``summary.md`` and ``latent_sensitivity.md``), ``READING_RULES``
+    then ``LATENT_SENSITIVITY_READING_RULES`` verbatim, both constants
+    named beside every table that quotes the arm, and the primary's status
+    the result in every table. The body depends on the inputs and the file
+    name only (the date is in the name and the title line; no revision,
+    host, time or runtime of the report run is written), so two runs on the
+    same inputs are byte-identical. The file is written to ``<out>.tmp``,
+    parsed back through ``parse_report`` and checked against the generated
+    tables, then renamed; no temporary file remains. The report quotes
+    aggregate values only and holds no participant identifier; ``reports/``
+    is committed. Findings, never stops (printed and listed under
+    "Findings"): every deviation and finding of every input manifest,
+    verbatim under its step; a manifest whose recorded revision is dirty; a
+    manifest without a ``numerics`` block.
+    """
+    log = "[report]"
+    reports_dir = Path(REPORTS_DIR)
+    if check:
+        out_path = Path(out) if out is not None else _newest_report(reports_dir)
+        if not out_path.is_file():
+            raise FileNotFoundError(f"{out_path} does not exist; nothing to check (write one with `adni-sexdiff report`)")
+        date = _report_date(out_path)
+        print(f"{log} checking {out_path} (date {date} from its name)")
+    else:
+        out_path = Path(out) if out is not None else reports_dir / REPORT_NAME.format(date=date_type.today().isoformat())
+        date = _report_date(out_path)
+        if out_path.exists() and not force:
+            raise FileExistsError(f"{out_path} exists; pass --force to replace it; nothing was written")
+    inputs = _load_report_inputs(
+        cleaned_dir=cleaned_dir, cohort_dir=cohort_dir, input_dir=input_dir, analysis_dir=analysis_dir,
+        diagnostics_dir=diagnostics_dir, sensitivity_dir=sensitivity_dir, log=log,
+    )
+    if check:
+        return check_report(out_path, inputs, log=log)
+    text, tables = render_report(inputs, date=date)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out_path.with_name(out_path.name + ".tmp")
+    try:
+        tmp.write_text(text)
+        n_tables, n_cells = _parse_back(tmp.read_text(), tables)
+        if out_path.exists() and not force:
+            raise FileExistsError(f"{out_path} appeared during the run; nothing was written")
+        os.replace(tmp, out_path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    n_generated = sum(len(df) * len(df.columns) for df in tables.values())
+    print(
+        f"{log} wrote {out_path}: {len(REPORT_SECTIONS)} sections, {len(tables)} tables, {n_generated} cells; parsed back "
+        f"{n_tables} tables, {n_cells} cells, equal to the generated ones"
+    )
+    print(f"{log} next: `adni-sexdiff report --check --out {out_path}` on the clean tree, then commit the report alone")
+    return {"path": out_path, "tables": tables, "checked": False, "mismatches": []}
 
 
 __all__ = [
@@ -5332,5 +6956,8 @@ __all__ = [
     "run_axis_diagnostics",
     "render_latent_sensitivity",
     "run_latent_sensitivity",
+    "render_report",
+    "parse_report",
+    "check_report",
     "run_report",
 ]

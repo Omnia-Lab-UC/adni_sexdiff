@@ -45,7 +45,12 @@ Scientific constants
     ``LATENT_SENSITIVITY_TABLE``, ``LATENT_SENSITIVITY_SUMMARY`` and
     ``LATENT_SENSITIVITY_MANIFEST``. Every scientific constant the six steps
     and the sensitivity step need is decided; a later variant or arm
-    introduces its own by proposal.
+    introduces its own by proposal. The change ``adni-report`` (the
+    ``report`` step) introduces no scientific constant: its conventions
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role) and
+    ``REPORT_SECTIONS`` (the report's ten section titles, in order) are
+    defined below, and the report quotes every setting by constant name from
+    the manifests and every number from the records.
 """
 
 from __future__ import annotations
@@ -996,3 +1001,55 @@ LATENT_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict | int | str | tuple] = {
         "feature_scale": "pooled_standardized",
     },
 }
+
+
+# --- report: conventions ------------------------------------------------------
+
+#: The six files ``axis-diagnostics`` writes, all aggregate; the report reads
+#: them for the primary and for the arm.
+DIAGNOSTICS_FILES: tuple[str, ...] = (
+    DIAGNOSTICS_AXIS_CORRELATIONS,
+    DIAGNOSTICS_BLOCK_PCS,
+    DIAGNOSTICS_GEOMETRY_SHARES,
+    DIAGNOSTICS_COMPONENTS,
+    DIAGNOSTICS_SUMMARY,
+    DIAGNOSTICS_MANIFEST,
+)
+#: Every file the ``report`` step reads (change ``adni-report``), by the role
+#: of the directory it lives in: ``cleaned`` (``--cleaned-dir``, paths
+#: relative to the cleaned root), ``cohort`` (``--cohort-dir``), ``export``
+#: (``--input-dir``), ``analysis`` (``--analysis-dir``, the primary),
+#: ``diagnostics`` (``--diagnostics-dir``, the primary's) and the three
+#: subdirectories of ``--sensitivity-dir`` (``LATENT_SENSITIVITY_SUBDIRS``:
+#: the arm's analysis, the comparison and the arm's diagnostics). All 26 are
+#: aggregate and committed; no participant-level file is read, and the
+#: hashes the report quotes for one come from these manifests. No other file
+#: is read.
+REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
+    "cleaned": tuple(f"{platform}/{CLEAN_MANIFEST}" for platform in PLATFORMS),
+    "cohort": (COHORT_COUNTS, COHORT_MANIFEST),
+    "export": (EXPORT_MANIFEST,),
+    "analysis": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
+    "diagnostics": DIAGNOSTICS_FILES,
+    f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
+    f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}": (
+        LATENT_SENSITIVITY_TABLE,
+        LATENT_SENSITIVITY_SUMMARY,
+        LATENT_SENSITIVITY_MANIFEST,
+    ),
+    f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}": DIAGNOSTICS_FILES,
+}
+#: The report's level-2 sections, in order (design D4 of ``adni-report``).
+#: ``report --check`` names a mismatch by section, table, row and column.
+REPORT_SECTIONS: tuple[str, ...] = (
+    "Summary",
+    "Provenance",
+    "Cohort",
+    "Export",
+    "Primary analysis",
+    "Axis diagnostics of the primary",
+    "Latent-adjustment sensitivity",
+    "Findings",
+    "Reading rules",
+    "Reproduction",
+)

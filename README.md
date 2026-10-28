@@ -5,11 +5,14 @@ Sex × stage (CN / MCI / AD) trajectory comparison on ADNI serum metabolomics
 the first MOTCO application at a well-powered design (n ≈ 1,300). Later ADNI
 layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 
-**Status: `clean`, `cohort`, `export`, `analyze`, `axis-diagnostics` and
-the sensitivity step `latent-sensitivity` implemented** (changes
-`adni-metabolomics-clean`, `adni-cohort`, `adni-export`, `adni-analyze`,
-`adni-axis-diagnostics` and `adni-latent-sensitivity`) and run on a data
-machine; `report` is a stub that raises `NotImplementedError`. The
+**Status: every step implemented.** `clean`, `cohort`, `export`,
+`analyze`, `axis-diagnostics`, the sensitivity step `latent-sensitivity`
+and `report` (changes `adni-metabolomics-clean`, `adni-cohort`,
+`adni-export`, `adni-analyze`, `adni-axis-diagnostics`,
+`adni-latent-sensitivity` and `adni-report`); the first six run on a data
+machine, `report` on any clone (it reads committed aggregate files only),
+and the first report is committed under `reports/` and checked by
+`report --check`. The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
 `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis
 settings (`ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
@@ -55,14 +58,14 @@ Project layout:
 ```
 .
 ├── data/            # raw ADNI files, uploaded by hand: LONI archive under Metabolomics/, clinical tables under Clinical/, the names the steps read as symlinks (gitignored)
-├── reports/         # committed case-study reports (numbers pasted from results/, checked by script)
+├── reports/         # committed case-study reports, generated in full by `report` from the aggregate outputs and checked by `report --check`
 ├── results/         # pipeline outputs; only aggregate files are committed (see .gitignore)
 ├── scripts/         # sync_results.sh (aggregate outputs between a machine and the cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py (the changes' read-only spikes)
 ├── src/
 │   └── adni_sexdiff/
-│       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, latent-sensitivity, report
+│       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, latent-sensitivity, report (exits 1 on a --check mismatch)
 │       ├── constants.py   # conventions; scientific constants enter through OpenSpec proposals only
-│       └── data.py        # pipeline steps (clean, cohort, export, analyze, axis-diagnostics and the sensitivity step latent-sensitivity implemented; report a stub with its output contract)
+│       └── data.py        # pipeline steps (clean, cohort, export, analyze, axis-diagnostics, report and the sensitivity step latent-sensitivity)
 ├── openspec/        # change proposals and specs
 ├── flake.nix        # Python 3.12 + uv; the shell hook runs `uv sync --locked`
 ├── pyproject.toml   # package adni_sexdiff, CLI adni-sexdiff (uv, uv.lock committed)
@@ -87,9 +90,10 @@ Pipeline (each step reads the previous step's outputs only):
      `stage`-conditioned latent-adjustment arm beside the primary, its
      comparison, and `axis-diagnostics` on the arm →
      `results/motco_latent_sensitivity/` (below)
-6. `report` – the case-study report from the generated files (the primary,
-   its diagnostics, the comparison and the arm's diagnostics), or a check of
-   one against them → `reports/`
+6. `report` – the case-study report generated in full from the kept
+   aggregate outputs (the clean, cohort and export manifests, the primary,
+   its diagnostics, the comparison and the arm's diagnostics), or a
+   cell-by-cell check of one against them → `reports/` (below)
 
 Quick start:
 
@@ -103,6 +107,8 @@ uv run adni-sexdiff analyze
 uv run adni-sexdiff axis-diagnostics
 uv run adni-sexdiff latent-sensitivity
 uv run adni-sexdiff axis-diagnostics --analysis-dir results/motco_latent_sensitivity/analysis --out-dir results/motco_latent_sensitivity/diagnostics
+uv run adni-sexdiff report
+uv run adni-sexdiff report --check
 ```
 
 Numerics. Every step runs in a pinned numeric environment
@@ -743,6 +749,111 @@ arm carries no Type I or power claim; an arm axis in the diagnostic is a
 measurement-space finding and never grounds to adopt the arm. No arm value
 changes a constant, selects a covariate, reruns the primary or defines a
 variant.
+
+## `report`
+
+```
+uv run adni-sexdiff report [--cleaned-dir DIR] [--cohort-dir DIR] [--input-dir DIR] [--analysis-dir DIR] [--diagnostics-dir DIR] [--sensitivity-dir DIR] [--out FILE] [--force]
+uv run adni-sexdiff report --check [--out FILE] [the same directory flags]
+```
+
+The last step of the pipeline (change `adni-report`): the case-study
+report, generated in full from the kept aggregate outputs, and its check.
+Every default is the pipeline's directory (`results/cleaned`,
+`results/cohort`, `results/motco_input`, `results/motco_analysis`,
+`results/motco_diagnostics`, `results/motco_latent_sensitivity` read as
+`analysis/`, `comparison/` and `diagnostics/`); no flag selects what is
+reported. `--out` must be named `reports/motco-adni-<date>.md`
+(`REPORT_NAME`): the date is read from the name and written in the title
+line only, write mode defaults to today's date and `--check` to the newest
+report under `reports/` by the date in its name.
+
+Inputs (`REPORT_INPUT_FILES`, 26 files, all committed): the two
+`clean_manifest.json`; `stage_counts.csv` and `cohort_manifest.json`; the
+export `manifest.json`; the primary's `result.json`,
+`analysis_manifest.json` and `summary.md`; the primary diagnostics' six
+files; the arm's three aggregate analysis files, the comparison's three
+files and the arm diagnostics' six files. Nothing else: no
+participant-level file is opened or required (`cohort.csv`, the export
+CSVs, `latent_scores.csv` and `analysis_metadata.csv` are quoted by the
+hashes the manifests record), no data root, no MOTCO call and no pinned
+numeric environment, so the step runs on any clone with the committed
+tree and records no numerics.
+
+Gates, before anything is written, each stopping naming the file or
+setting, both values and the step to rerun: every input present; every
+aggregate file hashes to the value its own manifest records under
+`outputs` (manifests are hashed for the chain, not checked against
+themselves); the primary is the primary (no latent adjustment,
+`is_primary` true in its diagnostics) and the arm is
+`LATENT_SENSITIVITY_ARM` (`is_primary` false in its diagnostics); the
+primary and the arm are reported runs (`n_jobs = 1` in manifest and
+record), every `numerics` block present records `pinned` true, and every
+manifest records the same MOTCO, scikit-learn and metabo_adni versions;
+the chain holds link by link (31 links: the clean manifests in the cohort
+and export manifests, the cohort manifest in the export manifest, the
+export manifest and files in the four analysis-reading manifests, the
+primary's two files as the arm's and the comparison's `reference`, the
+arm's two files in the comparison and the arm diagnostics). An existing
+`--out` stops write mode unless `--force`.
+
+The report (`REPORT_SECTIONS`, ten level-2 sections in order): summary;
+provenance (versions, revisions and numerics per step, the 26 inputs with
+their sha256, the raw LONI inputs as the clean and cohort manifests record
+them, the chain links checked: the report's manifest); cohort (the rules
+as recorded, the cascades, the sex × stage tables of both platform sets
+and the intersection, the intersection's `DX.bl` × phase cells, the
+per-cell covariate descriptives, phase against the p180 run, the cleaning
+options and counts with the expected ones beside them); export (the
+feature rule as recorded, features per block, block shares, the run offset
+per block, cells); primary analysis (settings by constant name, MOTCO's
+defaults read back, the statistics with p-values, rejection and null
+summaries, the reading lines, cell sizes, the latent space, the covariate
+block with the reference row, the `cli_equivalent`); axis diagnostics of
+the primary (the variables, the flagged rows, the components table, the
+block PCs with pc1 against `phase` beside the export's Pearson value);
+latent-adjustment sensitivity (the comparison with a status per
+statistic, the status lines, the latent spaces, the arm's
+`latent_adjustment` block, the covariate roles, MOTCO's two decisions, the
+arm's diagnostics, the first component against `phase` beside the
+primary's, the arm's `cli_equivalent`); findings (every deviation and
+finding of every manifest, verbatim under its step, then the report's own:
+a dirty recorded revision, a manifest without a `numerics` block);
+`READING_RULES` then `LATENT_SENSITIVITY_READING_RULES`, verbatim; the
+commands that reproduce the pipeline and check the report. Every table is
+titled by a level-3 heading and keyed by its first column; every number is
+copied from a record, a manifest or a CSV at the digits of the summary it
+belongs to (the step computes no statistic, correlation, mean or count);
+the only interpretive sentences are the ones `summary.md` and
+`latent_sensitivity.md` print, produced by the same code
+(`_statistic_reading_line`, `_arm_status_line`) so that they are
+string-equal across the three documents; the primary's status is the
+result wherever the arm appears, and both rule constants are named beside
+every table that quotes the arm. The body depends on the inputs and the
+file name only (no revision, host, time or runtime of the report run), so
+two runs on the same inputs are byte-identical and two dates differ in the
+title line alone. The file is written to `<out>.tmp`, parsed back through
+the checker's parser and checked against the generated tables, then
+renamed. It quotes aggregate values only and holds no participant
+identifier.
+
+`--check` reads the report, runs every gate, regenerates the report from
+the outputs now on disk with the date taken from the file name and
+compares: every table cell by cell (section, table, row key, column, both
+values) and every other line line by line (section, line number, both
+texts); absent or extra sections, tables, rows and lines are mismatches
+too. Every mismatch is printed, the CLI exits 1 on any, and nothing is
+written. A results directory regenerated after the report fails the check
+on the provenance hashes: the committed report corresponds to the
+committed outputs, and a change that regenerates an output or rewords a
+renderer re-issues the report.
+
+Commit discipline: a report is written on the clean tree at the
+implementing commit, checked with `report --check`, and committed alone,
+naming it and stating why it is aggregate (every value in it is copied
+from a committed aggregate file or a constant). `reports/` is committed
+and is unchanged in `.gitignore`, the sync filter and
+`PARTICIPANT_LEVEL_PATTERNS`.
 
 Dependencies: `motco` (git tag `v0.10.0`, via `[tool.uv.sources]`),
 `metabo_adni==0.5.8` (cleaning, never reimplemented here), `pandas`, `numpy`.
