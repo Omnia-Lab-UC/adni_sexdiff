@@ -17,6 +17,7 @@ dependencies = [
   "metabo_adni==0.5.8",
   "pandas",
   "numpy",
+  "threadpoolctl>=3.7.0",
 ]
 
 [project.scripts]

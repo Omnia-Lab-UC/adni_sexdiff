@@ -29,6 +29,7 @@ import hashlib
 import io
 import json
 import os
+import platform as _platform
 import re
 import shutil
 import subprocess
@@ -112,6 +113,7 @@ from .constants import (
     METABO_ADNI_VERSION,
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
+    NUMERIC_SETTINGS,
     PARTICIPANT_ID_COLUMN,
     PLATFORMS,
     RAW_INPUT_SHA256,
@@ -326,6 +328,154 @@ def _software_versions(names: Iterable[str] = _MANIFEST_PACKAGES) -> dict:
     return out
 
 
+#: The OpenBLAS kernel and thread count of a pinned run (``NUMERIC_SETTINGS``).
+_PINNED_OPENBLAS = (NUMERIC_SETTINGS["OPENBLAS_CORETYPE"], int(NUMERIC_SETTINGS["OPENBLAS_NUM_THREADS"]))
+
+
+def _cpu_model() -> str | None:
+    """The CPU model name (``/proc/cpuinfo`` on Linux, else ``platform.processor()``), or ``None``."""
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return _platform.processor() or None
+
+
+def _numerics_record() -> dict:
+    """The numeric environment this process actually has, for every manifest's ``numerics``.
+
+    Returns
+    -------
+    dict
+        ``host``, ``cpu_model``, ``cpus_available`` (the CPUs the process may
+        use, which cap OpenBLAS's threads), ``requested``
+        (``NUMERIC_SETTINGS``), ``environment`` (the four variables as the
+        process sees them), ``numpy_log2_float64`` (the target numpy's
+        ``float64`` ``log2`` dispatches to, from the public
+        ``numpy.lib.introspect.opt_func_info``), ``blas`` (per loaded BLAS
+        library, sorted by file name: ``api``, ``version``, ``architecture``,
+        ``num_threads``, ``library`` as a base name, from ``threadpoolctl``)
+        and ``pinned``.
+
+    Notes
+    -----
+    Call it after a step's work, so every library the step loaded (scipy's
+    OpenBLAS among them) is listed. ``pinned`` is decided from what the
+    process observes, not from what was requested: the variables equal
+    ``NUMERIC_SETTINGS``, ``log2`` runs numpy's baseline target, and every
+    loaded BLAS is OpenBLAS at the pinned kernel and thread count. A field
+    that cannot be read is ``None`` and makes ``pinned`` false. No path, no
+    data and no participant enters the record.
+    """
+    try:
+        from numpy.lib.introspect import opt_func_info
+
+        log2 = opt_func_info(func_name="^log2$", signature="float64").get("log2", {}).get("dd", {}).get("current")
+    except (ImportError, AttributeError, TypeError, ValueError):
+        log2 = None
+    try:
+        import threadpoolctl
+
+        blas = sorted(
+            (
+                {
+                    "api": info.get("internal_api"),
+                    "version": info.get("version"),
+                    "architecture": info.get("architecture"),
+                    "num_threads": info.get("num_threads"),
+                    "library": Path(info.get("filepath") or "").name,
+                }
+                for info in threadpoolctl.threadpool_info()
+                if info.get("user_api") == "blas"
+            ),
+            key=lambda entry: entry["library"],
+        )
+    except ImportError:
+        blas = None
+    try:
+        cpus = len(os.sched_getaffinity(0))
+    except AttributeError:
+        cpus = os.cpu_count()
+    record = {
+        "host": _platform.node() or None,
+        "cpu_model": _cpu_model(),
+        "cpus_available": cpus,
+        "requested": dict(NUMERIC_SETTINGS),
+        "environment": {name: os.environ.get(name) for name in NUMERIC_SETTINGS},
+        "numpy_log2_float64": log2,
+        "blas": blas,
+    }
+    record["pinned"] = _numerics_problems(record) == []
+    return record
+
+
+def _numerics_problems(record: dict) -> list[str]:
+    """Each way the observed state of ``record`` differs from the pinned one (empty when pinned)."""
+    problems = [
+        f"{name} is {seen!r} (pinned: {record['requested'][name]!r})"
+        for name, seen in record["environment"].items()
+        if seen != record["requested"][name]
+    ]
+    log2 = record["numpy_log2_float64"]
+    if log2 is None:
+        problems.append("numpy's log2 dispatch target could not be read (pinned: baseline)")
+    elif not str(log2).startswith("baseline"):
+        problems.append(f"numpy log2 runs {log2} (pinned: baseline)")
+    arch, threads = _PINNED_OPENBLAS
+    if not record["blas"]:
+        problems.append(f"no BLAS library could be read (pinned: OpenBLAS {arch} × {threads} thread)")
+    for lib in record["blas"] or []:
+        if lib["api"] != "openblas":
+            problems.append(f"BLAS {lib['api']} ({lib['library']}) cannot be pinned (pinned: OpenBLAS)")
+            continue
+        if lib["architecture"] != arch:
+            problems.append(f"OpenBLAS {lib['library']} reports {lib['architecture']} (pinned: {arch})")
+        if lib["num_threads"] != threads:
+            problems.append(f"OpenBLAS {lib['library']} runs {lib['num_threads']} thread(s) (pinned: {threads})")
+    return problems
+
+
+def _numerics_finding(record: dict) -> str | None:
+    """The finding for a run that is not pinned, naming what differs; ``None`` when pinned."""
+    problems = _numerics_problems(record)
+    if not problems:
+        return None
+    return (
+        "numerics not pinned: " + "; ".join(problems) + "; outputs may differ from another machine's at rounding "
+        "level and the hash chain may not reproduce; do not commit this output (NUMERIC_SETTINGS, change "
+        "adni-portable-numerics: import adni_sexdiff before numpy)"
+    )
+
+
+def _numerics(prefix: str) -> tuple[dict, list[str]]:
+    """Record the numeric state for a step's manifest, print it, and return it with its finding, if any.
+
+    Parameters
+    ----------
+    prefix:
+        The step's printed progress prefix (``[cohort]``, ``[clean] p180:``).
+
+    Returns
+    -------
+    tuple
+        ``(record, findings)``: the ``numerics`` block (``_numerics_record``)
+        and a list holding the not-pinned finding, or empty.
+    """
+    record = _numerics_record()
+    finding = _numerics_finding(record)
+    if finding is None:
+        arch, threads = _PINNED_OPENBLAS
+        print(
+            f"{prefix} numerics: pinned (log2 {record['numpy_log2_float64']}, OpenBLAS {arch} × {threads} thread, "
+            f"host {record['host']})"
+        )
+        return record, []
+    print(f"{prefix} numerics: NOT pinned (see the finding)")
+    return record, [finding]
+
+
 def _json_default(obj):
     if isinstance(obj, np.integer):
         return int(obj)
@@ -450,6 +600,12 @@ def run_clean(
     deviation is a finding, printed and recorded, and never stops the step.
     Each platform is written to ``<platform>.tmp/`` and renamed when
     complete.
+
+    The manifest's ``numerics`` block records the numeric environment the run
+    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
+    variables, numpy's ``log2`` target, each BLAS library's kernel and
+    threads, ``pinned``); a run that is not pinned is a finding, never a
+    stop, and its outputs are not committed.
     """
     if platform not in (*PLATFORMS, "all"):
         raise ValueError(f"platform must be one of {[*PLATFORMS, 'all']}, not {platform!r}")
@@ -770,11 +926,14 @@ def _clean_platform(platform: str, *, root: Path, final: Path, force: bool, inpu
                 "points_in_merged_metabolites": missing["points_in_merged_metabolites"]["ADNI2GO-UPLC"],
             }
 
+        numerics, numerics_findings = _numerics(f"{prefix}:")
+        findings += numerics_findings
         manifest = {
             "step": "clean",
             "platform": platform,
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "versions": _software_versions(),
+            "numerics": numerics,
             "git_revision": _git_revision(),
             "data_root": str(root.resolve()),
             "inputs": inputs,
@@ -1020,6 +1179,12 @@ def run_cohort(
     An unknown input hash and a phase that differs from the p180 run are
     findings too. The directory is written as ``cohort.tmp/`` and renamed
     when complete.
+
+    The manifest's ``numerics`` block records the numeric environment the run
+    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
+    variables, numpy's ``log2`` target, each BLAS library's kernel and
+    threads, ``pinned``); a run that is not pinned is a finding, never a
+    stop, and its outputs are not committed.
     """
     root = resolve_data_root(data_root)
     cleaned = Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR)
@@ -1310,11 +1475,14 @@ def run_cohort(
     deviations = [msg for key in expected for msg in _count_deviations(expected[key], counts.get(key), key)]
     findings += deviations
     stage_counts = _stage_counts_table(sets)
+    numerics, numerics_findings = _numerics("[cohort]")
+    findings += numerics_findings
 
     manifest = {
         "step": "cohort",
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "versions": _software_versions(),
+        "numerics": numerics,
         "git_revision": _git_revision(),
         "data_root": str(root.resolve()),
         "inputs": {"clean": clean_inputs, "raw": raw},
@@ -1595,6 +1763,12 @@ def run_export(
     printed and recorded, and never stops the step. The directory is
     written as ``motco_input.tmp/`` and renamed when complete. Reruns on
     the same inputs are byte-identical.
+
+    The manifest's ``numerics`` block records the numeric environment the run
+    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
+    variables, numpy's ``log2`` target, each BLAS library's kernel and
+    threads, ``pinned``); a run that is not pinned is a finding, never a
+    stop, and its outputs are not committed.
     """
     cleaned = Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR)
     cohort_path = Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR)
@@ -1774,11 +1948,14 @@ def run_export(
     observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
     deviations = [msg for key in expected for msg in _count_deviations(expected[key], observed.get(key), key)]
     findings += deviations
+    numerics, numerics_findings = _numerics("[export]")
+    findings += numerics_findings
 
     manifest = {
         "step": "export",
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "versions": _software_versions(),
+        "numerics": numerics,
         "git_revision": _git_revision(),
         "inputs": {"clean": clean_inputs, "cohort": cohort_inputs, "chain": chain},
         "settings": {
@@ -2413,6 +2590,12 @@ def run_analysis(
     MOTCO default that differs from the one the proposal states; a CV
     setting MOTCO clamped; covariate codings in the export manifest that
     differ from the constant. No finding names a participant.
+
+    The manifest's ``numerics`` block records the numeric environment the run
+    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
+    variables, numpy's ``log2`` target, each BLAS library's kernel and
+    threads, ``pinned``); a run that is not pinned is a finding, never a
+    stop, and its outputs are not committed.
     """
     motco_version = check_motco_version()
     rank_floor = check_motco_rank_floor()
@@ -2558,11 +2741,14 @@ def run_analysis(
     if (cv_used.get("min_components", 1)) != rank_floor:
         findings.append(f"the CV ran with rank floor {cv_used.get('min_components', 1)}, not ANALYSIS_RANK_FLOOR = {rank_floor}")
 
+    numerics, numerics_findings = _numerics("[analyze]")
+    findings += numerics_findings
     versions = _software_versions((*_MANIFEST_PACKAGES, "motco", "scikit-learn"))
     manifest = {
         "step": "analyze",
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "versions": versions,
+        "numerics": numerics,
         "motco_software": record.get("software"),
         "git_revision": _git_revision(),
         "inputs": {
@@ -3554,6 +3740,12 @@ def run_axis_diagnostics(
     it is never a filter: no ``export`` or ``analyze`` run reads its
     outputs, and arms and variants are predeclared in a proposal, never
     derived from a diagnostic value.
+
+    The manifest's ``numerics`` block records the numeric environment the run
+    actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
+    variables, numpy's ``log2`` target, each BLAS library's kernel and
+    threads, ``pinned``); a run that is not pinned is a finding, never a
+    stop, and its outputs are not committed.
     """
     log = "axis-diagnostics"
     threshold = DIAGNOSTIC_CORRELATION_THRESHOLD
@@ -3752,11 +3944,14 @@ def run_axis_diagnostics(
             "the primary's rank and the row counts are not expected; the rank-independent counts are"
         )
 
+    numerics, numerics_findings = _numerics(f"[{log}]")
+    findings += numerics_findings
     versions = _software_versions((*_MANIFEST_PACKAGES, "motco", "scikit-learn"))
     manifest = {
         "step": log,
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "versions": versions,
+        "numerics": numerics,
         "git_revision": _git_revision(),
         "inputs": {
             "export": {

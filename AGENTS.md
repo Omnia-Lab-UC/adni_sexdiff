@@ -294,6 +294,12 @@ behavior or defaults change.
 - Reported runs use `n_jobs = 1` (`constants.REPORTED_N_JOBS`): MOTCO seeds
   one RRPP stream per worker, so another value changes the permutation
   draws. Another value is recorded as a finding and the run is not reported.
+- Reported and committed runs are pinned (`numerics.pinned` true in their
+  manifest; `constants.NUMERIC_SETTINGS`, change `adni-portable-numerics`):
+  with the pinned numeric environment every machine writes the same bytes
+  from the same inputs, so the hash chain holds whichever machine ran a
+  step. A run that is not pinned is a finding and its outputs are not
+  committed.
 - Report numbers are pasted from the generated files (`summary.md`,
   `result.json`, the manifests, `stage_counts.csv`) and checked by
   `adni-sexdiff report --check`, never retyped.
@@ -309,11 +315,14 @@ behavior or defaults change.
 
 ## Layout
 
+- `src/adni_sexdiff/__init__.py` – sets `constants.NUMERIC_SETTINGS` in
+  `os.environ` on import, before any module imports numpy.
 - `src/adni_sexdiff/cli.py` – argparse CLI (`build_parser`, `main`); thin
   layer that calls into `data.py` and prints `[command]`-prefixed progress
   messages.
-- `src/adni_sexdiff/constants.py` – named constants: conventions (paths,
-  environment variables, platforms, columns, output names, pins, the
+- `src/adni_sexdiff/constants.py` – named constants (it imports no numpy):
+  conventions (paths, environment variables, platforms, columns, output
+  names, pins, the pinned numeric environment `NUMERIC_SETTINGS`, the
   participant-level patterns, the clean inputs and the raw-file repair
   registry, the cohort's file, columns and sex values, the export's block
   order, feature statuses and covariate columns, the analysis' statistics,
@@ -340,8 +349,9 @@ behavior or defaults change.
   and summary renderer, the diagnostic statistics (`spearman`,
   `partial_spearman`, `block_principal_components`, `geometry_shares`,
   `block_loading_shares`), the chain checks (`_check_analysis_inputs`,
-  `_check_cohort_chain`) and `render_axis_diagnostics`, and the manifest /
-  `.tmp` helpers every step reuses.
+  `_check_cohort_chain`) and `render_axis_diagnostics`, the numeric-state
+  record (`_numerics_record`, `_numerics_finding`, `_numerics`), and the
+  manifest / `.tmp` helpers every step reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a workstation
   and the cluster), `clean.sbatch` (`clean --platform all` on the cluster),
   `analyze.sbatch` (`analyze` on the cluster, no `--n-jobs`, so a reported
@@ -368,8 +378,27 @@ behavior or defaults change.
 - Run the CLI:
   `uv run adni-sexdiff <clean|cohort|export|analyze|axis-diagnostics|report> [options]`.
 - Dependencies: `motco` (git tag, constraint 4), `metabo_adni==0.5.8`
-  (constraint 3), `pandas`, `numpy`. Add dependencies with `uv add <pkg>`
-  so `pyproject.toml` and `uv.lock` stay consistent.
+  (constraint 3), `pandas`, `numpy`, `threadpoolctl` (the numeric-state
+  record). Add dependencies with `uv add <pkg>` so `pyproject.toml` and
+  `uv.lock` stay consistent.
+- Numerics (constraint 6, change `adni-portable-numerics`): importing
+  `adni_sexdiff` sets `constants.NUMERIC_SETTINGS` in the process
+  environment, replacing other values, before numpy loads:
+  `NPY_DISABLE_CPU_FEATURES="X86_V4 AVX512_ICL"` (numpy's AVX-512
+  dispatch), `OPENBLAS_CORETYPE=Haswell` (OpenBLAS's kernel),
+  `OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1`. The Nix shell and the
+  sbatch scripts export the same values, so `motco analyze` and scratch
+  scripts get them too.
+  - In a script or notebook, import `adni_sexdiff` before numpy; otherwise
+    the settings come too late and the step records a not-pinned finding.
+  - Every manifest's `numerics` block records the host, the CPU, the
+    variables, numpy's `log2` target and each BLAS library's kernel and
+    threads. To check a machine, run a step and read `numerics.pinned`.
+  - On 2026-10-28 an AVX-512 machine (24 CPUs) reproduced every committed
+    output pinned, on 24 CPUs and on 1. Unpinned, `export`, `analyze` and
+    the block SVD differed at about 1e-15.
+  - Requires x86-64 with AVX2 (`OPENBLAS_CORETYPE=Haswell`); other
+    architectures are unsupported.
 - Data root: `--data-root` → `ADNI_DATA_ROOT` → `data/` (constraint 2).
 - There is no test suite or linter configured yet. Verify changes by running
   the relevant CLI command or importing the function; say so explicitly when
@@ -569,7 +598,10 @@ behavior or defaults change.
   `uv run` could try to reach the network), `analyze` through
   `scripts/analyze.sbatch` (the same locked environment, no `--n-jobs`, so
   a reported run; compare the pulled `analysis_manifest.json` with the
-  workstation's: statistics, p-values, rank).
+  workstation's: statistics, p-values, rank). Both scripts export
+  `NUMERIC_SETTINGS`; `OPENBLAS_CORETYPE=Haswell` needs AVX2, so check a
+  node once (`grep -m1 -o avx2 /proc/cpuinfo` in a job) and read the pulled
+  manifest's `numerics` (`pinned` true, the node's CPU).
 - Only aggregate outputs leave the cluster: `scripts/sync_results.sh`
   (constraint 2). Never copy raw files, cleaned matrices or MOTCO inputs
   between machines.
@@ -588,9 +620,11 @@ behavior or defaults change.
   inputs (with sha256), settings, versions, git revision and findings in a
   manifest. `data.py`'s shared helpers do this (`require_raw_files`,
   `hash_raw_file`, `check_known_repairs`, `_finalize_output_dir`,
-  `_write_manifest`, `_git_revision`, `_software_versions`); manifests use
-  the top-level keys `step`, `versions`, `git_revision`, `inputs`,
-  `settings`, `outputs`, `findings`.
+  `_write_manifest`, `_git_revision`, `_software_versions`, `_numerics`);
+  manifests use the top-level keys `step`, `versions`, `numerics`,
+  `git_revision`, `inputs`, `settings`, `outputs`, `findings`. Manifests
+  written before `adni-portable-numerics` have no `numerics` block; their
+  outputs were reproduced pinned on 2026-10-28.
 
 ## OpenSpec workflow
 
