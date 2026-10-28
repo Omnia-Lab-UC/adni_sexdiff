@@ -1,0 +1,597 @@
+{
+  "arm": {
+    "constant": "LATENT_SENSITIVITY_ARM",
+    "dir": "results/motco_latent_sensitivity/analysis",
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 15081,
+        "sha256": "75935b879433291cb3c19e42a871722ccd7c2e24f3702c98e1e785ca73f5f4cb"
+      },
+      "result.json": {
+        "bytes": 7725,
+        "sha256": "f24e0e7417af6faa8a54ea46cd275aba221c5c94a5c7978f4f583de0a9fb3f70"
+      }
+    },
+    "findings": [
+      "the arm's CV-selected rank 4 differs from the primary's 8: reported beside angle, not ranked as better or worse (arm rule 3)"
+    ],
+    "latent_adjustment": "stage",
+    "n_jobs": 1,
+    "name": "latent_stage",
+    "selected_rank": 4
+  },
+  "counts": {
+    "cohort_cells": {
+      "Female": {
+        "AD": {
+          "age": {
+            "mean": 73.56240000000001,
+            "sd": 7.8845261276797425
+          },
+          "apoe4": {
+            "0": 46,
+            "1": 58,
+            "2": 21
+          },
+          "education": {
+            "mean": 14.464,
+            "sd": 2.7254594167329045
+          },
+          "n": 125,
+          "phase": {
+            "ADNI1": 72,
+            "ADNI2GO": 53
+          },
+          "statin": {
+            "0": 76,
+            "1": 49
+          }
+        },
+        "CN": {
+          "age": {
+            "mean": 73.47004219409283,
+            "sd": 5.508843929436564
+          },
+          "apoe4": {
+            "0": 168,
+            "1": 66,
+            "2": 3
+          },
+          "education": {
+            "mean": 15.738396624472573,
+            "sd": 2.7057539056526667
+          },
+          "n": 237,
+          "phase": {
+            "ADNI1": 94,
+            "ADNI2GO": 143
+          },
+          "statin": {
+            "0": 145,
+            "1": 92
+          }
+        },
+        "MCI": {
+          "age": {
+            "mean": 71.92774193548388,
+            "sd": 7.814512559023047
+          },
+          "apoe4": {
+            "0": 158,
+            "1": 117,
+            "2": 35
+          },
+          "education": {
+            "mean": 15.45483870967742,
+            "sd": 2.74767789099659
+          },
+          "n": 310,
+          "phase": {
+            "ADNI1": 117,
+            "ADNI2GO": 193
+          },
+          "statin": {
+            "0": 175,
+            "1": 135
+          }
+        }
+      },
+      "Male": {
+        "AD": {
+          "age": {
+            "mean": 75.43924050632911,
+            "sd": 7.738026176036364
+          },
+          "apoe4": {
+            "0": 53,
+            "1": 70,
+            "2": 35
+          },
+          "education": {
+            "mean": 15.79746835443038,
+            "sd": 3.0656500306553496
+          },
+          "n": 158,
+          "phase": {
+            "ADNI1": 82,
+            "ADNI2GO": 76
+          },
+          "statin": {
+            "0": 75,
+            "1": 83
+          }
+        },
+        "CN": {
+          "age": {
+            "mean": 74.81973094170404,
+            "sd": 5.997406790903034
+          },
+          "apoe4": {
+            "0": 163,
+            "1": 53,
+            "2": 7
+          },
+          "education": {
+            "mean": 17.08968609865471,
+            "sd": 2.5873969301201294
+          },
+          "n": 223,
+          "phase": {
+            "ADNI1": 98,
+            "ADNI2GO": 125
+          },
+          "statin": {
+            "0": 113,
+            "1": 110
+          }
+        },
+        "MCI": {
+          "age": {
+            "mean": 73.92566964285713,
+            "sd": 7.391953240175271
+          },
+          "apoe4": {
+            "0": 222,
+            "1": 178,
+            "2": 48
+          },
+          "education": {
+            "mean": 16.229910714285715,
+            "sd": 2.8313201940485695
+          },
+          "n": 448,
+          "phase": {
+            "ADNI1": 221,
+            "ADNI2GO": 227
+          },
+          "statin": {
+            "0": 213,
+            "1": 235
+          }
+        }
+      }
+    },
+    "cohort_cells_equal_record": true,
+    "cv_mean_auroc": {
+      "latent_stage": 0.5803110622810477,
+      "primary": 0.5995142920769246
+    },
+    "eigengap": {
+      "latent_stage": 0.8781230428391542,
+      "primary": 0.7439897653827622
+    },
+    "latent_adjustment": {
+      "conditioning": "stage",
+      "covariates": [
+        "age",
+        "education",
+        "apoe4",
+        "phase",
+        "statin"
+      ],
+      "cv_min_training_df": 741,
+      "design_columns": [
+        "stage[1]",
+        "stage[2]",
+        "age",
+        "education",
+        "apoe4[1]",
+        "apoe4[2]",
+        "phase[ADNI2GO]",
+        "statin[1]"
+      ],
+      "feature_r2": {
+        "fraction_above_0.5": 0.04697986577181208,
+        "mean": 0.16575103897770577,
+        "q05": 0.01452371055505311,
+        "q25": 0.033783261408264015,
+        "q50": 0.11609784351401714,
+        "q75": 0.25820419555492746,
+        "q95": 0.48643391367513966
+      },
+      "feature_scale": "pooled_standardized",
+      "n_samples": 1501,
+      "residual_df": 1492
+    },
+    "ranks": {
+      "latent_stage": 4,
+      "primary": 8
+    },
+    "record_cells": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    },
+    "rejected": {
+      "latent_stage": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "primary": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      }
+    },
+    "rows": 2,
+    "statuses": {
+      "angle": "same",
+      "delta": "same",
+      "shape": "same"
+    }
+  },
+  "created_at": "2026-10-28T17:32:59+00:00",
+  "deviations": [],
+  "expected": {
+    "component_selection": "cv",
+    "covariate_levels": {
+      "apoe4": {
+        "0": 810,
+        "1": 542,
+        "2": 149
+      },
+      "phase": {
+        "ADNI1": 684,
+        "ADNI2GO": 817
+      },
+      "statin": {
+        "0": 797,
+        "1": 704
+      }
+    },
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "dropped": 0,
+    "features": {
+      "joint": 298,
+      "nmr": 165,
+      "p180": 133
+    },
+    "latent_adjustment": {
+      "conditioning": "stage",
+      "covariates": [
+        "age",
+        "education",
+        "apoe4",
+        "phase",
+        "statin"
+      ],
+      "design_columns": [
+        "stage[1]",
+        "stage[2]",
+        "age",
+        "education",
+        "apoe4[1]",
+        "apoe4[2]",
+        "phase[ADNI2GO]",
+        "statin[1]"
+      ],
+      "feature_scale": "pooled_standardized",
+      "n_samples": 1501,
+      "residual_df": 1492
+    },
+    "min_components": 2,
+    "participants": 1501,
+    "permutations": 9999,
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    }
+  },
+  "findings": [
+    "the arm's CV-selected rank 4 differs from the primary's 8: reported beside angle, not ranked as better or worse (arm rule 3)"
+  ],
+  "git_revision": {
+    "commit": "ed17ca94835d8949a0b88c7800a115b1e483b6bf",
+    "dirty": false
+  },
+  "inputs": {
+    "cohort": {
+      "cohort_manifest_equals_export_record": true,
+      "descriptives_set": "intersection",
+      "dir": "results/cohort",
+      "files": {
+        "cohort_manifest.json": {
+          "bytes": 15164,
+          "equals_export_manifest": true,
+          "sha256": "dcb65a530bfc41f3d77bec08ad530bc81dede9f90ac2b4580d88e2e156d1e630"
+        }
+      }
+    },
+    "export": {
+      "dir": "results/motco_input",
+      "export_created_at": "2026-10-27T14:13:06+00:00",
+      "export_git_revision": {
+        "commit": "b10da517bed5919012610813aa8d7cdd778ce7bf",
+        "dirty": false
+      },
+      "export_manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      },
+      "files": {
+        "covariates.csv": {
+          "bytes": 35630,
+          "equals_export_manifest": true,
+          "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+          "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+        },
+        "manifest.json": {
+          "bytes": 14840,
+          "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+        },
+        "metadata.csv": {
+          "bytes": 21092,
+          "equals_export_manifest": true,
+          "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+          "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+        },
+        "nmr.csv": {
+          "bytes": 4802997,
+          "equals_export_manifest": true,
+          "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+          "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+        },
+        "p180.csv": {
+          "bytes": 3756402,
+          "equals_export_manifest": true,
+          "recorded": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e",
+          "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+        }
+      }
+    },
+    "primary": {
+      "chain": {
+        "covariates.csv": true,
+        "metadata.csv": true,
+        "nmr.csv": true,
+        "p180.csv": true
+      },
+      "created_at": "2026-10-27T18:14:42+00:00",
+      "dir": "results/motco_analysis",
+      "export_manifest_equals": true,
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 11512,
+          "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+        },
+        "result.json": {
+          "bytes": 7818,
+          "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+        }
+      },
+      "git_revision": {
+        "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+        "dirty": false
+      },
+      "latent_adjustment": null,
+      "motco": "0.10.0",
+      "n_jobs": 1,
+      "primary_records_export": true,
+      "seed_and_permutations_equal_constants": true,
+      "selected_rank": 8
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+    "cpus_available": 24,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-office",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "latent_sensitivity.csv": {
+      "bytes": 1310,
+      "participant_level": false,
+      "sha256": "a40e95550541d2c96a08266c865cc078fd0811f0bef15b77970edf4fbdea81e0"
+    },
+    "latent_sensitivity.md": {
+      "bytes": 13925,
+      "participant_level": false,
+      "sha256": "27de7c89576d5a323f81e0fad46ca6ea6a505b00a7c43fcca9432f0edc06b667"
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-27T18:14:42+00:00",
+    "dir": "results/motco_analysis",
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 11512,
+        "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+      },
+      "result.json": {
+        "bytes": 7818,
+        "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+      }
+    },
+    "git_revision": {
+      "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+      "dirty": false
+    },
+    "latent_adjustment": null,
+    "motco": "0.10.0",
+    "n_jobs": 1,
+    "selected_rank": 8
+  },
+  "settings": {
+    "ANALYSIS_ALPHA": 0.05,
+    "ANALYSIS_RANK_FLOOR": 2,
+    "ANALYSIS_REJECTION_RULE": "p <= alpha",
+    "LATENT_SENSITIVITY_ARM": {
+      "change": "adni-latent-sensitivity",
+      "conditioning": "stage",
+      "covariates": [
+        "age",
+        "education",
+        "apoe4",
+        "phase",
+        "statin"
+      ],
+      "name": "latent_stage",
+      "other_settings": "the primary's (ANALYSIS_* constants and MOTCO's defaults)",
+      "setting": "covariate_latent_adjustment"
+    },
+    "LATENT_SENSITIVITY_COVARIATE_ROLES": {
+      "age": {
+        "justification": "precedes disease: it can confound the stage effect but cannot be downstream of it",
+        "role": "pre-disease",
+        "variable": "age at baseline"
+      },
+      "apoe4": {
+        "justification": "precedes disease: it can confound the stage effect but cannot be downstream of it",
+        "role": "pre-disease",
+        "variable": "germline APOE e4 genotype (allele count)"
+      },
+      "education": {
+        "justification": "precedes disease: it can confound the stage effect but cannot be downstream of it",
+        "role": "pre-disease",
+        "variable": "years of schooling, completed before enrolment"
+      },
+      "phase": {
+        "justification": "tied to stage composition by design (SMC and EMCI exist only in ADNI-GO/2), not caused by stage",
+        "role": "design",
+        "variable": "the assay run and enrolment protocol (p180 kits ADNI-1 against ADNI-GO/2)"
+      },
+      "statin": {
+        "justification": "a treatment that may follow diagnosis: prescribing differs with cognitive status; it stays in the arm because the arm was predeclared with the five covariates, and the reading carries the limitation",
+        "role": "mediator candidate",
+        "variable": "HMG-CoA reductase inhibitor use on the screening medication row"
+      }
+    },
+    "REPORTED_N_JOBS": 1,
+    "columns": [
+      "analysis",
+      "directory",
+      "latent_adjustment",
+      "selected_rank",
+      "component_selection",
+      "cv_mean_auroc",
+      "cv_repeats_completed",
+      "eigengap",
+      "delta_observed",
+      "delta_p",
+      "delta_rejected",
+      "delta_null_mean",
+      "delta_null_sd",
+      "delta_null_q95",
+      "angle_observed",
+      "angle_p",
+      "angle_rejected",
+      "angle_null_mean",
+      "angle_null_sd",
+      "angle_null_q95",
+      "shape_observed",
+      "shape_p",
+      "shape_rejected",
+      "shape_null_mean",
+      "shape_null_sd",
+      "shape_null_q95",
+      "residual_df",
+      "cv_min_training_df",
+      "feature_r2_q05",
+      "feature_r2_q25",
+      "feature_r2_q50",
+      "feature_r2_q75",
+      "feature_r2_q95",
+      "feature_r2_mean"
+    ],
+    "motco_latent_adjustment_decisions": [
+      {
+        "decision": "adopt_stage",
+        "reading": "the `stage`-conditioned adjustment holds Type I at the validated design under conditions this change meets: the case study's own proposal justifies the covariate set (`LATENT_SENSITIVITY_COVARIATE_ROLES`), `group_stage` is not used, the record's `latent_adjustment` and `covariates` blocks are reported beside the results, no categorical level is rare enough to drop out of a CV training set, and the earlier binding statements stand; `angle` held the 0.0706 bound by 0.004 (0.067)",
+        "report": "../MOTCO/docs/reports/latent-adjustment-type-i-2026-10-20.md"
+      },
+      {
+        "decision": "candidate_fails",
+        "reading": "the adjustment loses `shape` power with a covariate-aligned nuisance axis (0.243 against 0.428) and small-magnitude `delta` power without one (0.400 against 0.520 at e = 0.1), so it is a sensitivity read beside the covariate-blind primary, never a replacement of it",
+        "report": "../MOTCO/docs/reports/latent-adjustment-power-2026-10-20.md"
+      }
+    ],
+    "n_jobs": 1,
+    "status_rule": "'same' when both rejections under ANALYSIS_REJECTION_RULE are equal, else 'differs (basis dependence)'; the primary's status is the result either way"
+  },
+  "step": "latent-sensitivity",
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

@@ -2,8 +2,9 @@
 
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
-``report``), each printing ``[command]``-prefixed progress messages.
-``clean``, ``cohort``, ``export``, ``analyze`` and ``axis-diagnostics`` are
+``report``) and one per sensitivity step (``latent-sensitivity``), each
+printing ``[command]``-prefixed progress messages. ``clean``, ``cohort``,
+``export``, ``analyze``, ``axis-diagnostics`` and ``latent-sensitivity`` are
 implemented; ``report`` is a stub that raises ``NotImplementedError``.
 """
 
@@ -18,6 +19,8 @@ from .constants import (
     DATA_ROOT_ENV,
     DEFAULT_DATA_ROOT,
     DIAGNOSTICS_DIR,
+    LATENT_SENSITIVITY_DIR,
+    LATENT_SENSITIVITY_SUBDIRS,
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
     PLATFORMS,
@@ -29,6 +32,7 @@ from .data import (
     run_clean,
     run_cohort,
     run_export,
+    run_latent_sensitivity,
     run_report,
 )
 
@@ -116,6 +120,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", type=Path, default=None, help=f"Diagnostics directory (default: {DIAGNOSTICS_DIR})")
     _add_force(p)
 
+    p = sub.add_parser(
+        "latent-sensitivity",
+        help="The predeclared stage-conditioned latent-adjustment arm (LATENT_SENSITIVITY_ARM: one analyze_trajectories "
+        "call at the primary's settings plus covariate_latent_adjustment = stage) and its comparison with the primary, "
+        f"read beside it and never replacing it -> {LATENT_SENSITIVITY_DIR}/{{{LATENT_SENSITIVITY_SUBDIRS['analysis']},"
+        f"{LATENT_SENSITIVITY_SUBDIRS['comparison']}}}/",
+    )
+    p.add_argument("--input-dir", type=Path, default=None, help=f"Output directory of export (default: {MOTCO_INPUT_DIR})")
+    p.add_argument(
+        "--analysis-dir", type=Path, default=None,
+        help=f"The primary's analysis directory, read as the reference, never written (default: {MOTCO_ANALYSIS_DIR})",
+    )
+    p.add_argument(
+        "--cohort-dir", type=Path, default=None,
+        help=f"Output directory of cohort; only cohort_manifest.json is read (default: {COHORT_DIR})",
+    )
+    p.add_argument(
+        "--out-dir", type=Path, default=None,
+        help=f"Output root; {LATENT_SENSITIVITY_SUBDIRS['analysis']}/ and {LATENT_SENSITIVITY_SUBDIRS['comparison']}/ are "
+        f"written under it, {LATENT_SENSITIVITY_SUBDIRS['diagnostics']}/ never (default: {LATENT_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
+        "--n-jobs",
+        type=int,
+        default=REPORTED_N_JOBS,
+        help=f"Parallel jobs for MOTCO's CV and RRPP (default: {REPORTED_N_JOBS}; reported runs use {REPORTED_N_JOBS})",
+    )
+    _add_force(p)
+
     p = sub.add_parser("report", help="Write the case-study report from the generated files, or check one against them")
     p.add_argument("--analysis-dir", type=Path, default=None, help=f"Output directory of analyze (default: {MOTCO_ANALYSIS_DIR})")
     p.add_argument("--cohort-dir", type=Path, default=None, help=f"Output directory of cohort (default: {COHORT_DIR})")
@@ -154,6 +187,15 @@ def main(argv: list[str] | None = None) -> int:
             analysis_dir=args.analysis_dir,
             cohort_dir=args.cohort_dir,
             out_dir=args.out_dir,
+            force=args.force,
+        )
+    elif args.command == "latent-sensitivity":
+        run_latent_sensitivity(
+            input_dir=args.input_dir,
+            analysis_dir=args.analysis_dir,
+            cohort_dir=args.cohort_dir,
+            out_dir=args.out_dir,
+            n_jobs=args.n_jobs,
             force=args.force,
         )
     elif args.command == "report":
