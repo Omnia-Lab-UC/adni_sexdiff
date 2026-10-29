@@ -28,12 +28,12 @@ primary and never replacing it; the report covers them since change
 `adni-report-variants`) and the sensitivity step `stage-sensitivity`
 (change `adni-stage-sensitivity`: the predeclared CN / LMCI / AD arm, the
 primary export's rows of the participants whose `DX.bl` is CN, LMCI or
-AD, read beside the primary and never replacing it; a later change adds
-it to the report).
+AD, read beside the primary and never replacing it; the report covers it
+since change `adni-report-stage-arm`).
 Every step but `report` runs on a data machine; `report` reads committed aggregate
 files only and runs on any clone; the reports are committed under
-`reports/`, the newest covering the primary, the latent arm and both
-export variants. The cluster copy and clone do not exist yet. A data machine is
+`reports/`, the newest covering the primary, the latent arm, both export
+variants and the CN / LMCI / AD arm. The cluster copy and clone do not exist yet. A data machine is
 any of the user's machines whose
 local participant-level files under `results/` (the export CSVs,
 `cohort.csv`, the primary's `latent_scores.csv` and
@@ -360,7 +360,7 @@ implemented by its own OpenSpec change, in order.
      `STAGE_RULE` or `COHORT_RULE`, selects a participant, reruns the
      primary or adopts the arm.
 6. `report` – from the kept aggregate outputs only (`REPORT_INPUT_FILES`,
-   53 committed files with 17 manifests: the two `clean_manifest.json`;
+   66 committed files with 21 manifests: the two `clean_manifest.json`;
    `stage_counts.csv` and `cohort_manifest.json`; the export
    `manifest.json`; the primary's `result.json`, `analysis_manifest.json`
    and `summary.md`; the primary diagnostics' six files; under
@@ -371,11 +371,17 @@ implemented by its own OpenSpec change, in order.
    `bridge/nist_bridge.csv` for hook `factors`, `motco_input/manifest.json`,
    the variant analysis' three aggregate files, the comparison's three
    files and the variant diagnostics' six files; every registered variant
-   required), nothing else: no participant-level file is opened or
-   required (their hashes are quoted from the manifests), no data root, no
-   MOTCO call, no pinned numerics, so it runs on any clone. Ten flags: the
-   seven directories (`--export-sensitivity-dir` the root of the variants),
-   `--out`, `--check`, `--force`. Gates before anything is written, each
+   required; under `results/motco_stage_sensitivity/`
+   (`REPORT_STAGE_ARM_FILES`, change `adni-report-stage-arm`) the
+   CN / LMCI / AD arm export's `motco_input/manifest.json`, the arm
+   analysis' three aggregate files, the comparison's three files and the
+   arm diagnostics' six files, the arm required), nothing else: no
+   participant-level file is opened or required (their hashes are quoted
+   from the manifests), no data root, no MOTCO call, no pinned numerics, so
+   it runs on any clone. Eleven flags: the eight directories
+   (`--export-sensitivity-dir` the root of the variants,
+   `--stage-sensitivity-dir` the root of the CN / LMCI / AD arm), `--out`,
+   `--check`, `--force`. Gates before anything is written, each
    naming the file or setting, both values and the step to rerun: every
    input present; every aggregate file hashes to the value its own manifest
    records; the primary is the primary, the arm is
@@ -384,41 +390,55 @@ implemented by its own OpenSpec change, in order.
    comparison manifests name it, its export manifest's `variant` block
    equals the `EXPORT_VARIANTS` entry, no latent adjustment, `is_primary`
    false and its name in its diagnostics), then the bridge table hashes to
-   its export manifest's `bridge.table.sha256`; the primary, the arm and
-   every variant analysis are reported runs (`n_jobs = REPORTED_N_JOBS`),
-   every `numerics` block present is pinned and all 17 manifests record the
-   same MOTCO, scikit-learn and metabo_adni versions; the chain holds link
-   by link from the clean manifests to the arm's and every variant's
-   diagnostics (76 links: 31, then 23 for `nist_bridge` and 22 for
-   `per_run_standardized`). Writes
+   its export manifest's `bridge.table.sha256`; the CN / LMCI / AD arm is
+   `STAGE_SENSITIVITY_ARM` (its export manifest records step
+   `stage-sensitivity`, every field of the constant in its `stage_arm`
+   block and no `variant` block, its analysis and comparison manifests name
+   it, its analysis records no latent adjustment, `is_primary` false and
+   `stage_arm` `cn_lmci_ad` in its diagnostics); the primary, the arm,
+   every variant analysis and the CN / LMCI / AD arm's analysis are
+   reported runs (`n_jobs = REPORTED_N_JOBS`), every `numerics` block
+   present is pinned and all 21 manifests record the same MOTCO,
+   scikit-learn and metabo_adni versions; the chain holds link by link from
+   the clean manifests to the arm's, every variant's and the
+   CN / LMCI / AD arm's diagnostics (100 links: 31, then 23 for
+   `nist_bridge`, 22 for `per_run_standardized` and 24 for the
+   CN / LMCI / AD arm, among them the primary feature tables its export
+   manifest names as the source of its floors). Writes
    `reports/motco-adni-<date>.md` (the date from the file name, in the
    title line only; an existing file stops it unless `--force`; staged as
-   `<out>.tmp`, parsed back and renamed): the eleven sections of
+   `<out>.tmp`, parsed back and renamed): the twelve sections of
    `REPORT_SECTIONS` (summary; provenance, the report's manifest with the
    QC archives and NIST workbooks; cohort; export; primary analysis; axis
    diagnostics of the primary; latent-adjustment sensitivity; export
-   sensitivity; findings; reading rules; reproduction), every reference to
+   sensitivity; stage-definition sensitivity, the CN / LMCI / AD arm beside
+   the primary with its four definition tables under their own headings;
+   findings; reading rules; reproduction), every reference to
    another section numbered from `REPORT_SECTIONS`, every table titled by
    a level-3 heading and keyed by its first column, every number copied
    from a record, a manifest or a CSV at the digits of the summary it
    belongs to (no statistic, correlation, mean or count of its own), every
-   reading sentence from `_statistic_reading_line`, `_arm_status_line` and
-   `_export_variant_status_line` and the variant lines from
-   `_export_variant_lines` (the code of `summary.md`,
-   `latent_sensitivity.md` and `export_sensitivity.md`, string-equal
-   across the documents; no sentence reads one variant against the other),
-   `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, then
-   `EXPORT_VARIANT_READING_RULES` verbatim, the arm's rules named beside
-   every table that quotes the arm and the variants' beside every table
-   that quotes a variant, the primary's status the result in every table;
+   reading sentence from `_statistic_reading_line`, `_arm_status_line`,
+   `_export_variant_status_line` and `_stage_arm_status_line`, the variant
+   lines from `_export_variant_lines` and the CN / LMCI / AD arm's bullets
+   and four tables from `_stage_arm_lines` and `_stage_arm_tables` (the
+   code of `summary.md`, `latent_sensitivity.md`, `export_sensitivity.md`
+   and `stage_sensitivity.md`, string-equal across the documents; no
+   sentence reads one sensitivity against another), `READING_RULES`, then
+   `LATENT_SENSITIVITY_READING_RULES`, then `EXPORT_VARIANT_READING_RULES`,
+   then `STAGE_SENSITIVITY_READING_RULES` verbatim, the arm's rules named
+   beside every table that quotes the arm, the variants' beside every
+   table that quotes a variant and the CN / LMCI / AD arm's beside every
+   table that quotes it, the primary's status the result in every table;
    the body depends on the inputs and the file name only, so two runs are
    byte-identical. With `--check` (default: the newest report under
    `reports/` by the date in its name) it first compares the report's
    level-2 headings with `REPORT_SECTIONS`: a report of an earlier layout
-   (`reports/motco-adni-2026-10-28.md`, ten sections) stops before any
+   (`reports/motco-adni-2026-10-28.md`, ten sections, and
+   `reports/motco-adni-2026-10-29.md`, eleven sections) stops before any
    gate, naming its absent and extra sections and
    `git log -1 --format=%H -- <report>`, the revision where it checks
-   (36c9cc8 for that report); otherwise it reruns the gates, regenerates
+   (36c9cc8 and c94f5e7 for those reports); otherwise it reruns the gates, regenerates
    the report and compares every table cell by cell and every other line
    line by line, printing each mismatch (section, table, row key, column,
    both values; or the line with both texts), exits 1 on any and writes
@@ -582,9 +602,9 @@ behavior or defaults change.
   `os.environ` on import, before any module imports numpy.
 - `src/adni_sexdiff/cli.py` – argparse CLI (`build_parser`, `main`); thin
   layer that calls into `data.py` and prints `[command]`-prefixed progress
-  messages; `report` takes ten flags (the seven directories, among them
-  `--export-sensitivity-dir`, `--out`, `--check`, `--force`) and `main`
-  returns 1 on a `--check` mismatch;
+  messages; `report` takes eleven flags (the eight directories, among them
+  `--export-sensitivity-dir` and `--stage-sensitivity-dir`, `--out`,
+  `--check`, `--force`) and `main` returns 1 on a `--check` mismatch;
   `export-sensitivity` takes `--variant` (a name of `EXPORT_VARIANTS` or
   `all`; the variants and the rule are never flags) and the directories,
   `--n-jobs` and `--force`; `stage-sensitivity` takes `--input-dir`,
@@ -634,15 +654,19 @@ behavior or defaults change.
   `STAGE_SENSITIVITY_SUBDIRS`, `STAGE_SENSITIVITY_TABLE`,
   `STAGE_SENSITIVITY_SUMMARY` and `STAGE_SENSITIVITY_MANIFEST`, change
   `adni-stage-sensitivity`); the report's conventions (`DIAGNOSTICS_FILES`,
-  `REPORT_VARIANT_FILES`, `REPORT_INPUT_FILES` keyed by directory role
-  with one role per variant subdirectory, `REPORT_SECTIONS` with eleven
-  titles; no scientific constant, changes `adni-report` and
-  `adni-report-variants`).
+  `REPORT_VARIANT_FILES`, `REPORT_STAGE_ARM_FILES` keyed by the
+  subdirectories of the CN / LMCI / AD arm, `REPORT_INPUT_FILES` keyed by
+  directory role with one role per variant subdirectory and per arm
+  subdirectory, `REPORT_SECTIONS` with twelve titles; no scientific
+  constant, changes `adni-report`, `adni-report-variants` and
+  `adni-report-stage-arm`).
 - `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`,
   `export`, `analyze`, `axis-diagnostics` and `report`: `run_report` with
   the loader and gates `_load_report_inputs` (the variant roles and labels
-  `_variant_role` and `_variant_labels`), the renderer `render_report`
-  with its table builders and `_export_sensitivity_section`, the parser
+  `_variant_role` and `_variant_labels`, the CN / LMCI / AD arm's
+  `_stage_arm_role` and `_STAGE_ARM_LABELS`), the renderer `render_report`
+  with its table builders, `_export_sensitivity_section` and
+  `_stage_sensitivity_section`, the parser
   `parse_report` and the checker `check_report` with the earlier-layout
   gate `_check_report_layout`; the shared reading sentences
   `_statistic_reading_line` and `_arm_status_line` that `summary.md`,
@@ -659,7 +683,9 @@ behavior or defaults change.
   `stage-sensitivity` (`run_stage_sensitivity`, with the arm export
   `_stage_arm_export`, the status sentence `_stage_arm_status_line`, the
   arm lines `_stage_arm_lines` shared by the arm's `summary.md` and
-  `stage_sensitivity.md`, and `render_stage_sensitivity`),
+  `stage_sensitivity.md` and the arm's four definition tables
+  `_stage_arm_tables` they print, all three printed by the report too, and
+  `render_stage_sensitivity`),
   `resolve_data_root`, the version gates
   (`check_metabo_adni_version`, `check_motco_version`,
   `check_motco_rank_floor`), the raw-input helpers, the analysis input

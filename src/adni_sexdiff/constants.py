@@ -66,11 +66,13 @@ Scientific constants
     names. Every scientific constant the six steps and the three sensitivity
     steps need is decided; a later variant or arm introduces its own by
     proposal. The changes
-    ``adni-report`` (the ``report`` step) and ``adni-report-variants`` (the
-    report extended to every export variant) introduce no scientific
-    constant: their conventions ``REPORT_INPUT_FILES`` (every file the step
-    reads, by directory role; 53 with the variants) and ``REPORT_SECTIONS``
-    (the report's eleven section titles, in order) are defined below, and
+    ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
+    report extended to every export variant) and ``adni-report-stage-arm``
+    (the report extended to the CN / LMCI / AD arm) introduce no scientific
+    constant: their conventions ``REPORT_STAGE_ARM_FILES``,
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 66
+    with the variants and the CN / LMCI / AD arm) and ``REPORT_SECTIONS``
+    (the report's twelve section titles, in order) are defined below, and
     the report quotes every setting by constant name from the manifests and
     every number from the records.
 """
@@ -1434,6 +1436,22 @@ REPORT_VARIANT_FILES: dict[str, tuple[str, ...]] = {
     "comparison": (EXPORT_SENSITIVITY_TABLE, EXPORT_SENSITIVITY_SUMMARY, EXPORT_SENSITIVITY_MANIFEST),
     "diagnostics": DIAGNOSTICS_FILES,
 }
+#: The files the report reads in each subdirectory of the CN / LMCI / AD arm,
+#: by the key of ``STAGE_SENSITIVITY_SUBDIRS`` (change
+#: ``adni-report-stage-arm``): the arm export's manifest, the arm analysis'
+#: three aggregate files, the comparison's three files and the arm
+#: diagnostics' six; the arm export's CSVs and the arm analysis'
+#: ``latent_scores.csv``, ``analysis_metadata.csv``, ``stage_means.csv`` and
+#: ``pls_loadings.csv`` are quoted by the hashes their manifests record.
+REPORT_STAGE_ARM_FILES: dict[str, tuple[str, ...]] = {
+    "export": (EXPORT_MANIFEST,),
+    "analysis": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
+    "comparison": (STAGE_SENSITIVITY_TABLE, STAGE_SENSITIVITY_SUMMARY, STAGE_SENSITIVITY_MANIFEST),
+    "diagnostics": DIAGNOSTICS_FILES,
+}
+assert tuple(REPORT_STAGE_ARM_FILES) == tuple(STAGE_SENSITIVITY_SUBDIRS), (
+    "REPORT_STAGE_ARM_FILES must name the files of every STAGE_SENSITIVITY_SUBDIRS key, in its order"
+)
 #: Every file the ``report`` step reads (change ``adni-report``), by the role
 #: of the directory it lives in: ``cleaned`` (``--cleaned-dir``, paths
 #: relative to the cleaned root), ``cohort`` (``--cohort-dir``), ``export``
@@ -1446,10 +1464,12 @@ REPORT_VARIANT_FILES: dict[str, tuple[str, ...]] = {
 #: of ``--export-sensitivity-dir`` (``EXPORT_SENSITIVITY_SUBDIRS`` in its
 #: order: the bridge table for a variant with hook ``factors``, the variant
 #: export's manifest, the variant analysis' three aggregate files, the
-#: comparison's three files and the variant diagnostics' six). All 53 are
-#: aggregate and committed; no participant-level file is read, and the
-#: hashes the report quotes for one come from these manifests. No other file
-#: is read.
+#: comparison's three files and the variant diagnostics' six), and the roles
+#: ``stage-sensitivity/<subdir>`` of ``--stage-sensitivity-dir`` (change
+#: ``adni-report-stage-arm``; ``STAGE_SENSITIVITY_SUBDIRS`` in its order, the
+#: files of ``REPORT_STAGE_ARM_FILES``). All 66 are aggregate and committed;
+#: no participant-level file is read, and the hashes the report quotes for
+#: one come from these manifests. No other file is read.
 REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
     "cleaned": tuple(f"{platform}/{CLEAN_MANIFEST}" for platform in PLATFORMS),
     "cohort": (COHORT_COUNTS, COHORT_MANIFEST),
@@ -1469,9 +1489,11 @@ REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
         for key, sub in EXPORT_SENSITIVITY_SUBDIRS.items()
         if key != "bridge" or spec["hook"] == "factors"
     },
+    **{f"stage-sensitivity/{sub}": REPORT_STAGE_ARM_FILES[key] for key, sub in STAGE_SENSITIVITY_SUBDIRS.items()},
 }
 #: The report's level-2 sections, in order (design D4 of ``adni-report``;
-#: "Export sensitivity" added by ``adni-report-variants``).
+#: "Export sensitivity" added by ``adni-report-variants``, "Stage-definition
+#: sensitivity" by ``adni-report-stage-arm``).
 #: ``report --check`` names a mismatch by section, table, row and column.
 REPORT_SECTIONS: tuple[str, ...] = (
     "Summary",
@@ -1482,6 +1504,7 @@ REPORT_SECTIONS: tuple[str, ...] = (
     "Axis diagnostics of the primary",
     "Latent-adjustment sensitivity",
     "Export sensitivity",
+    "Stage-definition sensitivity",
     "Findings",
     "Reading rules",
     "Reproduction",

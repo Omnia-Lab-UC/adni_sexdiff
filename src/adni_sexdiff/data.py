@@ -3,14 +3,17 @@
 ``clean`` (change ``adni-metabolomics-clean``), ``cohort`` (change
 ``adni-cohort``), ``export`` (change ``adni-export``), ``analyze`` (change
 ``adni-analyze``) and ``axis-diagnostics`` (change
-``adni-axis-diagnostics``) and ``report`` (change ``adni-report``: the
-case-study report generated in full from the kept aggregate outputs, and
-its cell-by-cell check) are implemented, and so are the sensitivity steps
-``latent-sensitivity`` (change ``adni-latent-sensitivity``: the predeclared
-``stage``-conditioned latent-adjustment arm) and ``export-sensitivity``
-(change ``adni-nist-bridge``: the predeclared export variants of the p180
-run handling, a NIST SRM 1950 bridge and per-run standardization), each
-read beside the primary and never replacing it. Every scientific constant
+``adni-axis-diagnostics``) and ``report`` (changes ``adni-report``,
+``adni-report-variants`` and ``adni-report-stage-arm``: the case-study
+report generated in full from the kept aggregate outputs, the primary
+beside every sensitivity, and its cell-by-cell check) are implemented, and
+so are the sensitivity steps ``latent-sensitivity`` (change
+``adni-latent-sensitivity``: the predeclared ``stage``-conditioned
+latent-adjustment arm), ``export-sensitivity`` (change
+``adni-nist-bridge``: the predeclared export variants of the p180 run
+handling, a NIST SRM 1950 bridge and per-run standardization) and
+``stage-sensitivity`` (change ``adni-stage-sensitivity``: the predeclared
+CN / LMCI / AD arm), each read beside the primary and never replacing it. Every scientific constant
 the steps need is decided and lives in ``constants``; a variant or arm
 enters only through a proposal.
 
@@ -21,8 +24,9 @@ function (``_run_export``, the body of ``export`` that a variant calls with
 its one p180 hook), the shared analysis function
 (``_run_trajectory_analysis``, the body of ``analyze`` that the arm and the
 variants call with their one differing input or setting), the shared reading sentences
-(``_statistic_reading_line``, ``_arm_status_line``: the code of
-``summary.md``, ``latent_sensitivity.md`` and the report) and the manifest
+(``_statistic_reading_line``, ``_arm_status_line``,
+``_export_variant_status_line``, ``_stage_arm_status_line``: the code of
+``summary.md``, the comparison documents and the report) and the manifest
 and output-directory helpers (``_git_revision``, ``_software_versions``,
 ``_write_manifest``, ``_finalize_output_dir``) are shared by every step.
 
@@ -2957,24 +2961,79 @@ def _stage_arm_definition(arm: dict) -> str:
     )
 
 
-def _stage_arm_lines(export_manifest: dict) -> list[str]:
-    """The "Arm" lines of the arm's ``summary.md`` and of ``stage_sensitivity.md``, every value read from the arm export manifest.
+def _stage_arm_tables(export_manifest: dict) -> list[tuple[list[str], str, list[list[str]]]]:
+    """The four tables of the arm's definition, each as (header, alignment, rows of cells), every value read from the arm export manifest.
 
-    The arm (``stage_arm``), the primary export it is a row subset of
-    (``reference``), the rows equal to the primary's
-    (``counts.rows_equal_primary``), the exported participants by ``dx_bl`` ×
-    sex with the categories the arm keeps (``counts.dx_bl``), the sex × stage
-    cells, the runs within each stage and the covariate levels of the primary
-    (``reference``) and of the arm (``counts``), and the run offset per block
-    of both. Keys are taken in the constants' orders (``STAGE_RULE``,
-    ``GROUP_VALUES``, ``STAGE_LABELS``, the covariate levels,
-    ``EXPORT_BLOCKS``), never in the manifest's, which is written with sorted
-    keys.
+    In order: the exported participants by ``dx_bl`` × sex with the
+    categories the arm keeps (``counts.dx_bl``), the sex × stage cells, the
+    runs within each stage and the covariate levels of the primary
+    (``reference``) and of the arm (``counts``). The alignment holds one
+    ``l``, ``r`` or ``c`` per column. ``_stage_arm_lines`` prints them under
+    its lead lines (the arm's ``summary.md`` and ``stage_sensitivity.md``)
+    and the report under its own level-3 headings (design D5 of
+    ``adni-report-stage-arm``), so the rows are string-equal across the
+    documents. Keys are taken in the constants' orders (``STAGE_RULE``,
+    ``GROUP_VALUES``, ``STAGE_LABELS``, the covariate levels), never in the
+    manifest's, which is written with sorted keys.
     """
     arm, reference = export_manifest["stage_arm"], export_manifest.get("reference", {})
     counts = export_manifest.get("counts", {})
     keep = [str(dx) for dx in arm["keep"]]
     phase_levels = [str(level) for level in ANALYSIS_COVARIATES["phase"]["levels"]]
+    by_dx = counts.get("dx_bl", {})
+    dx_rows = []
+    for dx, stage in STAGE_RULE["map"].items():
+        cells = by_dx.get(dx, {})
+        dx_rows.append([
+            dx, stage, "yes" if dx in keep else "no", *(str(cells.get(g, 0)) for g in GROUP_VALUES),
+            str(sum(cells.get(g, 0) for g in GROUP_VALUES)),
+        ])
+    p_cells, a_cells = reference.get("sex_stage", {}), counts.get("sex_stage", {})
+    p_runs, a_runs = reference.get("phase_by_stage", {}), counts.get("phase_by_stage", {})
+    p_levels, a_levels = reference.get("covariate_levels", {}), counts.get("covariate_levels", {})
+    return [
+        (["`dx_bl`", "stage", "in the arm", *GROUP_VALUES, "total"], "llc" + "r" * (len(GROUP_VALUES) + 1), dx_rows),
+        (
+            ["sex", *(f"{st} primary" for st in STAGE_LABELS), *(f"{st} arm" for st in STAGE_LABELS)],
+            "l" + "r" * (2 * len(STAGE_LABELS)),
+            [
+                [g, *(str(p_cells.get(g, {}).get(st)) for st in STAGE_LABELS), *(str(a_cells.get(g, {}).get(st)) for st in STAGE_LABELS)]
+                for g in GROUP_VALUES
+            ],
+        ),
+        (
+            ["stage", *(f"{r} primary" for r in phase_levels), *(f"{r} arm" for r in phase_levels)],
+            "l" + "r" * (2 * len(phase_levels)),
+            [
+                [st, *(str(p_runs.get(st, {}).get(r)) for r in phase_levels), *(str(a_runs.get(st, {}).get(r)) for r in phase_levels)]
+                for st in STAGE_LABELS
+            ],
+        ),
+        (
+            ["covariate", "level", "primary", "arm"],
+            "llrr",
+            [
+                [f"`{name}`", level, str(p_levels.get(name, {}).get(level)), str(a_levels.get(name, {}).get(level))]
+                for name in ANALYSIS_CATEGORICAL_COVARIATES
+                for level in (str(v) for v in ANALYSIS_COVARIATES[name]["levels"])
+            ],
+        ),
+    ]
+
+
+def _stage_arm_lines(export_manifest: dict) -> list[str]:
+    """The "Arm" lines of the arm's ``summary.md`` and of ``stage_sensitivity.md``, every value read from the arm export manifest.
+
+    The arm (``stage_arm``), the primary export it is a row subset of
+    (``reference``), the rows equal to the primary's
+    (``counts.rows_equal_primary``), the four tables of
+    ``_stage_arm_tables`` each under its lead line, and the run offset per
+    block of both. Keys are taken in the constants' orders
+    (``EXPORT_BLOCKS`` for the blocks), never in the manifest's, which is
+    written with sorted keys.
+    """
+    arm, reference = export_manifest["stage_arm"], export_manifest.get("reference", {})
+    counts = export_manifest.get("counts", {})
     rows_equal = counts.get("rows_equal_primary", {})
     files = [*(f"{p}.csv" for p in EXPORT_BLOCKS), EXPORT_METADATA, EXPORT_COVARIATES]
     tables = reference.get("feature_tables", {})
@@ -2989,58 +3048,23 @@ def _stage_arm_lines(export_manifest: dict) -> list[str]:
         ),
         f"- participants: {counts.get('participants')} of the primary's {reference.get('participants')}; dropped: "
         + ", ".join(f"{dx} {counts.get('dropped', {}).get(dx)}" for dx in arm["drop"]),
-        "",
+    ]
+    leads = [
         f"Exported participants by `{arm['source']}` (`STAGE_RULE` maps it onto the stage):",
-        "",
-        "| `dx_bl` | stage | in the arm | " + " | ".join(GROUP_VALUES) + " | total |",
-        "|---|---|:---:|" + "---:|" * (len(GROUP_VALUES) + 1),
-    ]
-    by_dx = counts.get("dx_bl", {})
-    for dx, stage in STAGE_RULE["map"].items():
-        cells = by_dx.get(dx, {})
-        lines.append(
-            f"| {dx} | {stage} | {'yes' if dx in keep else 'no'} | "
-            + " | ".join(str(cells.get(g, 0)) for g in GROUP_VALUES) + f" | {sum(cells.get(g, 0) for g in GROUP_VALUES)} |"
-        )
-    p_cells, a_cells = reference.get("sex_stage", {}), counts.get("sex_stage", {})
-    lines += [
-        "",
         "Sex × stage cells:",
-        "",
-        "| sex | " + " | ".join(f"{st} primary" for st in STAGE_LABELS) + " | " + " | ".join(f"{st} arm" for st in STAGE_LABELS) + " |",
-        "|---|" + "---:|" * (2 * len(STAGE_LABELS)),
-    ]
-    for g in GROUP_VALUES:
-        lines.append(
-            f"| {g} | " + " | ".join(str(p_cells.get(g, {}).get(st)) for st in STAGE_LABELS) + " | "
-            + " | ".join(str(a_cells.get(g, {}).get(st)) for st in STAGE_LABELS) + " |"
-        )
-    p_runs, a_runs = reference.get("phase_by_stage", {}), counts.get("phase_by_stage", {})
-    lines += [
-        "",
         "Runs within each stage (`phase`):",
-        "",
-        "| stage | " + " | ".join(f"{r} primary" for r in phase_levels) + " | " + " | ".join(f"{r} arm" for r in phase_levels) + " |",
-        "|---|" + "---:|" * (2 * len(phase_levels)),
-    ]
-    for st in STAGE_LABELS:
-        lines.append(
-            f"| {st} | " + " | ".join(str(p_runs.get(st, {}).get(r)) for r in phase_levels) + " | "
-            + " | ".join(str(a_runs.get(st, {}).get(r)) for r in phase_levels) + " |"
-        )
-    p_levels, a_levels = reference.get("covariate_levels", {}), counts.get("covariate_levels", {})
-    lines += [
-        "",
         "Covariate levels:",
-        "",
-        "| covariate | level | primary | arm |",
-        "|---|---|---:|---:|",
     ]
-    for name in ANALYSIS_CATEGORICAL_COVARIATES:
-        for level in (str(v) for v in ANALYSIS_COVARIATES[name]["levels"]):
-            lines.append(
-                f"| `{name}` | {level} | {p_levels.get(name, {}).get(level)} | {a_levels.get(name, {}).get(level)} |"
-            )
+    separator = {"l": "---|", "r": "---:|", "c": ":---:|"}
+    for lead, (header, align, rows) in zip(leads, _stage_arm_tables(export_manifest)):
+        lines += [
+            "",
+            lead,
+            "",
+            "| " + " | ".join(header) + " |",
+            "|" + "".join(separator[a] for a in align),
+            *("| " + " | ".join(row) + " |" for row in rows),
+        ]
     primary_offset, offsets = reference.get("phase_offset", {}), counts.get("phase_offset", {})
     lines.append("")
     for p in EXPORT_BLOCKS:
@@ -7838,11 +7862,26 @@ def _variant_labels(variant: str) -> dict[str, str]:
     }
 
 
-#: The 17 manifests the report reads, in pipeline order: (label, role in
+def _stage_arm_role(key: str) -> str:
+    """The role of ``REPORT_INPUT_FILES`` of a subdirectory of the CN / LMCI / AD arm, by its key in ``STAGE_SENSITIVITY_SUBDIRS``."""
+    return f"stage-sensitivity/{STAGE_SENSITIVITY_SUBDIRS[key]}"
+
+
+#: The labels of the CN / LMCI / AD arm's four manifests, in pipeline order
+#: (design D2 of ``adni-report-stage-arm``); the latent arm keeps its labels.
+_STAGE_ARM_LABELS: dict[str, str] = {
+    "export": "stage-sensitivity (export)",
+    "analysis": "stage-sensitivity (analysis)",
+    "comparison": "stage-sensitivity (comparison)",
+    "diagnostics": f"axis-diagnostics ({STAGE_SENSITIVITY_ARM['name']})",
+}
+
+
+#: The 21 manifests the report reads, in pipeline order: (label, role in
 #: ``REPORT_INPUT_FILES``, file name in that role); the primary's and the
 #: arm's nine, then four per variant of ``EXPORT_VARIANTS`` in registry
-#: order. The label names the step in every provenance table and under
-#: "Findings".
+#: order, then the CN / LMCI / AD arm's four. The label names the step in
+#: every provenance table and under "Findings".
 _REPORT_MANIFESTS: tuple[tuple[str, str, str], ...] = (
     *((f"clean {platform}", "cleaned", f"{platform}/{CLEAN_MANIFEST}") for platform in PLATFORMS),
     ("cohort", "cohort", COHORT_MANIFEST),
@@ -7857,6 +7896,11 @@ _REPORT_MANIFESTS: tuple[tuple[str, str, str], ...] = (
         for variant in EXPORT_VARIANTS
         for key, name in (("export", EXPORT_MANIFEST), ("analysis", ANALYSIS_MANIFEST),
                           ("comparison", EXPORT_SENSITIVITY_MANIFEST), ("diagnostics", DIAGNOSTICS_MANIFEST))
+    ),
+    *(
+        (_STAGE_ARM_LABELS[key], _stage_arm_role(key), name)
+        for key, name in (("export", EXPORT_MANIFEST), ("analysis", ANALYSIS_MANIFEST),
+                          ("comparison", STAGE_SENSITIVITY_MANIFEST), ("diagnostics", DIAGNOSTICS_MANIFEST))
     ),
 )
 #: The packages whose versions every manifest that records them must agree on.
@@ -7878,11 +7922,13 @@ def _report_date(path: Path) -> str:
 
 
 def _report_dirs(
-    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir,
+    stage_sensitivity_dir,
 ) -> dict[str, Path]:
-    """The directory of every role of ``REPORT_INPUT_FILES`` from the seven directory flags (design D7)."""
+    """The directory of every role of ``REPORT_INPUT_FILES`` from the eight directory flags (design D7)."""
     sensitivity = Path(sensitivity_dir) if sensitivity_dir is not None else Path(LATENT_SENSITIVITY_DIR)
     variants = Path(export_sensitivity_dir) if export_sensitivity_dir is not None else Path(EXPORT_SENSITIVITY_DIR)
+    stage = Path(stage_sensitivity_dir) if stage_sensitivity_dir is not None else Path(STAGE_SENSITIVITY_DIR)
     dirs = {
         "cleaned": Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR),
         "cohort": Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR),
@@ -7895,6 +7941,8 @@ def _report_dirs(
     for variant in EXPORT_VARIANTS:
         for key, sub in EXPORT_SENSITIVITY_SUBDIRS.items():
             dirs[_variant_role(variant, key)] = variants / variant / sub
+    for key, sub in STAGE_SENSITIVITY_SUBDIRS.items():
+        dirs[_stage_arm_role(key)] = stage / sub
     return dirs
 
 
@@ -7923,6 +7971,13 @@ def _report_rerun(role: str, name: str, dirs: dict[str, Path]) -> str:
                 f"{dirs[_variant_role(variant, 'analysis')]} --out-dir {dirs[role]}`"
             )
         return f"`adni-sexdiff export-sensitivity --variant {variant} --force`, then the variant's `axis-diagnostics`"
+    if role.startswith("stage-sensitivity/"):
+        if role == _stage_arm_role("diagnostics"):
+            return (
+                f"`adni-sexdiff axis-diagnostics --input-dir {dirs[_stage_arm_role('export')]} --analysis-dir "
+                f"{dirs[_stage_arm_role('analysis')]} --out-dir {dirs[role]}`"
+            )
+        return "`adni-sexdiff stage-sensitivity --force`, then the arm's `axis-diagnostics`"
     return "`adni-sexdiff latent-sensitivity`"
 
 
@@ -7949,14 +8004,15 @@ def _load_report_inputs(
     diagnostics_dir=None,
     sensitivity_dir=None,
     export_sensitivity_dir=None,
+    stage_sensitivity_dir=None,
     log: str = "[report]",
 ) -> dict:
-    """Read and gate every input of ``report`` (design D3 of ``adni-report`` and ``adni-report-variants``), before anything is written.
+    """Read and gate every input of ``report`` (design D3 of ``adni-report``, ``adni-report-variants`` and ``adni-report-stage-arm``), before anything is written.
 
     Parameters
     ----------
-    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir:
-        The seven directories (``_report_dirs``); ``None`` is the pipeline's.
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir, stage_sensitivity_dir:
+        The eight directories (``_report_dirs``); ``None`` is the pipeline's.
     log:
         The progress prefix.
 
@@ -7967,11 +8023,13 @@ def _load_report_inputs(
         ``sha256``, ``bytes``), ``manifests`` and ``manifest_paths`` (label →
         parsed manifest and its path, in ``_REPORT_MANIFESTS`` order),
         ``records`` (``primary`` and ``arm``: the two ``result.json``;
-        ``variants``: variant → its ``result.json``), ``tables``
+        ``variants``: variant → its ``result.json``; ``stage_arm``: the CN /
+        LMCI / AD arm's ``result.json``), ``tables``
         (``stage_counts``, ``comparison``, ``diagnostics`` and
         ``arm_diagnostics``; ``variants``: variant → ``comparison``,
         ``bridge`` (``None`` without a bridge role) and ``diagnostics``;
-        each CSV read as text), ``provenance`` (one row
+        ``stage_arm``: ``comparison`` and ``diagnostics``; each CSV read as
+        text), ``provenance`` (one row
         per input file: path, sha256, bytes, where it is recorded),
         ``chain`` (one row per link: the manifest key, the upstream value,
         the hash, ``ok``, the step to rerun), ``versions`` (the consistent
@@ -7995,21 +8053,32 @@ def _load_report_inputs(
     adjustment, its diagnostics record ``is_primary`` false and its name);
     the bridge table of a variant with hook ``factors`` is then checked
     against ``bridge.table.sha256`` of its export manifest, the one place
-    the step records it; (4) reported runs: the primary, the arm and every
-    variant analysis record ``n_jobs = REPORTED_N_JOBS`` in manifest and
-    record, every ``numerics`` block present records ``pinned`` true, and
-    every manifest that records MOTCO, scikit-learn or metabo_adni records
-    the same version; (5) the chain, link by link from the clean manifests
-    to the arm's and every variant's diagnostics. The identity and
+    the step records it; the CN / LMCI / AD arm is ``STAGE_SENSITIVITY_ARM``
+    (its export manifest records step ``stage-sensitivity``, every field of
+    the constant in its ``stage_arm`` block and no ``variant`` block, its
+    analysis and comparison manifests name the arm, its analysis records no
+    latent adjustment, its diagnostics record ``is_primary`` false and the
+    arm); (4) reported runs: the primary, the arm, every variant analysis
+    and the CN / LMCI / AD arm's analysis record ``n_jobs =
+    REPORTED_N_JOBS`` in manifest and record, every ``numerics`` block
+    present records ``pinned`` true, and every manifest that records MOTCO,
+    scikit-learn or metabo_adni records the same version; (5) the chain,
+    link by link from the clean manifests to the arm's, every variant's and
+    the CN / LMCI / AD arm's diagnostics, the primary feature tables the arm
+    export names as the source of its floors included. The identity and
     reported-run gates read a manifest's own content, so they run before
-    the chain: an arm given as the primary, swapped variant directories, an
-    unreported run or an unpinned manifest is named as such, not as a broken
-    link. No participant-level file is opened or hashed: the hashes of
-    ``cohort.csv``, the export CSVs of the primary and of every variant,
+    the chain: an arm given as the primary, swapped variant directories, a
+    crossed CN / LMCI / AD arm, an unreported run or an unpinned manifest is
+    named as such, not as a broken link. No participant-level file is
+    opened or hashed: the hashes of ``cohort.csv``, the export CSVs of the
+    primary, of every variant and of the CN / LMCI / AD arm,
     ``latent_scores.csv`` and ``analysis_metadata.csv`` are the ones the
     manifests recorded (``equals_*`` flags are read, not recomputed).
     """
-    dirs = _report_dirs(cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir)
+    dirs = _report_dirs(
+        cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir,
+        stage_sensitivity_dir,
+    )
 
     # (1) every input present
     absent = []
@@ -8170,6 +8239,68 @@ def _load_report_inputs(
             for variant, record in variant_records.items()
         )
     )
+    st_name = STAGE_SENSITIVITY_ARM["name"]
+    st_labels = _STAGE_ARM_LABELS
+    st_e_role, st_a_role, st_d_role = (_stage_arm_role(k) for k in ("export", "analysis", "diagnostics"))
+    st_rerun = _report_rerun(st_e_role, "", dirs)
+    st_export = manifests[st_labels["export"]]
+    st_export_path = manifest_paths[st_labels["export"]]
+    recorded_arm = st_export.get("stage_arm") or {}
+    if st_export.get("step") != "stage-sensitivity" or recorded_arm.get("constant") != "STAGE_SENSITIVITY_ARM":
+        raise RuntimeError(
+            f"{dirs[st_e_role]} is not the CN / LMCI / AD arm's export: {st_export_path} records step "
+            f"{st_export.get('step')!r} and stage_arm.constant {recorded_arm.get('constant')!r} (the arm records "
+            f"'stage-sensitivity' and 'STAGE_SENSITIVITY_ARM'); point --stage-sensitivity-dir at the root of "
+            f"`stage-sensitivity`, or rerun {st_rerun}; nothing was written"
+        )
+    for field, value in STAGE_SENSITIVITY_ARM.items():
+        expected = list(value) if isinstance(value, tuple) else value
+        if recorded_arm.get(field) != expected:
+            raise RuntimeError(
+                f"{st_export_path} records the arm {recorded_arm.get('name')!r} with {field} {recorded_arm.get(field)!r}, "
+                f"but STAGE_SENSITIVITY_ARM[{field!r}] is {value!r}: the constant moved after the run; rerun {st_rerun}; "
+                "nothing was written"
+            )
+    if st_export.get("variant") is not None:
+        raise RuntimeError(
+            f"{st_export_path} records the export variant {(st_export.get('variant') or {}).get('name')!r}: the CN / LMCI / "
+            f"AD arm takes the primary export's rows and is not crossed with an export variant; rerun {st_rerun}; nothing "
+            "was written"
+        )
+    st_record = json.loads(files[st_a_role][ANALYSIS_RESULT]["path"].read_text())
+    st_analysis = manifests[st_labels["analysis"]]
+    recorded = (st_analysis.get("stage_arm") or {}).get("name")
+    latent = st_analysis.get("settings", {}).get("latent_adjustment")
+    if recorded != st_name or latent is not None or "latent_adjustment" in st_record:
+        raise RuntimeError(
+            f"{dirs[st_a_role]} is not the CN / LMCI / AD arm's analysis: {ANALYSIS_MANIFEST} records the arm {recorded!r} "
+            f"and latent adjustment {latent!r}"
+            + (f", and {ANALYSIS_RESULT} carries a latent_adjustment block" if "latent_adjustment" in st_record else "")
+            + f" (the arm records {st_name!r} and None: it is not crossed with the latent adjustment); point "
+            f"--stage-sensitivity-dir at the root of `stage-sensitivity`, or rerun {st_rerun}; nothing was written"
+        )
+    st_comparison = manifests[st_labels["comparison"]]
+    for where, value in (("stage_arm.name", (st_comparison.get("stage_arm") or {}).get("name")),
+                         ("arm.name", (st_comparison.get("arm") or {}).get("name"))):
+        if value != st_name:
+            raise RuntimeError(
+                f"{manifest_paths[st_labels['comparison']]} records {where} {value!r}, but STAGE_SENSITIVITY_ARM is "
+                f"{st_name!r}; point --stage-sensitivity-dir at the root of `stage-sensitivity`, or rerun {st_rerun}; "
+                "nothing was written"
+            )
+    st_diag_where = str(manifest_paths[st_labels["diagnostics"]])
+    is_primary = _get(manifests[st_labels["diagnostics"]], "inputs.analysis.is_primary", where=st_diag_where)
+    read_arm = (manifests[st_labels["diagnostics"]].get("inputs", {}).get("analysis") or {}).get("stage_arm")
+    if is_primary is not False or read_arm != st_name:
+        raise RuntimeError(
+            f"{st_diag_where} records inputs.analysis.is_primary {is_primary!r} and stage_arm {read_arm!r}: the diagnostics "
+            f"of the CN / LMCI / AD arm must read the arm (is_primary false, stage_arm {st_name!r}); rerun "
+            f"{_report_rerun(st_d_role, '', dirs)}; nothing was written"
+        )
+    print(
+        f"{log} CN / LMCI / AD arm (`STAGE_SENSITIVITY_ARM`): {dirs[st_a_role].parent} ({st_name}, rank "
+        f"{st_record['latent']['selected_lv']}, latent adjustment none, no export variant)"
+    )
 
     # (4) reported runs: n_jobs, pinned numerics, consistent versions
     arm_rerun = "`adni-sexdiff latent-sensitivity`"
@@ -8178,6 +8309,7 @@ def _load_report_inputs(
         (_variant_labels(v)["analysis"], record, f"`adni-sexdiff export-sensitivity --variant {v} --force`")
         for v, record in variant_records.items()
     ]
+    reported.append((st_labels["analysis"], st_record, "`adni-sexdiff stage-sensitivity --force`"))
     for label, record, rerun in reported:
         for where, value in ((f"{manifest_paths[label]} (settings.n_jobs)", manifests[label].get("settings", {}).get("n_jobs")),
                              (f"{manifest_paths[label].parent / ANALYSIS_RESULT} (measurement.n_jobs)", record.get("measurement", {}).get("n_jobs"))):
@@ -8214,7 +8346,8 @@ def _load_report_inputs(
         if first is not None:
             versions[pkg] = first[1]
     print(
-        f"{log} reported runs: primary, arm and {len(variant_records)} variants n_jobs {REPORTED_N_JOBS}; numerics pinned in "
+        f"{log} reported runs: primary, arm, {len(variant_records)} variants and the CN / LMCI / AD arm n_jobs "
+        f"{REPORTED_N_JOBS}; numerics pinned in "
         f"{len(manifests) - len(numerics_absent)} "
         f"manifests, absent in {len(numerics_absent)}; versions consistent ("
         + ", ".join(f"{k} {v}" for k, v in versions.items()) + ")"
@@ -8293,6 +8426,29 @@ def _load_report_inputs(
             name = EXPORT_SENSITIVITY_BRIDGE_TABLE
             link(labels["comparison"], ["inputs", "variant", "bridge", "sha256"], f"sha256({files[vb_role][name]['path']})", sha[vb_role][name], rerun)
         diagnostics_links(labels["diagnostics"], labels["analysis"], variant_sha, _report_rerun(_variant_role(variant, "diagnostics"), "", dirs), export_role=ve_role)
+    st_c_role = _stage_arm_role("comparison")
+    st_sha = {name: sha[st_a_role][name] for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST)}
+    st_export_sha = sha[st_e_role][EXPORT_MANIFEST]
+    export_outputs = manifests["export"].get("outputs", {})
+    link(st_labels["export"], ["inputs", "cohort", "manifest", "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, st_rerun)
+    link(st_labels["export"], ["inputs", "primary_export", "manifest", "sha256"], f"sha256({export_path})", export_sha, st_rerun)
+    link(st_labels["export"], ["reference", "manifest", "sha256"], f"sha256({export_path})", export_sha, st_rerun)
+    for block in EXPORT_BLOCKS:
+        name = f"features_{block}.csv"
+        link(st_labels["export"], ["reference", "feature_tables", name, "sha256"], f"export: outputs.{name}.sha256",
+             export_outputs.get(name, {}).get("sha256"), st_rerun)
+    export_file_links(st_labels["analysis"], st_rerun, export_role=st_e_role, export_label=st_labels["export"])
+    for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+        link(st_labels["analysis"], ["reference", "files", name, "sha256"], f"sha256({files[a_role][name]['path']})", primary_sha[name], st_rerun)
+    link(st_labels["analysis"], ["reference", "export", "manifest", "sha256"], f"sha256({export_path})", export_sha, st_rerun)
+    for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+        link(st_labels["comparison"], ["reference", "files", name, "sha256"], f"sha256({files[a_role][name]['path']})", primary_sha[name], st_rerun)
+    for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+        link(st_labels["comparison"], ["arm", "files", name, "sha256"], f"sha256({files[st_a_role][name]['path']})", st_sha[name], st_rerun)
+    link(st_labels["comparison"], ["arm", "export", "manifest", "sha256"], f"sha256({st_export_path})", st_export_sha, st_rerun)
+    link(st_labels["comparison"], ["inputs", "primary", "export", "manifest", "sha256"], f"sha256({export_path})", export_sha, st_rerun)
+    link(st_labels["comparison"], ["inputs", "cohort", "files", COHORT_MANIFEST, "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, st_rerun)
+    diagnostics_links(st_labels["diagnostics"], st_labels["analysis"], st_sha, _report_rerun(st_d_role, "", dirs), export_role=st_e_role)
     for row in chain:
         if not row["ok"]:
             label = row["link"].split(":")[0]
@@ -8301,7 +8457,10 @@ def _load_report_inputs(
                 f"{row['sha256']}; the upstream output was regenerated after this step, rerun {row['rerun']} (then every "
                 "step after it); nothing was written"
             )
-    print(f"{log} chain: {len(chain)} links hold from the clean manifests to the arm's and every variant's diagnostics")
+    print(
+        f"{log} chain: {len(chain)} links hold from the clean manifests to the arm's, every variant's and the CN / LMCI / AD "
+        "arm's diagnostics"
+    )
 
     # findings of the report itself (design D8)
     findings: list[str] = []
@@ -8330,7 +8489,7 @@ def _load_report_inputs(
         "files": files,
         "manifests": manifests,
         "manifest_paths": manifest_paths,
-        "records": {"primary": primary, "arm": arm, "variants": variant_records},
+        "records": {"primary": primary, "arm": arm, "variants": variant_records, "stage_arm": st_record},
         "tables": {
             "stage_counts": read_csv("cohort", COHORT_COUNTS),
             "comparison": read_csv(c_role, LATENT_SENSITIVITY_TABLE),
@@ -8346,6 +8505,10 @@ def _load_report_inputs(
                     "diagnostics": diagnostics_tables(_variant_role(variant, "diagnostics")),
                 }
                 for variant in EXPORT_VARIANTS
+            },
+            "stage_arm": {
+                "comparison": read_csv(st_c_role, STAGE_SENSITIVITY_TABLE),
+                "diagnostics": diagnostics_tables(st_d_role),
             },
         },
         "provenance": provenance,
@@ -8363,12 +8526,12 @@ def _md_escape(value) -> str:
 
 
 def _markdown_table(df: pd.DataFrame, align: str | None = None) -> list[str]:
-    """A Markdown table from a frame of strings; ``align`` is one ``l``/``r`` per column (left by default)."""
+    """A Markdown table from a frame of strings; ``align`` is one ``l``/``r``/``c`` per column (left by default)."""
     columns = [str(c) for c in df.columns]
     align = align or "l" * len(columns)
     lines = [
         "| " + " | ".join(_md_escape(c) for c in columns) + " |",
-        "|" + "|".join("---:" if a == "r" else "---" for a in align) + "|",
+        "|" + "|".join({"l": "---", "r": "---:", "c": ":---:"}[a] for a in align) + "|",
     ]
     for row in df.itertuples(index=False):
         lines.append("| " + " | ".join(_md_escape(v) for v in row) + " |")
@@ -8821,8 +8984,140 @@ def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list
         b.code(_text(settings.get("cli_equivalent", {}).get("command")))
 
 
+def _stage_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[str], p_status: dict) -> None:
+    """The "Stage-definition sensitivity" section: the primary beside the CN / LMCI / AD arm (design D4 of ``adni-report-stage-arm``).
+
+    Every value is read from the arm's ``stage_sensitivity.csv``, its
+    comparison, analysis and export manifests, the primary export manifest,
+    the two ``result.json`` and the arm's diagnostics files (the chain
+    checked that the comparison references the primary's record now on
+    disk). The status sentences are ``_stage_arm_status_line``, the arm's
+    bullets the ones ``_stage_arm_lines`` writes and its four definition
+    tables ``_stage_arm_tables``, string-equal to ``stage_sensitivity.md``;
+    the arm is read against the primary only (stage-arm rule 8).
+    """
+    dirs, manifests, paths = inputs["dirs"], inputs["manifests"], inputs["manifest_paths"]
+    primary, record = inputs["records"]["primary"], inputs["records"]["stage_arm"]
+    labels = _STAGE_ARM_LABELS
+    name = STAGE_SENSITIVITY_ARM["name"]
+    e_manifest, a_manifest = manifests[labels["export"]], manifests[labels["analysis"]]
+    cmp_manifest, d_manifest = manifests[labels["comparison"]], manifests[labels["diagnostics"]]
+    arm = e_manifest["stage_arm"]
+    rows = {r["analysis"]: r for r in inputs["tables"]["stage_arm"]["comparison"].to_dict("records")}
+    p_row, a_row = rows["primary"], rows[name]
+    statuses = cmp_manifest.get("counts", {}).get("statuses", {})
+    a_status = {s: _rejected(record["p_values"].get(s)) for s in ANALYSIS_STATISTICS}
+    rules = _section_ref("Reading rules")
+    ref_files = cmp_manifest.get("reference", {}).get("files", {})
+    b.para(
+        f"The primary (`{dirs['analysis']}`, `{ANALYSIS_RESULT}` sha256 `{ref_files.get(ANALYSIS_RESULT, {}).get('sha256')}`) beside "
+        f"the CN / LMCI / AD arm `{name}` (`STAGE_SENSITIVITY_ARM`, change `{arm['change']}`: {_stage_arm_definition(arm)}; every "
+        f"other export and analysis setting the primary's; `{dirs[_stage_arm_role('analysis')]}`, `{ANALYSIS_RESULT}` sha256 "
+        f"`{a_manifest.get('outputs', {}).get(ANALYSIS_RESULT, {}).get('sha256')}` as its `{ANALYSIS_MANIFEST}` records it), as "
+        f"`{paths[labels['comparison']]}` records them. Every table in this section quotes the arm and is read under "
+        f"`READING_RULES` and `STAGE_SENSITIVITY_READING_RULES` ({rules}): the primary row comes first and its status is the "
+        "result; the arm never replaces it (stage-arm rule 1), a status that differs is dependence on the stage definition "
+        "and the sample (stage-arm rule 2), and the arm is read against the primary only (stage-arm rule 8)."
+    )
+    stat_rows = []
+    for s in ANALYSIS_STATISTICS:
+        for label, row in (("primary", p_row), (name, a_row)):
+            stat_rows.append({
+                "row": f"{s} {label}", "statistic": s, "analysis": label, "observed": _num(row[f"{s}_observed"]),
+                "p (RRPP)": _num(row[f"{s}_p"]), "rejected": _yes_no(row[f"{s}_rejected"]),
+                "null mean": _num(row[f"{s}_null_mean"]), "null sd": _num(row[f"{s}_null_sd"]), "null q95": _num(row[f"{s}_null_q95"]),
+                "status": "the result" if label == "primary" else _text(statuses.get(s)),
+            })
+    b.table("Statistics: primary and arm", stat_rows, ["row", "statistic", "analysis", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "status"], align="lllrrlrrrl")
+    b.para(
+        f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected rank, "
+        f"floor, eigengap and null summary (reading rule 2, stage-arm rule 3): primary rank {_count(p_row['selected_rank'])} "
+        f"(floor {ANALYSIS_RANK_FLOOR}, pooled relative eigengap {_num(p_row['eigengap'])}); {name} rank "
+        f"{_count(a_row['selected_rank'])} (floor {ANALYSIS_RANK_FLOOR}, eigengap {_num(a_row['eigengap'])})"
+        + (
+            "; the ranks differ, which is reported, not ranked (stage-arm rule 3)."
+            if p_row["selected_rank"] != a_row["selected_rank"] else "; the ranks are equal."
+        )
+    )
+    b.para("Status per statistic:")
+    b.bullets([_stage_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
+    p_perm = primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {}
+    a_perm = record.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {}
+    space_rows = [
+        {"quantity": "participants", "primary": _count(p_row["participants"]), name: _count(a_row["participants"])},
+        {"quantity": "PLS-DA rank (selection)", "primary": f"{_count(p_row['selected_rank'])} (`{p_row['component_selection']}`)", name: f"{_count(a_row['selected_rank'])} (`{a_row['component_selection']}`)"},
+        {"quantity": "rank floor (`ANALYSIS_RANK_FLOOR`)", "primary": str(ANALYSIS_RANK_FLOOR), name: str(ANALYSIS_RANK_FLOOR)},
+        {"quantity": "cv_mean_auroc", "primary": _num(p_row["cv_mean_auroc"]), name: _num(a_row["cv_mean_auroc"])},
+        {"quantity": "CV repeats completed", "primary": _count(p_row["cv_repeats_completed"]), name: _count(a_row["cv_repeats_completed"])},
+        {"quantity": "pooled relative eigengap", "primary": _num(p_row["eigengap"]), name: _num(a_row["eigengap"])},
+        {"quantity": "eigengap permutation null q05 / q50 / q95",
+         "primary": f"{_fmt(p_perm.get('q05'))} / {_fmt(p_perm.get('q50'))} / {_fmt(p_perm.get('q95'))}",
+         name: f"{_fmt(a_perm.get('q05'))} / {_fmt(a_perm.get('q50'))} / {_fmt(a_perm.get('q95'))}"},
+    ]
+    b.table("Latent space: primary and arm", space_rows, ["quantity", "primary", name], align="lrr")
+    b.heading(f"Arm `{name}`")
+    b.bullets([line[2:] for line in _stage_arm_lines(e_manifest) if line.startswith("- ")])
+    titles = ["Exported participants by `dx_bl`", "Sex × stage cells", "Runs within each stage", "Covariate levels"]
+    for title, (header, align, table_rows) in zip(titles, _stage_arm_tables(e_manifest)):
+        b.table(f"{name}: {title}", [dict(zip(header, r)) for r in table_rows], header, align=align)
+    e_primary = manifests["export"]
+    exports = {"primary": e_primary, name: e_manifest}
+    offset_rows = []
+    for block in e_primary.get("settings", {}).get("blocks", EXPORT_BLOCKS):
+        for label, m in exports.items():
+            o = m.get("counts", {}).get("phase_offset", {}).get(block, {})
+            e = m.get("expected", {}).get("phase_offset", {}).get(block, {})
+            offset_rows.append({
+                "row": f"{block} {label}", "block": block, "export": label,
+                "median |d|": _num(o.get("median_abs_d"), ".2f"), "max |d|": _num(o.get("max_abs_d"), ".2f"),
+                "|d| > 0.5": _count(o.get("abs_d_gt_0_5")), "|d| > 1": _count(o.get("abs_d_gt_1")),
+                "|corr(PC1, phase)|": _num(o.get("abs_corr_pc1_phase"), ".2f"), "|corr(PC2, phase)|": _num(o.get("abs_corr_pc2_phase"), ".2f"),
+                "expected |d| > 0.5": _count(e.get("abs_d_gt_0_5")), "expected |d| > 1": _count(e.get("abs_d_gt_1")),
+            })
+    b.para(
+        "The run offset per block (`phase`, ADNI1 against ADNI2GO, on the primary's scale and floors), over the primary's "
+        "exported participants as the primary export manifest records it and over the arm's rows as the arm export manifest "
+        "records it (`counts.phase_offset`), beside the predeclared counts (`EXPORT_EXPECTED_COUNTS`, "
+        "`STAGE_SENSITIVITY_EXPECTED_COUNTS`; `n/a` where none is predeclared):"
+    )
+    b.table("Run offset: primary and arm", offset_rows, ["row", "block", "export", "median |d|", "max |d|", "|d| > 0.5", "|d| > 1", "|corr(PC1, phase)|", "|corr(PC2, phase)|", "expected |d| > 0.5", "expected |d| > 1"], align="lllrrrrrrrr")
+    flat, flat_e = _flatten(e_manifest.get("counts", {})), _flatten(e_manifest.get("expected", {}))
+    keys = dict.fromkeys(
+        k for src in (STAGE_SENSITIVITY_EXPECTED_COUNTS["export"], e_manifest.get("expected", {}))
+        for k in _flatten({key: value for key, value in src.items() if key != "phase_offset"})
+    )
+    b.para(
+        "The arm export's counts beside its predeclared ones (`STAGE_SENSITIVITY_EXPECTED_COUNTS`, every key of its "
+        "`export` entry but the run offset above; the analysis' and the diagnostics' entries are compared by their steps, "
+        f"and a deviation is copied under {_section_ref('Findings')}), as its export manifest records them (`counts`, "
+        "`expected`):"
+    )
+    b.table("Arm export against the predeclared counts", [
+        {"quantity": key, "observed": _text(flat.get(key)), "expected": _text(flat_e.get(key))} for key in keys
+    ], ["quantity", "observed", "expected"], align="lrr")
+    d_analysis = d_manifest.get("inputs", {}).get("analysis", {})
+    b.para(
+        f"Axis diagnostics of `{name}` (`{dirs[_stage_arm_role('diagnostics')]}`, rank "
+        f"{_count(d_manifest.get('counts', {}).get('components'))}, `is_primary` {_text(d_analysis.get('is_primary'))}, "
+        f"stage arm `{_text(d_analysis.get('stage_arm'))}`): a component of the arm that tracks a variable here is a "
+        "measurement-space finding about the arm; it never reinterprets either analysis' statistics and is never grounds "
+        "to adopt the arm, and in the arm `dx_bl` orders the participants as `stage` does, so their correlations coincide "
+        "(stage-arm rule 7)."
+    )
+    _diagnostics_section(b, inputs["tables"]["stage_arm"]["diagnostics"], d_manifest, prefix=f"{name}: ")
+    b.table("First component against phase", _first_component_rows([
+        ("primary", inputs["tables"]["diagnostics"]), (name, inputs["tables"]["stage_arm"]["diagnostics"])
+    ]), ["analysis", "component", "sd", "rho with phase", "rho | design", "flag"], align="llrrrl")
+    settings = a_manifest.get("settings", {})
+    b.para(
+        f"The `motco analyze` command that reproduces `{name}`'s analysis directory (`cli_equivalent`; "
+        + _text(settings.get("cli_equivalent", {}).get("note")) + "):"
+    )
+    b.code(_text(settings.get("cli_equivalent", {}).get("command")))
+
+
 def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
-    """Render the case-study report from the loaded inputs (design D4 of ``adni-report`` and ``adni-report-variants``).
+    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants`` and ``adni-report-stage-arm``).
 
     Parameters
     ----------
@@ -8839,7 +9134,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
 
     Notes
     -----
-    The eleven sections of ``REPORT_SECTIONS``, in order, each table titled
+    The twelve sections of ``REPORT_SECTIONS``, in order, each table titled
     by a level-3 heading and keyed by its first column; every reference to
     another section is numbered from ``REPORT_SECTIONS`` (``_section_ref``).
     Every number is read from a record, a manifest or a CSV and formatted
@@ -8847,12 +9142,15 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     significant digits for record values, p-values as recorded, counts as
     integers, correlations and shares as ``diagnostics.md`` prints them); no
     statistic, correlation, mean or count is computed here. The reading
-    sentences are ``_statistic_reading_line``, ``_arm_status_line`` and
-    ``_export_variant_status_line``, the ones ``summary.md``,
-    ``latent_sensitivity.md`` and ``export_sensitivity.md`` print, and the
-    variant lines are ``_export_variant_lines``; the reading rules are the
-    constants, verbatim. The body depends on the inputs and ``date`` only:
-    no revision, host, time or runtime of the report run is written.
+    sentences are ``_statistic_reading_line``, ``_arm_status_line``,
+    ``_export_variant_status_line`` and ``_stage_arm_status_line``, the ones
+    ``summary.md``, ``latent_sensitivity.md``, ``export_sensitivity.md`` and
+    ``stage_sensitivity.md`` print; the variant lines are
+    ``_export_variant_lines``, and the CN / LMCI / AD arm's bullets and
+    definition tables are ``_stage_arm_lines`` and ``_stage_arm_tables``;
+    the reading rules are the constants, verbatim. The body depends on the
+    inputs and ``date`` only: no revision, host, time or runtime of the
+    report run is written.
     """
     b = _ReportBuilder()
     dirs, files, manifests, paths = inputs["dirs"], inputs["files"], inputs["manifests"], inputs["manifest_paths"]
@@ -8874,12 +9172,14 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
 
     b.lines.append(f"# {_REPORT_TITLE} — {date}")
     b.para(
-        "Generated in full by `adni-sexdiff report` (changes `adni-report` and `adni-report-variants`) from the kept "
-        "aggregate outputs of the pipeline: every number is copied from a record, a manifest or a CSV and formatted with "
-        "the digits of the summary it belongs to, every reading sentence is the one `summary.md`, `latent_sensitivity.md` "
-        "or `export_sensitivity.md` prints, and the reading rules are the constants, verbatim. The primary analysis stays "
-        "primary in every table; the arm is read beside it under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`, "
-        f"and each export variant under `READING_RULES` and `EXPORT_VARIANT_READING_RULES` ({_section_ref('Reading rules')}). "
+        "Generated in full by `adni-sexdiff report` (changes `adni-report`, `adni-report-variants` and "
+        "`adni-report-stage-arm`) from the kept aggregate outputs of the pipeline: every number is copied from a record, a "
+        "manifest or a CSV and formatted with the digits of the summary it belongs to, every reading sentence is the one "
+        "`summary.md`, `latent_sensitivity.md`, `export_sensitivity.md` or `stage_sensitivity.md` prints, and the reading "
+        "rules are the constants, verbatim. The primary analysis stays primary in every table; the arm is read beside it "
+        "under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`, each export variant under `READING_RULES` and "
+        "`EXPORT_VARIANT_READING_RULES`, and the CN / LMCI / AD arm under `READING_RULES` and "
+        f"`STAGE_SENSITIVITY_READING_RULES` ({_section_ref('Reading rules')}). "
         "`adni-sexdiff report --check` compares this file with the outputs cell by cell. No value here is participant-level."
     )
 
@@ -8934,6 +9234,20 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         b.bullets([
             _export_variant_status_line(s, v_statuses.get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
         ])
+    st_name = STAGE_SENSITIVITY_ARM["name"]
+    st_record = inputs["records"]["stage_arm"]
+    st_arm = manifests[_STAGE_ARM_LABELS["export"]]["stage_arm"]
+    st_statuses = manifests[_STAGE_ARM_LABELS["comparison"]].get("counts", {}).get("statuses", {})
+    st_status = {s: _rejected(st_record["p_values"].get(s)) for s in ANALYSIS_STATISTICS}
+    b.para(
+        f"The predeclared CN / LMCI / AD arm `{st_name}` (`STAGE_SENSITIVITY_ARM`, change `{st_arm['change']}`: "
+        f"{_stage_arm_definition(st_arm)}; every other export and analysis setting the primary's; "
+        f"{_section_ref('Stage-definition sensitivity')}) selected rank {st_record['latent']['selected_lv']}. Status per "
+        "statistic (`same` when the rejection under `ANALYSIS_REJECTION_RULE` equals the primary's, else "
+        f"`{_STAGE_SENSITIVITY_STATUS_DIFFERS}`; the primary's status is the result either way), read under `READING_RULES` "
+        f"and `STAGE_SENSITIVITY_READING_RULES` ({_section_ref('Reading rules')}):"
+    )
+    b.bullets([_stage_arm_status_line(s, st_statuses.get(s, "n/a"), p_status[s], st_status[s]) for s in ANALYSIS_STATISTICS])
 
     def flagged_components(manifest: dict) -> str:
         per = manifest.get("counts", {}).get("per_component", {})
@@ -8941,6 +9255,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         return ", ".join(f"`{c}`" for c in names) if names else "none"
 
     d_flagged, ad_flagged = d_manifest.get("counts", {}).get("flagged", {}), ad_manifest.get("counts", {}).get("flagged", {})
+    st_flagged = manifests[_STAGE_ARM_LABELS["diagnostics"]].get("counts", {}).get("flagged", {})
     b.para(
         f"Axis diagnostics (|rho| ≥ {d_manifest.get('settings', {}).get('DIAGNOSTIC_CORRELATION_THRESHOLD')} flagged, a "
         "reporting threshold, not an adoption rule): in the primary, "
@@ -8955,7 +9270,10 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
             for v in variants
             for f in [manifests[v_labels[v]["diagnostics"]].get("counts", {}).get("flagged", {})]
         )
-        + f" ({_section_ref('Export sensitivity')}). A flagged row is a measurement-space finding, never a change of a statistic."
+        + f" ({_section_ref('Export sensitivity')}); in `{st_name}`, {_count(st_flagged.get('axis_raw'))} and "
+        f"{_count(st_flagged.get('axis_partial'))}, the flagged components "
+        f"{flagged_components(manifests[_STAGE_ARM_LABELS['diagnostics']])} ({_section_ref('Stage-definition sensitivity')}). "
+        "A flagged row is a measurement-space finding, never a change of a statistic."
     )
 
     # 2. Provenance ------------------------------------------------------------------------
@@ -9393,7 +9711,11 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.section(next(sections))
     _export_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 9. Findings --------------------------------------------------------------------------
+    # 9. Stage-definition sensitivity ------------------------------------------------------
+    b.section(next(sections))
+    _stage_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
+
+    # 10. Findings -------------------------------------------------------------------------
     b.section(next(sections))
     b.para("Every deviation from the predeclared counts and every finding of every input manifest, verbatim, under its step; then the report's own.")
     for label, m in manifests.items():
@@ -9409,7 +9731,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     else:
         b.para("None.")
 
-    # 10. Reading rules --------------------------------------------------------------------
+    # 11. Reading rules --------------------------------------------------------------------
     b.section(next(sections))
     b.heading("READING_RULES")
     b.para("Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):")
@@ -9423,8 +9745,11 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.heading("EXPORT_VARIANT_READING_RULES")
     b.para(_export_variant_rules_heading()[-1])
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)))
+    b.heading("STAGE_SENSITIVITY_READING_RULES")
+    b.para(_stage_arm_rules_heading()[-1])
+    b.para(*(f"{i}. {rule}" for i, rule in enumerate(STAGE_SENSITIVITY_READING_RULES, 1)))
 
-    # 11. Reproduction ---------------------------------------------------------------------
+    # 12. Reproduction ---------------------------------------------------------------------
     b.section(next(sections))
     sens_dir = dirs[s_role].parent
     reads_root = [v for v in variants if manifests[v_labels[v]["export"]].get("variant", {}).get("reads_data_root")]
@@ -9453,6 +9778,9 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
             f"{dirs[_variant_role(v, 'analysis')]} --out-dir {dirs[_variant_role(v, 'diagnostics')]}"
             for v in variants
         ),
+        "uv run adni-sexdiff stage-sensitivity",
+        f"uv run adni-sexdiff axis-diagnostics --input-dir {dirs[_stage_arm_role('export')]} --analysis-dir "
+        f"{dirs[_stage_arm_role('analysis')]} --out-dir {dirs[_stage_arm_role('diagnostics')]}",
         "uv run adni-sexdiff report",
         "uv run adni-sexdiff report --check",
     )
@@ -9463,13 +9791,16 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "the provenance hashes until a new report is written and checked."
     )
     v_settings = [manifests[v_labels[v]["analysis"]].get("settings", {}) for v in variants]
+    st_settings = manifests[_STAGE_ARM_LABELS["analysis"]].get("settings", {})
     b.para(
-        f"MOTCO's CLI equivalents of the {2 + len(variants)} analyses, the primary, the arm and "
-        + ", ".join(f"`{v}`" for v in variants) + " (`cli_equivalent` of their analysis manifests):"
+        f"MOTCO's CLI equivalents of the {3 + len(variants)} analyses, the primary, the arm, "
+        + ", ".join(f"`{v}`" for v in variants) + f" and the CN / LMCI / AD arm `{st_name}` (`cli_equivalent` of their "
+        "analysis manifests):"
     )
     b.code(
         _text(ps.get("cli_equivalent", {}).get("command")), _text(a_settings.get("cli_equivalent", {}).get("command")),
         *(_text(vs.get("cli_equivalent", {}).get("command")) for vs in v_settings),
+        _text(st_settings.get("cli_equivalent", {}).get("command")),
     )
     return b.text(), b.tables
 
@@ -9747,6 +10078,7 @@ def run_report(
     diagnostics_dir: str | Path | None = None,
     sensitivity_dir: str | Path | None = None,
     export_sensitivity_dir: str | Path | None = None,
+    stage_sensitivity_dir: str | Path | None = None,
     out: str | Path | None = None,
     check: bool = False,
     force: bool = False,
@@ -9783,6 +10115,13 @@ def run_report(
         table (hook ``factors``), the variant export's manifest, the variant
         analysis' three aggregate files, the comparison's three files and the
         variant diagnostics' six. Every registered variant is required.
+    stage_sensitivity_dir:
+        The root of ``stage-sensitivity`` (default
+        ``constants.STAGE_SENSITIVITY_DIR``), read through
+        ``STAGE_SENSITIVITY_SUBDIRS`` (``REPORT_STAGE_ARM_FILES``): the CN /
+        LMCI / AD arm export's manifest, the arm analysis' three aggregate
+        files, the comparison's three files and the arm diagnostics' six.
+        The arm is required.
     out:
         The report path, whose name must match ``constants.REPORT_NAME``
         (``reports/motco-adni-<date>.md``); the date is read from it. Write
@@ -9809,7 +10148,7 @@ def run_report(
 
     Notes
     -----
-    Inputs are the 53 kept aggregate files of ``REPORT_INPUT_FILES`` (17
+    Inputs are the 66 kept aggregate files of ``REPORT_INPUT_FILES`` (21
     manifests) and nothing else: no participant-level file is opened or
     required, and the hashes the report quotes for one are the values the
     manifests record. So the step runs on any clone with the committed
@@ -9819,32 +10158,42 @@ def run_report(
     values and the step to rerun: every input present; every aggregate file
     hashes to the value its own manifest records (the bridge table to its
     variant export manifest's ``bridge.table.sha256``); the primary is the
-    primary, the arm is ``LATENT_SENSITIVITY_ARM`` and each variant
-    directory holds its ``EXPORT_VARIANTS`` entry; the primary, the arm and
-    every variant analysis are reported runs (``n_jobs =
+    primary, the arm is ``LATENT_SENSITIVITY_ARM``, each variant directory
+    holds its ``EXPORT_VARIANTS`` entry and the CN / LMCI / AD arm is
+    ``STAGE_SENSITIVITY_ARM`` (not crossed with an export variant or the
+    latent adjustment); the primary, the arm, every variant analysis and
+    the CN / LMCI / AD arm's analysis are reported runs (``n_jobs =
     REPORTED_N_JOBS``), every ``numerics`` block present is pinned and
     every manifest records the same MOTCO, scikit-learn and metabo_adni
-    versions; the chain holds link by link (76 links on the committed tree)
-    from the clean manifests to the arm's and every variant's diagnostics.
-    Write mode also stops on an existing ``out`` without ``force``.
+    versions; the chain holds link by link (100 links on the committed
+    tree: 76, then 24 for the CN / LMCI / AD arm) from the clean manifests
+    to the arm's, every variant's and the CN / LMCI / AD arm's diagnostics,
+    the primary feature tables the arm export names as the source of its
+    floors included. Write mode also stops on an existing ``out`` without
+    ``force``.
 
-    Output contract (``render_report``): one Markdown file with the eleven
+    Output contract (``render_report``): one Markdown file with the twelve
     sections of ``REPORT_SECTIONS`` in order (summary; provenance;
     cohort; export; primary analysis; axis diagnostics of the primary;
-    latent-adjustment sensitivity; export sensitivity; findings; reading
-    rules; reproduction), every table titled by a level-3 heading and
-    keyed by its first column, every number copied from a record, a
-    manifest or a CSV at the digits of the summary it belongs to, every
-    reading sentence produced by ``_statistic_reading_line``,
-    ``_arm_status_line`` and ``_export_variant_status_line`` (the code of
-    ``summary.md``, ``latent_sensitivity.md`` and
-    ``export_sensitivity.md``), the variant lines by
-    ``_export_variant_lines``, ``READING_RULES``, then
-    ``LATENT_SENSITIVITY_READING_RULES``, then
-    ``EXPORT_VARIANT_READING_RULES`` verbatim, the arm's and the variants'
-    constants named beside every table that quotes them, and the primary's
-    status the result in every table. The body depends on the inputs and the file
-    name only (the date is in the name and the title line; no revision,
+    latent-adjustment sensitivity; export sensitivity; stage-definition
+    sensitivity; findings; reading rules; reproduction), every table titled
+    by a level-3 heading and keyed by its first column, every number copied
+    from a record, a manifest or a CSV at the digits of the summary it
+    belongs to, every reading sentence produced by
+    ``_statistic_reading_line``, ``_arm_status_line``,
+    ``_export_variant_status_line`` and ``_stage_arm_status_line`` (the code
+    of ``summary.md``, ``latent_sensitivity.md``, ``export_sensitivity.md``
+    and ``stage_sensitivity.md``), the variant lines by
+    ``_export_variant_lines``, the CN / LMCI / AD arm's bullets and
+    definition tables by ``_stage_arm_lines`` and ``_stage_arm_tables``,
+    ``READING_RULES``, then ``LATENT_SENSITIVITY_READING_RULES``, then
+    ``EXPORT_VARIANT_READING_RULES``, then
+    ``STAGE_SENSITIVITY_READING_RULES`` verbatim, the arm's, the variants'
+    and the CN / LMCI / AD arm's constants named beside every table that
+    quotes them, no sentence reading one sensitivity against another, and
+    the primary's status the result in every table. The body depends on
+    the inputs and the file name only (the date is in the name and the
+    title line; no revision,
     host, time or runtime of the report run is written), so two runs on the
     same inputs are byte-identical. The file is written to ``<out>.tmp``,
     parsed back through ``parse_report`` and checked against the generated
@@ -9872,7 +10221,7 @@ def run_report(
     inputs = _load_report_inputs(
         cleaned_dir=cleaned_dir, cohort_dir=cohort_dir, input_dir=input_dir, analysis_dir=analysis_dir,
         diagnostics_dir=diagnostics_dir, sensitivity_dir=sensitivity_dir, export_sensitivity_dir=export_sensitivity_dir,
-        log=log,
+        stage_sensitivity_dir=stage_sensitivity_dir, log=log,
     )
     if check:
         return check_report(out_path, inputs, log=log)
