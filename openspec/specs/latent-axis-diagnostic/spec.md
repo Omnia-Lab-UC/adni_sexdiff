@@ -35,11 +35,19 @@ Every input hash the analysis manifest records SHALL equal the sha256 of that ex
 - **THEN** the step stops naming `stage_means.csv`, 7 and 8, and writes nothing
 
 ### Requirement: Cohort table is checked and chained to the export
-`cohort.csv` SHALL hash to the value `cohort_manifest.json` records, `cohort_manifest.json` SHALL hash to the value the export manifest records for it, and the rows with both platform flags SHALL be the exported participants in export order. A mismatch SHALL stop the step before anything is written, naming the file and the step to rerun.
+`cohort.csv` SHALL hash to the value `cohort_manifest.json` records, `cohort_manifest.json` SHALL hash to the value the export manifest records for it, and the rows with both platform flags SHALL be the exported participants in export order. On the CN / LMCI / AD arm's export (a manifest that records the arm) the rows compared SHALL be the both-flag rows whose `dx_bl` the arm keeps. A mismatch SHALL stop the step before anything is written, naming the file and the step to rerun.
 
 #### Scenario: Cohort rerun after the export
 - **WHEN** `cohort_manifest.json` hashes to a value other than the one the export manifest records
 - **THEN** the step stops naming `cohort_manifest.json` and the `export` command, and writes nothing
+
+#### Scenario: Arm export read
+- **WHEN** `--input-dir results/motco_stage_sensitivity/motco_input` is read, whose manifest records the arm `cn_lmci_ad`
+- **THEN** the 1130 both-flag rows of `cohort.csv` whose `dx_bl` is CN, LMCI or AD are compared with the exported participants in order, and the check passes
+
+#### Scenario: Arm export with another cohort
+- **WHEN** the arm's manifest records a cohort manifest hash other than the one now on disk
+- **THEN** the step stops naming `cohort_manifest.json`, both hashes and the `stage-sensitivity` command, and writes nothing
 
 ### Requirement: Predeclared variable set
 The variables SHALL be the constant `DIAGNOSTIC_VARIABLES`: `age`, `education`, `apoe4` (0 / 1 / 2), `phase` (1 for `ADNI2GO`) and `statin` from `covariates.csv`; `stage` (CN 0, MCI 1, AD 2) and `male` (1 for Male) from `metadata.csv`; `dx_bl` (CN 0, SMC 1, EMCI 2, LMCI 3, AD 4) from `cohort.csv`. The set SHALL NOT be chosen or extended from a result, and the manifest SHALL list every variable with its source file and derivation.
@@ -111,7 +119,7 @@ Every output SHALL be per component, per block or per variable, SHALL hold no pa
 - **THEN** `git check-ignore -q` fails for each of the six files
 
 ### Requirement: Manifest records provenance, definitions and predeclared counts
-`diagnostics_manifest.json` SHALL record the software versions, the git revision, every input with its sha256 and the chain checks, the analysis read (manifest hash, latent adjustment, `n_jobs`, selected rank, whether it is the primary), the variables with sources, the threshold, the conditioning columns, the definition of every statistic, the observed counts beside `DIAGNOSTICS_EXPECTED_COUNTS` with the deviations, output hashes and findings.
+`diagnostics_manifest.json` SHALL record the software versions, the git revision, every input with its sha256 and the chain checks, the analysis read (manifest hash, latent adjustment, `n_jobs`, selected rank, whether it is the primary, the export variant or stage arm it belongs to), the variables with sources, the threshold, the conditioning columns, the definition of every statistic, the observed counts beside `DIAGNOSTICS_EXPECTED_COUNTS` with the deviations, output hashes and findings.
 
 #### Scenario: Counts match on the primary
 - **WHEN** the step runs on the committed export, cohort and primary analysis
@@ -120,6 +128,13 @@ Every output SHALL be per component, per block or per variable, SHALL hold no pa
 #### Scenario: A count deviates
 - **WHEN** the export holds 1500 participants
 - **THEN** the manifest's deviations name `participants`, expected 1501 and observed 1500, and the step still completes
+
+### Requirement: Expected counts on the CN / LMCI / AD arm
+When the analysis read is the CN / LMCI / AD arm (an analysis manifest that records step `stage-sensitivity`), the expected participants and sex × stage cells SHALL be the arm's predeclared ones (`STAGE_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]`), beside the rank-independent keys, and a deviation SHALL be a finding, never a stop.
+
+#### Scenario: Counts match on the arm
+- **WHEN** the step reads the arm's export and analysis
+- **THEN** the manifest records the analysis read as the stage arm `cn_lmci_ad`, not the primary, expects and observes 1130 participants with the arm's six cells, and its deviation list is empty
 
 ### Requirement: Findings for conditions that change the reading
 The step SHALL record a finding, never a stop, when the analysis read has `n_jobs` other than 1, when it is not the primary (a latent adjustment or a non-default analysis directory, so the primary's rank is not expected), when a variable is constant or has fewer than three complete rows, and, per component, the flagged variables as counts and names. A finding SHALL name counts, settings and variables, never a participant.
@@ -143,7 +158,7 @@ Two runs on the same inputs SHALL give byte-identical CSVs and `diagnostics.md`,
 The diagnostic reads sex and stage. Its outputs SHALL NOT be an input of `export`, `analyze`, any sensitivity arm or any export variant, and the documentation SHALL state that variants and arms are predeclared in a change proposal, never derived from a diagnostic value.
 
 #### Scenario: No downstream read
-- **WHEN** any `export`, `analyze`, `latent-sensitivity` or `export-sensitivity` command runs
+- **WHEN** any `export`, `analyze`, `latent-sensitivity`, `export-sensitivity` or `stage-sensitivity` command runs
 - **THEN** it reads nothing under any diagnostics directory
 
 ### Requirement: Reading rules carried
@@ -167,3 +182,14 @@ The diagnostic reads sex and stage. Its outputs SHALL NOT be an input of `export
 #### Scenario: Export variant read
 - **WHEN** the analysis read is `results/motco_export_sensitivity/nist_bridge/analysis/` with its own export directory
 - **THEN** `diagnostics.md` names the export variant `nist_bridge`, calls each flagged row a finding about the variant's measurement space, prints `EXPORT_VARIANT_READING_RULES` after `READING_RULES`, and states that the primary analysis stays primary
+
+### Requirement: Reading rules of the CN / LMCI / AD arm read
+On the CN / LMCI / AD arm (an analysis manifest that records step `stage-sensitivity`) `diagnostics.md` SHALL name the arm, call each flagged row a finding about the arm's measurement space and print `STAGE_SENSITIVITY_READING_RULES` after `READING_RULES`; the diagnostic's outputs on the primary, the latent arm and the export variants SHALL keep their bytes.
+
+#### Scenario: Stage arm read
+- **WHEN** the analysis read is `results/motco_stage_sensitivity/analysis/` with the arm's export directory
+- **THEN** `diagnostics.md` names the CN / LMCI / AD arm `cn_lmci_ad`, calls each flagged row a finding about the arm's measurement space, prints `STAGE_SENSITIVITY_READING_RULES` after `READING_RULES`, and states that the primary analysis stays primary
+
+#### Scenario: Other reads unchanged
+- **WHEN** the diagnostic runs pinned on the primary, the latent arm or an export variant after this change
+- **THEN** its four CSVs and `diagnostics.md` have the sha256 the committed diagnostics manifest of that read records
