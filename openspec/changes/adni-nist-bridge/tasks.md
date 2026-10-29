@@ -103,7 +103,7 @@ No task line records a participant value.
 
   Done 2026-10-29 on nixos-home, on the uncommitted implementation (rerun on the clean tree in 5.5, whose outputs are the committed ones): no deviation in either variant's export, analysis or comparison manifest; `nmr.csv`, `metadata.csv` and `covariates.csv` equal the primary's; `bridge/nist_bridge.csv` equals the spike's appendix for all 133 metabolites (kit, valid counts, ISTD flags, bridged, run means, applied `b` and its SE at 3 decimals; not bridged: `C0`, `C10.2`, `C12`, `C14.1.OH`, `C6..C4.1.DC.`, `Serotonin`, `Spermidine`); p180 run offsets `nist_bridge` / `per_run_standardized`: median |d| 0.29 / 0.00, |d| > 0.5 35 / 0, |d| > 1 8 / 0, |corr(PC1, phase)| 0.22 / 0.00, |corr(PC2, phase)| 0.58 / 0.00; runs 684 / 817, none differing from `phase`; every `numerics.pinned` true. Ranks, statistics and statuses: `results/motco_export_sensitivity/<variant>/comparison/export_sensitivity.csv` and `.md`; the only finding of each variant is its rank differing from the primary's.
 - [x] 5.4 Run `axis-diagnostics` on both variants into `<variant>/diagnostics`. Verify the chain checks pass and `is_primary` is false. (Done 2026-10-29 on nixos-home: both pass the chain checks, `is_primary` false with `export_variant` recorded, `numerics.pinned` true, no deviation on the rank-independent keys; the flagged rows are in each `diagnostics/diagnostics.md`.)
-- [ ] 5.5 Rerun 5.3 and 5.4 with `--force` on the clean tree after the implementation commit. Verify every output except the manifests' timestamps and revision is byte-identical to the first run.
+- [x] 5.5 Rerun 5.3 and 5.4 with `--force` on the clean tree after the implementation commit. Verify every output except the manifests' timestamps and revision is byte-identical to the first run. (Done 2026-10-29 on nixos-home at `94a0046`, clean: the first run's `diagnostics/` were moved aside before the rerun, so that no stale-diagnostics finding enters outputs whose diagnostics are regenerated, and 5.4 was rerun. Against the first run: the 37 non-JSON files (every CSV, `summary.md`, `export_sensitivity.md`, `nist_bridge.csv`, `diagnostics.md`) byte-identical; the 10 manifests and records equal apart from time, revision, MOTCO's runtime in `result.json` and the hashes of the files that carry them (the spec's "Reproducible run", worded so during the apply); no deviation; every `numerics.pinned` true; the scratch copy deleted. These are the committed outputs, `73aedb5`.)
 
 ## 6. Docs and commit hygiene
 
@@ -116,10 +116,12 @@ No task line records a participant value.
   - the participant-level patterns of constraint 1.
 
   Verify with `grep -n export-sensitivity README.md AGENTS.md`.
-- [ ] 6.2 Before the commit of outputs, name every file added under `results/motco_export_sensitivity/` with why it is aggregate. Verify:
+- [x] 6.2 Before the commit of outputs, name every file added under `results/motco_export_sensitivity/` with why it is aggregate. Verify:
   - `git check-ignore` on every participant-level file;
   - `grep -rIl` for any `RID` column or value in the staged files returns nothing;
   - `openspec validate adni-nist-bridge --strict` passes.
+
+  Done 2026-10-29 on nixos-home (`73aedb5`): 31 files added, each named with why it is aggregate in the commit message (per variant the bridge table for `nist_bridge`, the export manifest, `result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json`, `summary.md`, the three comparison files and the six diagnostics files); `git check-ignore` matches all 16 participant-level files (each variant's six `motco_input/*.csv`, `latent_scores.csv` and `analysis_metadata.csv`); no staged CSV has an `rid` or `RID` column, and `grep -w` finds `rid` only as the export's column name (`sample_column`, `sample_col`, the `cli_equivalent`'s `--sample-col rid`); `openspec validate --strict` passes.
 
 ## Workflow follow-up
 
