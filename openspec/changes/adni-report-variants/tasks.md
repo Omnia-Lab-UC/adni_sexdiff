@@ -111,18 +111,20 @@ Every task runs on any machine with the Nix shell and the committed tree. The in
 
 ## 6. The report and commit hygiene
 
-- [ ] 6.1 Commit the implementation first. Then, on the clean tree at that commit (`git status` clean):
+- [x] 6.1 Commit the implementation first. Then, on the clean tree at that commit (`git status` clean):
   - run `uv run adni-sexdiff report`, then `uv run adni-sexdiff report --check`;
   - verify the check passes and reads the new report as the newest;
   - verify `grep -nE '\bRID\b|\brid\b' reports/motco-adni-<date>.md` hits only column-name mentions;
   - verify `reports/motco-adni-2026-10-28.md` is byte-unchanged.
 
-  Commit the new report alone, and record its sections, tables, cells and chain links in this line.
-- [ ] 6.2 Commit hygiene. Verify:
+  Commit the new report alone, and record its sections, tables, cells and chain links in this line. Done: the implementation is 22c2c85; on the clean tree there `report` wrote `reports/motco-adni-2026-10-29.md` (11 sections, 58 tables, 2850 cells, 76 chain links; 122 KB) and `report --check` without `--out` read it as the newest (58 tables, 2850 cells and 560 other lines compared, no mismatch, exit 0); the grep hits the sample column `rid` and `--sample-col rid` only; `reports/motco-adni-2026-10-28.md` is byte-unchanged. The report is committed alone as c94f5e7.
+- [x] 6.2 Commit hygiene. Verify:
   - `git status` is clean;
   - `git ls-files results` lists the same 61 files as before the change (30 + 31);
   - no file under `results/` changed in any commit of the branch;
   - no committed file holds a participant identifier (the grep of 6.1 over every file the branch adds).
+
+  Verified: `git status` clean; `git ls-files results` lists the same 61 files as `main` (30 + 31); no file under `results/` changed on the branch; over the eleven files the branch adds or changes, every grep hit is the name of the column (`RID`, `rid`), none a participant value.
 
 ## Workflow follow-up
 
