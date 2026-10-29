@@ -6,14 +6,16 @@ the first MOTCO application at a well-powered design (n ≈ 1,300). Later ADNI
 layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 
 **Status: every step implemented.** `clean`, `cohort`, `export`,
-`analyze`, `axis-diagnostics`, the sensitivity steps `latent-sensitivity`
-and `export-sensitivity`, and `report` (changes `adni-metabolomics-clean`,
-`adni-cohort`, `adni-export`, `adni-analyze`, `adni-axis-diagnostics`,
-`adni-latent-sensitivity`, `adni-nist-bridge`, `adni-report` and
-`adni-report-variants`); every step but `report` runs on a data machine,
-`report` on any clone (it reads committed aggregate files only), and the
-reports are committed under `reports/` and checked by `report --check`;
-the newest covers the primary, the latent arm and both export variants.
+`analyze`, `axis-diagnostics`, the sensitivity steps `latent-sensitivity`,
+`export-sensitivity` and `stage-sensitivity`, and `report` (changes
+`adni-metabolomics-clean`, `adni-cohort`, `adni-export`, `adni-analyze`,
+`adni-axis-diagnostics`, `adni-latent-sensitivity`, `adni-nist-bridge`,
+`adni-report`, `adni-report-variants` and `adni-stage-sensitivity`); every
+step but `report` runs on a data machine, `report` on any clone (it reads
+committed aggregate files only), and the reports are committed under
+`reports/` and checked by `report --check`; the newest covers the primary,
+the latent arm and both export variants (the CN / LMCI / AD arm joins the
+report by a later change).
 The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
 `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis
@@ -23,8 +25,9 @@ diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 `DIAGNOSTIC_CORRELATION_THRESHOLD`) and the sensitivity constants
 (`LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
 `LATENT_SENSITIVITY_READING_RULES`; `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`,
-`EXPORT_VARIANT_READING_RULES`); every constant the six steps and the two
-sensitivity steps need is decided.
+`EXPORT_VARIANT_READING_RULES`; `STAGE_SENSITIVITY_ARM`,
+`STAGE_SENSITIVITY_READING_RULES`); every constant the six steps and the
+three sensitivity steps need is decided.
 `AGENTS.md` holds the conventions and the hard constraints and is the single
 source of truth.
 
@@ -69,12 +72,12 @@ Project layout:
 ├── data/            # raw ADNI files, uploaded by hand: LONI archive under Metabolomics/, clinical tables under Clinical/, the names the steps read as symlinks (gitignored)
 ├── reports/         # committed case-study reports, generated in full by `report` from the aggregate outputs and checked by `report --check`
 ├── results/         # pipeline outputs; only aggregate files are committed (see .gitignore)
-├── scripts/         # sync_results.sh (aggregate outputs between a machine and the cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py and spike_nist_bridge.py (the changes' read-only spikes)
+├── scripts/         # sync_results.sh (aggregate outputs between a machine and the cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py, spike_nist_bridge.py and spike_stage_arm.py (the changes' read-only spikes)
 ├── src/
 │   └── adni_sexdiff/
-│       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, latent-sensitivity, export-sensitivity, report (exits 1 on a --check mismatch)
+│       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, latent-sensitivity, export-sensitivity, stage-sensitivity, report (exits 1 on a --check mismatch)
 │       ├── constants.py   # conventions; scientific constants enter through OpenSpec proposals only
-│       └── data.py        # pipeline steps (clean, cohort, export, analyze, axis-diagnostics, report and the sensitivity steps latent-sensitivity and export-sensitivity)
+│       └── data.py        # pipeline steps (clean, cohort, export, analyze, axis-diagnostics, report and the sensitivity steps latent-sensitivity, export-sensitivity and stage-sensitivity)
 ├── openspec/        # change proposals and specs
 ├── flake.nix        # Python 3.12 + uv; the shell hook runs `uv sync --locked`
 ├── pyproject.toml   # package adni_sexdiff, CLI adni-sexdiff (uv, uv.lock committed)
@@ -105,6 +108,12 @@ Pipeline (each step reads the previous step's outputs only):
      primary's settings and compared with the primary, and
      `axis-diagnostics` on each → `results/motco_export_sensitivity/`
      (below)
+   - `stage-sensitivity` (sensitivity step, after 5) – the predeclared
+     CN / LMCI / AD arm (SMC and EMCI, enrolled only in ADNI-GO/2, dropped):
+     the primary export's rows of the kept participants, analysed at the
+     primary's settings and compared with the primary, and
+     `axis-diagnostics` on the arm → `results/motco_stage_sensitivity/`
+     (below)
 6. `report` – the case-study report generated in full from the kept
    aggregate outputs (the clean, cohort and export manifests, the primary,
    its diagnostics, the latent arm with its comparison and diagnostics, and
@@ -127,6 +136,8 @@ uv run adni-sexdiff axis-diagnostics --analysis-dir results/motco_latent_sensiti
 uv run adni-sexdiff export-sensitivity --variant all
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/nist_bridge/motco_input --analysis-dir results/motco_export_sensitivity/nist_bridge/analysis --out-dir results/motco_export_sensitivity/nist_bridge/diagnostics
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/per_run_standardized/motco_input --analysis-dir results/motco_export_sensitivity/per_run_standardized/analysis --out-dir results/motco_export_sensitivity/per_run_standardized/diagnostics
+uv run adni-sexdiff stage-sensitivity
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_stage_sensitivity/motco_input --analysis-dir results/motco_stage_sensitivity/analysis --out-dir results/motco_stage_sensitivity/diagnostics
 uv run adni-sexdiff report
 uv run adni-sexdiff report --check
 ```
@@ -616,11 +627,17 @@ measurement space (the primary stays primary) and prints
 (below): the manifest records `is_primary` false and the variant's name,
 and `diagnostics.md` names the variant, calls a flagged row a finding
 about the variant's measurement space and prints
-`EXPORT_VARIANT_READING_RULES` after `READING_RULES`. Its error hints
+`EXPORT_VARIANT_READING_RULES` after `READING_RULES`. With the
+CN / LMCI / AD arm of `stage-sensitivity` (below) the cohort check
+compares the both-flag rows whose `dx_bl` the arm keeps, the expected
+participants and cells are the arm's (`STAGE_SENSITIVITY_EXPECTED_COUNTS`),
+the manifest records `is_primary` false and `stage_arm`, and
+`diagnostics.md` names the arm and prints
+`STAGE_SENSITIVITY_READING_RULES` after `READING_RULES`. Its error hints
 name the command that wrote the analysis read (`adni-sexdiff analyze`,
-`adni-sexdiff latent-sensitivity` or `adni-sexdiff export-sensitivity
---variant <name>`, from the manifest's `step`). No other flag; no setting
-is a flag.
+`adni-sexdiff latent-sensitivity`, `adni-sexdiff export-sensitivity
+--variant <name>` or `adni-sexdiff stage-sensitivity`, from the manifest's
+`step`). No other flag; no setting is a flag.
 
 The diagnostic reads sex and stage, so it is never a filter: no `export`
 or `analyze` run reads `results/motco_diagnostics/`, and arms and variants
@@ -907,6 +924,125 @@ than the primary's and a variant-only rejection is run-handling
 dependence; the run offset per block and the bridge factors are reported
 beside the results, and a variant axis in the diagnostic is a
 measurement-space finding.
+
+## `stage-sensitivity`
+
+```
+uv run adni-sexdiff stage-sensitivity [--input-dir DIR] [--analysis-dir DIR] [--cohort-dir DIR] [--out-dir DIR] [--n-jobs N] [--force]
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_stage_sensitivity/motco_input --analysis-dir results/motco_stage_sensitivity/analysis --out-dir results/motco_stage_sensitivity/diagnostics [--force]
+```
+
+A sensitivity step, read beside the primary and never replacing it
+(change `adni-stage-sensitivity`). `STAGE_RULE` merges SMC into CN and
+EMCI and LMCI into MCI, and SMC and EMCI were enrolled only in ADNI-GO/2,
+so inside the primary's CN and MCI the two runs hold different
+diagnoses and the additive `phase` coefficient carries both the run
+offset and that difference. The export variants handle the measurement
+side of the run; this arm handles the design side. `STAGE_SENSITIVITY_ARM`
+is `cn_lmci_ad`: the exported participants whose `dx_bl` (`cohort.csv`,
+ADNIMERGE `DX.bl` on the baseline row) is CN, LMCI or AD, staged by
+`STAGE_RULE`'s own map (CN → CN, LMCI → MCI, AD → AD; three import-time
+assertions tie the arm to `STAGE_RULE`), SMC and EMCI dropped; the
+primary export's rows of those participants, every cell unchanged (the
+primary's floors and scale; nothing re-exported); every analysis setting
+the primary's (`ANALYSIS_*`, MOTCO's defaults, no latent adjustment,
+`n_jobs = 1` for the reported run, one `analyze_trajectories` call
+through the code `analyze` uses). The arm is not crossed with the latent
+adjustment or an export variant. The arm and its rule are constants,
+never flags; `--input-dir`, `--analysis-dir` and `--cohort-dir` name the
+primary and the cohort to read.
+
+What it changes, from the change's spike (`openspec/changes/adni-stage-sensitivity/spike.md`):
+each stage holds one `DX.bl` category in both runs, so the `phase`
+coefficient is estimated within one diagnosis. It does not balance the
+runs across stages (ADNI-1 share CN 0.527, MCI 0.700, AD 0.544, against
+0.417, 0.446, 0.544 in the primary) and does not remove the run offset,
+which is measurement (p180 median |d| 1.10 on its rows against 1.12, PC1
+correlation 0.71 against 0.73).
+
+Inputs: the primary export `results/motco_input/` (the five files, checked
+as `analyze` checks them, and the four CSVs read as bytes for the copy; no
+feature table), the primary's `result.json` and `analysis_manifest.json`
+(read, never written) and `results/cohort/` (`cohort.csv`, the source of
+`dx_bl`, and `cohort_manifest.json`). No data-root file, no cleaned table,
+nothing under a diagnostics directory.
+
+Checks, in this order, before anything is written (a failure names the
+file or setting, both values or counts and the command to rerun, never a
+participant, and nothing is created under the output root): the gates of
+`analyze`; an existing `motco_input/`, `analysis/` or `comparison/`
+without `--force`; the primary export against its manifest, and that it
+is the primary (no arm or variant recorded); the primary analysis as a
+chained reference (its recorded export hashes, no latent adjustment, the
+installed MOTCO, the seed and permutations); the cohort chain
+(`cohort.csv` against its manifest, the manifest against the export
+manifest's record, the both-flag rows the exported participants in order,
+with equal sex and stage); every `dx_bl` in `STAGE_RULE`'s map; and every
+kept row's stage equal to the arm's map of its `dx_bl`.
+
+Outputs under `results/motco_stage_sensitivity/`, each subdirectory
+staged as `<sub>.tmp/` and the three renamed together when complete;
+`--force` replaces them, and replacing the arm while `diagnostics/`
+exists is a finding (stale until `axis-diagnostics` is rerun). Two pinned
+runs write byte-identical CSVs, `summary.md` and `stage_sensitivity.md`;
+`result.json` differs only in MOTCO's runtime:
+
+| file | content | committed / synced |
+|---|---|---|
+| `motco_input/p180.csv`, `nmr.csv`, `metadata.csv`, `covariates.csv` | the primary export's header and the lines of the kept participants, in export order, copied as bytes (every row the primary's; no `dx_bl` written) | no (participant-level; matched by `results/motco_stage_sensitivity/motco_input/*.csv`) |
+| `motco_input/manifest.json` | step `stage-sensitivity`; `stage_arm` (the constant by name); the primary export as `reference` (its manifest hash, the four files copied, its feature tables' hashes as the source of the floors, its cells, runs within stage, covariate levels and run offset); the cohort chain; the primary's settings (`block_columns`, covariate codings); the counts (kept, dropped per `dx_bl`, `dx_bl` × sex, cells, runs within stage, levels, features, missing covariate values, non-finite cells, `rows_equal_primary` per file, and per block the shape counts, spectrum and run offset on the arm's rows); `STAGE_SENSITIVITY_EXPECTED_COUNTS["export"]` beside them with deviations; output hashes; findings | yes (aggregate, no `RID`) |
+| `analysis/result.json`, `pls_loadings.csv`, `stage_means.csv` | as for the primary | yes (aggregate) |
+| `analysis/latent_scores.csv`, `analysis_metadata.csv` | as for the primary | no (participant-level; matched by `results/**/`) |
+| `analysis/analysis_manifest.json` | step `stage-sensitivity`; the arm export's five files as inputs; `stage_arm`; the primary as `reference` (its two hashes, rank, MOTCO, `n_jobs`, its export); every setting as the primary's; `cli_equivalent`; the arm's `analysis` expected counts with deviations; findings | yes (aggregate) |
+| `analysis/summary.md` | the primary's renderer with the arm's title, an "Arm" section (the participants by `dx_bl` × sex, the cells, runs within stage and covariate levels of both, the run offset per block of both), the arm's note on each reading line and `STAGE_SENSITIVITY_READING_RULES` after `READING_RULES` | yes (aggregate) |
+| `comparison/stage_sensitivity.csv` | the primary row then the arm row: participants, selected rank and mode, `cv_mean_auroc`, CV repeats, eigengap, per statistic observed, p, rejection, null mean, SD and q95; every value read from the two records | yes (aggregate) |
+| `comparison/stage_sensitivity.md` | the statistics with a status per statistic (`same`, or `differs (stage-definition dependence)`; the primary's status is the result either way), the arm's reading lines, the latent spaces, the arm section, the findings, `READING_RULES` then `STAGE_SENSITIVITY_READING_RULES` | yes (aggregate) |
+| `comparison/stage_sensitivity_manifest.json` | the nine inputs (the primary export's five files, the primary's two, the cohort's two) with sha256 and chains; the settings; the arm's own files; the counts (statuses, ranks, participants, cells, levels, runs within stage, run offsets); both expected counts and deviations; output hashes; findings | yes (aggregate) |
+| `diagnostics/` (six files) | `axis-diagnostics` on the arm, run with the second command above | yes (aggregate) |
+
+Predeclared counts (`STAGE_SENSITIVITY_EXPECTED_COUNTS`, from the committed
+`stage_counts.csv` and the spike, none from a run of the arm): `export`
+1130 participants kept, SMC 96 and EMCI 275 dropped, cells Female CN 183,
+MCI 187, AD 125 and Male CN 181, MCI 296, AD 158, runs within stage
+(ADNI1 / ADNI2GO) CN 192 / 172, MCI 338 / 145, AD 154 / 129, features p180
+133 and NMR 165, every row of the four CSVs equal to the primary's, 0
+missing covariate values and non-finite cells, p180 metabolites with
+phase |d| > 0.5 / > 1 at 107 / 77 (NMR > 1 at 0); `analysis` every key of
+`ANALYSIS_EXPECTED_COUNTS` with 1130 participants, the cells above and the
+levels `apoe4` 589 / 413 / 128, `phase` 684 / 446, `statin` 603 / 527;
+`diagnostics` the rank-independent keys with the arm's participants and
+cells. The arm's rank is not predeclared. A deviation is a finding, never
+a stop. Findings also record every finding of `analyze`, rows read back
+that differ from the primary's, an arm rank that differs from the
+primary's, a statistic whose status differs (stage-definition
+dependence), a primary read with `n_jobs ≠ 1` and stale diagnostics.
+
+Diagnostics on the arm: the second command above writes the six files of
+`axis-diagnostics` under `diagnostics/`, with `is_primary` false,
+`stage_arm` `cn_lmci_ad`, the cohort check on the both-flag rows the arm
+keeps, the arm's participants and cells expected, and a `diagnostics.md`
+that names the arm and prints both sets of reading rules. In the arm
+`dx_bl` orders the participants as `stage` does, so their correlations
+coincide; a flagged row is a measurement-space finding about the arm and
+never grounds to adopt it.
+
+Reading rules (`STAGE_SENSITIVITY_READING_RULES`, written before any run
+and printed verbatim after `READING_RULES` in the arm's `summary.md`,
+`stage_sensitivity.md`, the arm's `diagnostics.md` and every report that
+quotes the arm), in brief: the arm never replaces the primary, and no arm
+result changes a constant, `STAGE_RULE` or `COHORT_RULE`, reruns the
+primary or adopts the arm; the arm differs in the participants (its CN is
+`DX.bl` CN, its MCI is LMCI) and so in its z-scoring, CV folds, basis,
+rank, reference row and permutation draws, and a differing status is
+dependence on the stage definition and the sample; its rank, floor,
+eigengap and null summary are read beside its `angle`; `phase` is
+estimated within one diagnosis per stage while the runs stay unbalanced
+and the run offset stays; the arm's MCI is a later, narrower stage, and
+`angle` reads the endpoints (the AD cells are the primary's, the CN cells
+lose SMC); a non-rejection is no more informative than the primary's and
+an arm-only rejection is stage-definition dependence; the cells, runs
+within stage and run offset are reported beside the results; the arm is
+read against the primary only, never against another sensitivity.
 
 ## `report`
 

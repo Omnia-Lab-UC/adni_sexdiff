@@ -53,9 +53,19 @@ Scientific constants
     ``adni-nist-bridge``, with the predeclared
     ``EXPORT_VARIANT_EXPECTED_COUNTS`` and ``NIST_BRIDGE_WORKBOOK_SHA256``
     and the conventions ``EXPORT_SENSITIVITY_DIR``,
-    ``EXPORT_SENSITIVITY_SUBDIRS`` and the output names. Every scientific
-    constant the six steps and the two sensitivity steps need is decided; a
-    later variant or arm introduces its own by proposal. The changes
+    ``EXPORT_SENSITIVITY_SUBDIRS`` and the output names;
+    ``STAGE_SENSITIVITY_ARM`` (the single CN / LMCI / AD arm ``cn_lmci_ad``:
+    the exported participants whose ``DX.bl`` is CN, LMCI or AD, staged by
+    ``STAGE_RULE``'s own map, the primary export's rows and floors, the
+    primary's analysis settings; tied to ``STAGE_RULE`` by three import-time
+    assertions) and ``STAGE_SENSITIVITY_READING_RULES`` (the eight statements
+    every reader of the arm carries after ``READING_RULES``), by the change
+    ``adni-stage-sensitivity``, with the predeclared
+    ``STAGE_SENSITIVITY_EXPECTED_COUNTS`` and the conventions
+    ``STAGE_SENSITIVITY_DIR``, ``STAGE_SENSITIVITY_SUBDIRS`` and the output
+    names. Every scientific constant the six steps and the three sensitivity
+    steps need is decided; a later variant or arm introduces its own by
+    proposal. The changes
     ``adni-report`` (the ``report`` step) and ``adni-report-variants`` (the
     report extended to every export variant) introduce no scientific
     constant: their conventions ``REPORT_INPUT_FILES`` (every file the step
@@ -102,6 +112,9 @@ DIAGNOSTICS_DIR = "results/motco_diagnostics"
 #: one directory per variant of ``EXPORT_VARIANTS``, laid out as
 #: ``EXPORT_SENSITIVITY_SUBDIRS``.
 EXPORT_SENSITIVITY_DIR = "results/motco_export_sensitivity"
+#: The output root of ``stage-sensitivity`` (change ``adni-stage-sensitivity``),
+#: laid out as ``STAGE_SENSITIVITY_SUBDIRS``.
+STAGE_SENSITIVITY_DIR = "results/motco_stage_sensitivity"
 REPORTS_DIR = "reports"
 
 # --- Output file names -----------------------------------------------------
@@ -153,6 +166,9 @@ PARTICIPANT_LEVEL_PATTERNS: tuple[str, ...] = (
     # each export variant's MOTCO input (``EXPORT_SENSITIVITY_SUBDIRS["export"]``),
     # its feature tables with it, as the primary's
     f"{EXPORT_SENSITIVITY_DIR}/*/motco_input/*.csv",
+    # the CN / LMCI / AD arm's MOTCO input (``STAGE_SENSITIVITY_SUBDIRS["export"]``):
+    # the primary export's rows of the participants it keeps
+    f"{STAGE_SENSITIVITY_DIR}/motco_input/*.csv",
     f"{RESULTS_DIR}/**/{ANALYSIS_LATENT_SCORES}",
     f"{RESULTS_DIR}/**/{ANALYSIS_METADATA}",
 )
@@ -1244,6 +1260,153 @@ EXPORT_VARIANT_EXPECTED_COUNTS: dict[str, dict] = {
 assert tuple(EXPORT_VARIANT_EXPECTED_COUNTS) == tuple(EXPORT_VARIANTS), (
     "EXPORT_VARIANT_EXPECTED_COUNTS must predeclare every EXPORT_VARIANTS entry, in its order"
 )
+
+
+# --- stage-sensitivity: conventions -------------------------------------------
+
+#: The subdirectories of ``STAGE_SENSITIVITY_DIR``: ``export`` (the arm's MOTCO
+#: input, laid out as ``MOTCO_INPUT_DIR`` without the feature tables; its CSVs
+#: are participant-level), ``analysis`` (laid out as ``MOTCO_ANALYSIS_DIR``) and
+#: ``comparison``, all written by ``stage-sensitivity``, and ``diagnostics``
+#: (``axis-diagnostics --input-dir <export> --analysis-dir <analysis> --out-dir
+#: <diagnostics>``, never touched by ``stage-sensitivity``).
+STAGE_SENSITIVITY_SUBDIRS: dict[str, str] = {
+    "export": "motco_input",
+    "analysis": "analysis",
+    "comparison": "comparison",
+    "diagnostics": "diagnostics",
+}
+#: ``comparison/``: the primary and the arm side by side.
+STAGE_SENSITIVITY_TABLE = "stage_sensitivity.csv"
+STAGE_SENSITIVITY_SUMMARY = "stage_sensitivity.md"
+STAGE_SENSITIVITY_MANIFEST = "stage_sensitivity_manifest.json"
+
+# --- stage-sensitivity: scientific constants ----------------------------------
+
+#: Decided by the change ``adni-stage-sensitivity`` (2026-10-29, before any run)
+#: and never changed by a flag, a result or a count. The single CN / LMCI / AD
+#: arm: the exported participants whose enrollment category ``dx_bl``
+#: (``cohort.csv``, ADNIMERGE ``DX.bl`` on the baseline row) is in ``keep``,
+#: staged by ``STAGE_RULE``'s own map (``stage_map``); the categories in
+#: ``drop`` (SMC and EMCI, enrolled only in ADNI-GO/2) leave the arm. Its rows
+#: are the primary export's rows of the kept participants, every cell unchanged
+#: (the primary's floors and scale); its analysis is the primary's
+#: (``ANALYSIS_*`` and MOTCO's defaults, no latent adjustment, ``n_jobs = 1``
+#: for the reported run). It is not crossed with the latent adjustment or an
+#: export variant. It is read beside the primary and never replaces it. The
+#: assertions below tie it to ``STAGE_RULE``.
+STAGE_SENSITIVITY_ARM: dict = {
+    "name": "cn_lmci_ad",
+    "source": "dx_bl",
+    "keep": ("CN", "LMCI", "AD"),
+    "drop": ("SMC", "EMCI"),
+    "stage_map": {"CN": "CN", "LMCI": "MCI", "AD": "AD"},
+    "floors": (
+        "the primary export's (EXPORT_FEATURE_RULE over the exported participants); the arm's rows are the primary "
+        "export's rows"
+    ),
+    "analysis": "the primary's (ANALYSIS_* constants and MOTCO's defaults; no latent adjustment)",
+    "change": "adni-stage-sensitivity",
+}
+assert set(STAGE_SENSITIVITY_ARM["keep"]) | set(STAGE_SENSITIVITY_ARM["drop"]) == set(STAGE_RULE["map"]), (
+    "STAGE_SENSITIVITY_ARM must keep or drop every category of STAGE_RULE's map"
+)
+assert all(STAGE_RULE["map"][dx] == stage for dx, stage in STAGE_SENSITIVITY_ARM["stage_map"].items()), (
+    "STAGE_SENSITIVITY_ARM's stage_map must be STAGE_RULE's map for the categories it keeps"
+)
+assert tuple(STAGE_SENSITIVITY_ARM["stage_map"]) == STAGE_SENSITIVITY_ARM["keep"], (
+    "STAGE_SENSITIVITY_ARM's stage_map must map exactly the kept categories, in their order"
+)
+
+#: Decided by the change ``adni-stage-sensitivity``, written before any run:
+#: the binding reading rules of the CN / LMCI / AD arm, printed verbatim after
+#: ``READING_RULES`` in the arm's ``summary.md``, in ``stage_sensitivity.md``,
+#: in the arm's ``diagnostics.md`` and in every report that quotes the arm. The
+#: numbers quoted are from the committed ``stage_counts.csv`` and the change's
+#: spike, none from a run of the arm.
+STAGE_SENSITIVITY_READING_RULES: tuple[str, ...] = (
+    "The arm is read beside the primary and never replaces it. No arm result changes a constant, `STAGE_RULE` or "
+    "`COHORT_RULE`, reruns the primary or adopts the arm.",
+    "The arm's rows are the primary export's rows of the 1130 participants whose `DX.bl` is CN, LMCI or AD, with the "
+    "cells unchanged (the primary's floors). The covariates, their coding and every analysis setting are the "
+    "primary's. It differs in the participants: the 96 SMC and 275 EMCI participants, enrolled only in ADNI-GO/2, are "
+    "dropped. Its CN is `DX.bl` CN and its MCI is LMCI. Its z-scoring, CV folds, latent basis, rank, covariate "
+    "reference row and permutation draws are its own. A rejection status that differs is dependence on the stage "
+    "definition and the sample, not a result of the arm.",
+    "The arm's CV-selected rank, floor, eigengap and `angle` null summary are reported beside its `angle`. A rank that "
+    "differs from the primary's is reported, not ranked.",
+    "In the arm each stage holds one `DX.bl` category in both runs, so the `phase` coefficient of the stage-means "
+    "model is estimated from contrasts within one diagnosis. In the primary, the ADNI-GO/2 rows of CN and MCI add SMC "
+    "and EMCI. The arm neither balances the runs across stages nor removes the run offset, which is measurement: the "
+    "ADNI-1 share per stage is CN 0.527, MCI 0.700, AD 0.544 in the arm and 0.417, 0.446, 0.544 in the primary; the "
+    "p180 median |d| is 1.10 on the arm's rows and 1.12 on the primary's, and PC1's correlation with phase 0.71 and "
+    "0.73. `phase` stays a covariate under the additive assumption of reading rule 5.",
+    "The arm's MCI (LMCI) is a later and narrower stage than the primary's MCI, and its CN excludes subjective memory "
+    "concern. A difference that involves the middle stage is a difference of stage definition. `angle` reads only the "
+    "endpoint stages: the arm's AD cells are the primary's, and its CN cells lose the SMC participants.",
+    "The arm holds 1130 of the 1501 participants. Its non-rejection is no more informative than the primary's: "
+    "reading rule 3 holds, and no power statement exists at this design. A rejection that appears only in the arm is "
+    "dependence on the stage definition and the sample, read beside its rank and null summary.",
+    "The arm's export manifest records its cells, the runs within each stage and the run offset on its rows, and they "
+    "are reported beside the results with the primary's. A component of the arm that tracks a variable in its axis "
+    "diagnostic is a measurement-space finding about the arm and never grounds to adopt it. In the arm, `dx_bl` "
+    "orders the participants as `stage` does, so their correlations coincide.",
+    "The arm is not crossed with the latent adjustment or an export variant, and is read against the primary only. No "
+    "sentence reads it against another sensitivity.",
+)
+
+# --- stage-sensitivity: predeclared counts ------------------------------------
+
+#: Predeclared by the change ``adni-stage-sensitivity`` from the committed
+#: ``stage_counts.csv`` and its spike (``spike.md``, 2026-10-29; none from a run
+#: of the arm). ``export``: the kept participants and the dropped ones per
+#: ``dx_bl``, the sex × stage cells, the runs within each stage (``phase``), the
+#: features per block (the primary's ``block_columns``), every row of the four
+#: CSVs equal to the primary's, the missing covariate values and non-finite
+#: cells, and the p180 metabolites with phase |d| above 0.5 and above 1 on the
+#: arm's rows (NMR above 1). ``analysis``: every key of
+#: ``ANALYSIS_EXPECTED_COUNTS`` with the arm's participants, cells and
+#: covariate levels. ``diagnostics``: the rank-independent keys of
+#: ``DIAGNOSTICS_EXPECTED_COUNTS`` with the arm's participants and cells. The
+#: arm's rank is not predeclared. ``stage-sensitivity`` and ``axis-diagnostics``
+#: compare the arm with these and record every difference as a finding; a
+#: difference never stops a step and never changes a setting.
+_STAGE_SENSITIVITY_CELLS: dict[str, dict[str, int]] = {
+    "Female": {"CN": 183, "MCI": 187, "AD": 125},
+    "Male": {"CN": 181, "MCI": 296, "AD": 158},
+}
+STAGE_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict] = {
+    "export": {
+        "participants": 1130,
+        "dropped": {"SMC": 96, "EMCI": 275},
+        "sex_stage": _STAGE_SENSITIVITY_CELLS,
+        "phase_by_stage": {
+            "CN": {"ADNI1": 192, "ADNI2GO": 172},
+            "MCI": {"ADNI1": 338, "ADNI2GO": 145},
+            "AD": {"ADNI1": 154, "ADNI2GO": 129},
+        },
+        "features": {"p180": 133, "nmr": 165},
+        "rows_equal_primary": {"p180.csv": True, "nmr.csv": True, EXPORT_METADATA: True, EXPORT_COVARIATES: True},
+        "missing_covariate_values": 0,
+        "non_finite": {"p180": 0, "nmr": 0},
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 107, "abs_d_gt_1": 77}, "nmr": {"abs_d_gt_1": 0}},
+    },
+    "analysis": {
+        **ANALYSIS_EXPECTED_COUNTS,
+        "participants": 1130,
+        "sex_stage": _STAGE_SENSITIVITY_CELLS,
+        "covariate_levels": {
+            "apoe4": {"0": 589, "1": 413, "2": 128},
+            "phase": {"ADNI1": 684, "ADNI2GO": 446},
+            "statin": {"0": 603, "1": 527},
+        },
+    },
+    "diagnostics": {
+        **{key: DIAGNOSTICS_EXPECTED_COUNTS[key] for key in DIAGNOSTICS_RANK_INDEPENDENT_KEYS},
+        "participants": 1130,
+        "sex_stage": _STAGE_SENSITIVITY_CELLS,
+    },
+}
 
 
 # --- report: conventions ------------------------------------------------------

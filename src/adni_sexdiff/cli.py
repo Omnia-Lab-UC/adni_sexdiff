@@ -3,7 +3,7 @@
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
 ``report``) and one per sensitivity step (``latent-sensitivity``,
-``export-sensitivity``), each
+``export-sensitivity``, ``stage-sensitivity``), each
 printing ``[command]``-prefixed progress messages that name files and
 counts, never a participant. ``report --check`` exits 1 on any mismatch.
 """
@@ -30,6 +30,8 @@ from .constants import (
     REPORT_NAME,
     REPORTED_N_JOBS,
     REPORTS_DIR,
+    STAGE_SENSITIVITY_DIR,
+    STAGE_SENSITIVITY_SUBDIRS,
 )
 from .data import (
     run_analysis,
@@ -40,6 +42,7 @@ from .data import (
     run_export_sensitivity,
     run_latent_sensitivity,
     run_report,
+    run_stage_sensitivity,
 )
 
 
@@ -190,6 +193,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_force(p)
 
+    written = ", ".join(STAGE_SENSITIVITY_SUBDIRS[k] for k in ("export", "analysis", "comparison"))
+    p = sub.add_parser(
+        "stage-sensitivity",
+        help="The predeclared CN / LMCI / AD arm (STAGE_SENSITIVITY_ARM: the primary export's rows of the participants "
+        "whose DX.bl is CN, LMCI or AD, SMC and EMCI dropped, analysed at the primary's settings) and its comparison "
+        f"with the primary, read beside it and never replacing it -> {STAGE_SENSITIVITY_DIR}/{{{written}}}/",
+    )
+    p.add_argument(
+        "--input-dir", type=Path, default=None,
+        help=f"The primary export, read as the reference and copied by rows, never written (default: {MOTCO_INPUT_DIR})",
+    )
+    p.add_argument(
+        "--analysis-dir", type=Path, default=None,
+        help=f"The primary's analysis directory, read as the reference, never written (default: {MOTCO_ANALYSIS_DIR})",
+    )
+    p.add_argument(
+        "--cohort-dir", type=Path, default=None,
+        help=f"Output directory of cohort; cohort.csv (dx_bl) and cohort_manifest.json are read (default: {COHORT_DIR})",
+    )
+    p.add_argument(
+        "--out-dir", type=Path, default=None,
+        help=f"Output root; {{{written}}}/ are written under it, {STAGE_SENSITIVITY_SUBDIRS['diagnostics']}/ never "
+        f"(default: {STAGE_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
+        "--n-jobs",
+        type=int,
+        default=REPORTED_N_JOBS,
+        help=f"Parallel jobs for MOTCO's CV and RRPP (default: {REPORTED_N_JOBS}; reported runs use {REPORTED_N_JOBS})",
+    )
+    _add_force(p)
+
     p = sub.add_parser(
         "report",
         help="Write the case-study report from the kept aggregate outputs (no participant-level file is read), or check "
@@ -271,6 +306,15 @@ def main(argv: list[str] | None = None) -> int:
             cohort_dir=args.cohort_dir,
             input_dir=args.input_dir,
             analysis_dir=args.analysis_dir,
+            out_dir=args.out_dir,
+            n_jobs=args.n_jobs,
+            force=args.force,
+        )
+    elif args.command == "stage-sensitivity":
+        run_stage_sensitivity(
+            input_dir=args.input_dir,
+            analysis_dir=args.analysis_dir,
+            cohort_dir=args.cohort_dir,
             out_dir=args.out_dir,
             n_jobs=args.n_jobs,
             force=args.force,
