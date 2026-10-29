@@ -205,6 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Root of latent-sensitivity, read as {'/, '.join(LATENT_SENSITIVITY_SUBDIRS.values())}/ (default: {LATENT_SENSITIVITY_DIR})",
     )
     p.add_argument(
+        "--export-sensitivity-dir", type=Path, default=None,
+        help=f"Root of export-sensitivity, read per variant ({', '.join(EXPORT_VARIANTS)}) as <variant>/"
+        f"{'/, <variant>/'.join(EXPORT_SENSITIVITY_SUBDIRS.values())}/ (default: {EXPORT_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
         "--out", type=Path, default=None,
         help=f"Report path, named {REPORT_NAME.format(date='<date>')}; the date is read from the name (default: "
         f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there)",
@@ -278,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
             analysis_dir=args.analysis_dir,
             diagnostics_dir=args.diagnostics_dir,
             sensitivity_dir=args.sensitivity_dir,
+            export_sensitivity_dir=args.export_sensitivity_dir,
             out=args.out,
             check=args.check,
             force=args.force,
