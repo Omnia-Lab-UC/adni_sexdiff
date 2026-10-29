@@ -1,0 +1,889 @@
+{
+  "counts": {
+    "block_shares": {
+      "nmr": 0.5536912751677853,
+      "p180": 0.4463087248322148
+    },
+    "covariate_levels": {
+      "apoe4": {
+        "0": 589,
+        "1": 413,
+        "2": 128
+      },
+      "phase": {
+        "ADNI1": 684,
+        "ADNI2GO": 446
+      },
+      "statin": {
+        "0": 603,
+        "1": 527
+      }
+    },
+    "dropped": {
+      "EMCI": 275,
+      "SMC": 96
+    },
+    "dx_bl": {
+      "AD": {
+        "Female": 125,
+        "Male": 158
+      },
+      "CN": {
+        "Female": 183,
+        "Male": 181
+      },
+      "EMCI": {
+        "Female": 123,
+        "Male": 152
+      },
+      "LMCI": {
+        "Female": 187,
+        "Male": 296
+      },
+      "SMC": {
+        "Female": 54,
+        "Male": 42
+      }
+    },
+    "features": {
+      "nmr": 165,
+      "p180": 133
+    },
+    "joint_features": 298,
+    "missing_covariate_values": 0,
+    "non_finite": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "participants": 1130,
+    "phase_by_stage": {
+      "AD": {
+        "ADNI1": 154,
+        "ADNI2GO": 129
+      },
+      "CN": {
+        "ADNI1": 192,
+        "ADNI2GO": 172
+      },
+      "MCI": {
+        "ADNI1": 338,
+        "ADNI2GO": 145
+      }
+    },
+    "phase_offset": {
+      "nmr": {
+        "abs_corr_pc1_phase": 0.15159829170221803,
+        "abs_corr_pc2_phase": 0.11145365116050437,
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 0.8263211928314318,
+        "median_abs_d": 0.2564531230597794
+      },
+      "p180": {
+        "abs_corr_pc1_phase": 0.712080547498499,
+        "abs_corr_pc2_phase": 0.4246080517046516,
+        "abs_d_gt_0_5": 107,
+        "abs_d_gt_1": 77,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 2.8450542649423136,
+        "median_abs_d": 1.0956448143367283
+      }
+    },
+    "rows_equal_primary": {
+      "covariates.csv": true,
+      "metadata.csv": true,
+      "nmr.csv": true,
+      "p180.csv": true
+    },
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 183,
+        "MCI": 187
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 181,
+        "MCI": 296
+      }
+    },
+    "shape": {
+      "nmr": {
+        "abs_skew_gt_1": 3,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 4,
+        "max_abs_z_gt_8": 1,
+        "median_abs_skew": 0.20024982038792136,
+        "skew_lt_minus_1": 1
+      },
+      "p180": {
+        "abs_skew_gt_1": 1,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 13,
+        "max_abs_z_gt_8": 0,
+        "median_abs_skew": 0.23251231244812198,
+        "skew_lt_minus_1": 0
+      }
+    },
+    "spectrum": {
+      "nmr": {
+        "effective_rank": 3.766321328007212,
+        "features": 165,
+        "numerical_rank": 165,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.9212358037313835,
+        "pc1_3_share": 0.7721387311579282,
+        "pc1_share": 0.43799962485334076
+      },
+      "p180": {
+        "effective_rank": 5.387410422621883,
+        "features": 133,
+        "numerical_rank": 133,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.7448885180931281,
+        "pc1_3_share": 0.5455903586921171,
+        "pc1_share": 0.4102908440193977
+      }
+    }
+  },
+  "created_at": "2026-10-29T17:16:04+00:00",
+  "deviations": [],
+  "expected": {
+    "dropped": {
+      "EMCI": 275,
+      "SMC": 96
+    },
+    "features": {
+      "nmr": 165,
+      "p180": 133
+    },
+    "missing_covariate_values": 0,
+    "non_finite": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "participants": 1130,
+    "phase_by_stage": {
+      "AD": {
+        "ADNI1": 154,
+        "ADNI2GO": 129
+      },
+      "CN": {
+        "ADNI1": 192,
+        "ADNI2GO": 172
+      },
+      "MCI": {
+        "ADNI1": 338,
+        "ADNI2GO": 145
+      }
+    },
+    "phase_offset": {
+      "nmr": {
+        "abs_d_gt_1": 0
+      },
+      "p180": {
+        "abs_d_gt_0_5": 107,
+        "abs_d_gt_1": 77
+      }
+    },
+    "rows_equal_primary": {
+      "covariates.csv": true,
+      "metadata.csv": true,
+      "nmr.csv": true,
+      "p180.csv": true
+    },
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 183,
+        "MCI": 187
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 181,
+        "MCI": 296
+      }
+    }
+  },
+  "findings": [],
+  "git_revision": {
+    "commit": "55841a33de15a13654612d2cc9a53c61ce5b9c70",
+    "dirty": false
+  },
+  "inputs": {
+    "cohort": {
+      "dir": "results/cohort",
+      "manifest": {
+        "name": "cohort_manifest.json",
+        "sha256": "dcb65a530bfc41f3d77bec08ad530bc81dede9f90ac2b4580d88e2e156d1e630"
+      },
+      "manifest_equals_primary_export_record": true,
+      "outputs": {
+        "cohort.csv": {
+          "equals_cohort_manifest": true,
+          "sha256": "fe70cbf2e38f21ab25c9f32bfb1c503387b8eab2babf96aba7a286ea02b109ce"
+        }
+      },
+      "rows_equal_exported_participants": true
+    },
+    "primary_export": {
+      "dir": "results/motco_input",
+      "files": {
+        "covariates.csv": {
+          "bytes": 35630,
+          "equals_export_manifest": true,
+          "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+          "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+        },
+        "manifest.json": {
+          "bytes": 14840,
+          "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+        },
+        "metadata.csv": {
+          "bytes": 21092,
+          "equals_export_manifest": true,
+          "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+          "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+        },
+        "nmr.csv": {
+          "bytes": 4802997,
+          "equals_export_manifest": true,
+          "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+          "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+        },
+        "p180.csv": {
+          "bytes": 3756402,
+          "equals_export_manifest": true,
+          "recorded": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e",
+          "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+        }
+      },
+      "manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      }
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "covariates.csv": {
+      "bytes": 26356,
+      "participant_level": true,
+      "sha256": "cb91521984795011418932dda4b9e6e58ec98f5472145ef3d42517a9c53ad458"
+    },
+    "metadata.csv": {
+      "bytes": 15640,
+      "participant_level": true,
+      "sha256": "5743441af6c9224ff6949430b3c9e8e3237e56ab88e637409f871852cb16663a"
+    },
+    "nmr.csv": {
+      "bytes": 3616125,
+      "participant_level": true,
+      "sha256": "484c341b11875961d57e7fcd25340cb97c99fa8d6c07ab2e41f22b70dea6bb6d"
+    },
+    "p180.csv": {
+      "bytes": 2827271,
+      "participant_level": true,
+      "sha256": "4f940b4f67521cc611fec3af55b18cf6273b065bd69db6127a82a780605d1b0e"
+    }
+  },
+  "reference": {
+    "covariate_levels": {
+      "apoe4": {
+        "0": 810,
+        "1": 542,
+        "2": 149
+      },
+      "phase": {
+        "ADNI1": 684,
+        "ADNI2GO": 817
+      },
+      "statin": {
+        "0": 797,
+        "1": 704
+      }
+    },
+    "created_at": "2026-10-27T14:13:06+00:00",
+    "dir": "results/motco_input",
+    "feature_tables": {
+      "features_nmr.csv": {
+        "sha256": "d4495f6aae38985460a118582e8e3250f9c56b8e27fc38d64bedc5b14514b9ee"
+      },
+      "features_p180.csv": {
+        "sha256": "7793776534d580f9a49e0ad95e0d8f6ecef3b5a7ff3c02f64dd07c905f4bb5ee"
+      }
+    },
+    "floors_note": "the arm's rows are the primary export's rows: its floors are the primary's, recorded in these feature tables",
+    "git_revision": {
+      "commit": "b10da517bed5919012610813aa8d7cdd778ce7bf",
+      "dirty": false
+    },
+    "manifest": {
+      "name": "manifest.json",
+      "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+    },
+    "outputs": {
+      "covariates.csv": {
+        "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+      },
+      "metadata.csv": {
+        "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+      },
+      "nmr.csv": {
+        "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+      },
+      "p180.csv": {
+        "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+      }
+    },
+    "participants": 1501,
+    "phase_by_stage": {
+      "AD": {
+        "ADNI1": 154,
+        "ADNI2GO": 129
+      },
+      "CN": {
+        "ADNI1": 192,
+        "ADNI2GO": 268
+      },
+      "MCI": {
+        "ADNI1": 338,
+        "ADNI2GO": 420
+      }
+    },
+    "phase_offset": {
+      "nmr": {
+        "abs_corr_pc1_phase": 0.134914819678611,
+        "abs_corr_pc2_phase": 0.07177054898291932,
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 0.6722749103659197,
+        "median_abs_d": 0.20765838704530382
+      },
+      "p180": {
+        "abs_corr_pc1_phase": 0.7338041282644211,
+        "abs_corr_pc2_phase": 0.3982350519508593,
+        "abs_d_gt_0_5": 109,
+        "abs_d_gt_1": 80,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 2.876015830557166,
+        "median_abs_d": 1.121003151194811
+      }
+    },
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    }
+  },
+  "settings": {
+    "EXPORT_FEATURE_RULE": {
+      "membership": {
+        "nmr": {
+          "derived": {
+            "degree": [
+              "equals",
+              "UNSATURATION"
+            ],
+            "percentage": [
+              "endswith",
+              "_PCT"
+            ],
+            "ratio": [
+              "contains",
+              "_BY_"
+            ],
+            "size": [
+              "endswith",
+              "_SIZE"
+            ]
+          }
+        },
+        "p180": {
+          "derived": {}
+        }
+      },
+      "scale": {
+        "floor_method": "linear",
+        "floor_quantile": 0.05,
+        "motco_transform": "identity",
+        "transform": "log2(x + floor)"
+      }
+    },
+    "STAGE_SENSITIVITY_ARM": {
+      "analysis": "the primary's (ANALYSIS_* constants and MOTCO's defaults; no latent adjustment)",
+      "change": "adni-stage-sensitivity",
+      "drop": [
+        "SMC",
+        "EMCI"
+      ],
+      "floors": "the primary export's (EXPORT_FEATURE_RULE over the exported participants); the arm's rows are the primary export's rows",
+      "keep": [
+        "CN",
+        "LMCI",
+        "AD"
+      ],
+      "name": "cn_lmci_ad",
+      "source": "dx_bl",
+      "stage_map": {
+        "AD": "AD",
+        "CN": "CN",
+        "LMCI": "MCI"
+      }
+    },
+    "block_columns": {
+      "nmr": [
+        "TOTAL_C",
+        "NON_HDL_C",
+        "REMNANT_C",
+        "VLDL_C",
+        "CLINICAL_LDL_C",
+        "LDL_C",
+        "HDL_C",
+        "TOTAL_TG",
+        "VLDL_TG",
+        "LDL_TG",
+        "HDL_TG",
+        "TOTAL_PL",
+        "VLDL_PL",
+        "LDL_PL",
+        "HDL_PL",
+        "TOTAL_CE",
+        "VLDL_CE",
+        "LDL_CE",
+        "HDL_CE",
+        "TOTAL_FC",
+        "VLDL_FC",
+        "LDL_FC",
+        "HDL_FC",
+        "TOTAL_L",
+        "VLDL_L",
+        "LDL_L",
+        "HDL_L",
+        "TOTAL_P",
+        "VLDL_P",
+        "LDL_P",
+        "HDL_P",
+        "PHOSPHOGLYC",
+        "CHOLINES",
+        "PHOSPHATIDYLC",
+        "SPHINGOMYELINS",
+        "APOB",
+        "APOA1",
+        "TOTAL_FA",
+        "OMEGA_3",
+        "OMEGA_6",
+        "PUFA",
+        "MUFA",
+        "SFA",
+        "LA",
+        "DHA",
+        "ALA",
+        "GLN",
+        "GLY",
+        "HIS",
+        "TOTAL_BCAA",
+        "ILE",
+        "LEU",
+        "VAL",
+        "PHE",
+        "TYR",
+        "GLUCOSE",
+        "LACTATE",
+        "PYRUVATE",
+        "CITRATE",
+        "GLYCEROL",
+        "BOHBUTYRATE",
+        "ACETATE",
+        "ACETOACETATE",
+        "ACETONE",
+        "CREATININE",
+        "ALBUMIN",
+        "GLYCA",
+        "XXL_VLDL_P",
+        "XXL_VLDL_L",
+        "XXL_VLDL_PL",
+        "XXL_VLDL_C",
+        "XXL_VLDL_CE",
+        "XXL_VLDL_FC",
+        "XXL_VLDL_TG",
+        "XL_VLDL_P",
+        "XL_VLDL_L",
+        "XL_VLDL_PL",
+        "XL_VLDL_C",
+        "XL_VLDL_CE",
+        "XL_VLDL_FC",
+        "XL_VLDL_TG",
+        "L_VLDL_P",
+        "L_VLDL_L",
+        "L_VLDL_PL",
+        "L_VLDL_C",
+        "L_VLDL_CE",
+        "L_VLDL_FC",
+        "L_VLDL_TG",
+        "M_VLDL_P",
+        "M_VLDL_L",
+        "M_VLDL_PL",
+        "M_VLDL_C",
+        "M_VLDL_CE",
+        "M_VLDL_FC",
+        "M_VLDL_TG",
+        "S_VLDL_P",
+        "S_VLDL_L",
+        "S_VLDL_PL",
+        "S_VLDL_C",
+        "S_VLDL_CE",
+        "S_VLDL_FC",
+        "S_VLDL_TG",
+        "XS_VLDL_P",
+        "XS_VLDL_L",
+        "XS_VLDL_PL",
+        "XS_VLDL_C",
+        "XS_VLDL_CE",
+        "XS_VLDL_FC",
+        "XS_VLDL_TG",
+        "IDL_P",
+        "IDL_L",
+        "IDL_PL",
+        "IDL_C",
+        "IDL_CE",
+        "IDL_FC",
+        "IDL_TG",
+        "L_LDL_P",
+        "L_LDL_L",
+        "L_LDL_PL",
+        "L_LDL_C",
+        "L_LDL_CE",
+        "L_LDL_FC",
+        "L_LDL_TG",
+        "M_LDL_P",
+        "M_LDL_L",
+        "M_LDL_PL",
+        "M_LDL_C",
+        "M_LDL_CE",
+        "M_LDL_FC",
+        "M_LDL_TG",
+        "S_LDL_P",
+        "S_LDL_L",
+        "S_LDL_PL",
+        "S_LDL_C",
+        "S_LDL_CE",
+        "S_LDL_FC",
+        "S_LDL_TG",
+        "XL_HDL_P",
+        "XL_HDL_L",
+        "XL_HDL_PL",
+        "XL_HDL_C",
+        "XL_HDL_CE",
+        "XL_HDL_FC",
+        "XL_HDL_TG",
+        "L_HDL_P",
+        "L_HDL_L",
+        "L_HDL_PL",
+        "L_HDL_C",
+        "L_HDL_CE",
+        "L_HDL_FC",
+        "L_HDL_TG",
+        "M_HDL_P",
+        "M_HDL_L",
+        "M_HDL_PL",
+        "M_HDL_C",
+        "M_HDL_CE",
+        "M_HDL_FC",
+        "M_HDL_TG",
+        "S_HDL_P",
+        "S_HDL_L",
+        "S_HDL_PL",
+        "S_HDL_C",
+        "S_HDL_CE",
+        "S_HDL_FC",
+        "S_HDL_TG"
+      ],
+      "p180": [
+        "C0",
+        "C10",
+        "C10.2",
+        "C12",
+        "C14.1",
+        "C14.1.OH",
+        "C14.2",
+        "C16",
+        "C16.1",
+        "C18",
+        "C18.1",
+        "C18.2",
+        "C2",
+        "C3",
+        "C4",
+        "C6..C4.1.DC.",
+        "C5",
+        "C7.DC",
+        "C9",
+        "lysoPC.a.C16.0",
+        "lysoPC.a.C16.1",
+        "lysoPC.a.C17.0",
+        "lysoPC.a.C18.0",
+        "lysoPC.a.C18.1",
+        "lysoPC.a.C18.2",
+        "lysoPC.a.C20.3",
+        "lysoPC.a.C20.4",
+        "lysoPC.a.C24.0",
+        "lysoPC.a.C28.0",
+        "lysoPC.a.C28.1",
+        "PC.aa.C28.1",
+        "PC.aa.C30.0",
+        "PC.aa.C32.0",
+        "PC.aa.C32.1",
+        "PC.aa.C32.3",
+        "PC.aa.C34.3",
+        "PC.aa.C34.4",
+        "PC.aa.C36.0",
+        "PC.aa.C36.1",
+        "PC.aa.C36.3",
+        "PC.aa.C36.5",
+        "PC.aa.C36.6",
+        "PC.aa.C38.0",
+        "PC.aa.C38.3",
+        "PC.aa.C38.4",
+        "PC.aa.C38.5",
+        "PC.aa.C38.6",
+        "PC.aa.C40.2",
+        "PC.aa.C40.3",
+        "PC.aa.C40.4",
+        "PC.aa.C40.5",
+        "PC.aa.C40.6",
+        "PC.aa.C42.0",
+        "PC.aa.C42.1",
+        "PC.aa.C42.2",
+        "PC.aa.C42.4",
+        "PC.aa.C42.5",
+        "PC.aa.C42.6",
+        "PC.ae.C30.0",
+        "PC.ae.C30.2",
+        "PC.ae.C32.1",
+        "PC.ae.C32.2",
+        "PC.ae.C34.0",
+        "PC.ae.C34.1",
+        "PC.ae.C34.2",
+        "PC.ae.C34.3",
+        "PC.ae.C36.0",
+        "PC.ae.C36.1",
+        "PC.ae.C36.2",
+        "PC.ae.C36.3",
+        "PC.ae.C36.4",
+        "PC.ae.C36.5",
+        "PC.ae.C38.0",
+        "PC.ae.C38.2",
+        "PC.ae.C38.3",
+        "PC.ae.C38.4",
+        "PC.ae.C38.5",
+        "PC.ae.C38.6",
+        "PC.ae.C40.1",
+        "PC.ae.C40.2",
+        "PC.ae.C40.3",
+        "PC.ae.C40.4",
+        "PC.ae.C40.5",
+        "PC.ae.C40.6",
+        "PC.ae.C42.1",
+        "PC.ae.C42.2",
+        "PC.ae.C42.3",
+        "PC.ae.C42.4",
+        "PC.ae.C42.5",
+        "PC.ae.C44.3",
+        "PC.ae.C44.4",
+        "PC.ae.C44.5",
+        "PC.ae.C44.6",
+        "SM..OH..C14.1",
+        "SM..OH..C16.1",
+        "SM..OH..C22.1",
+        "SM..OH..C22.2",
+        "SM..OH..C24.1",
+        "SM.C16.0",
+        "SM.C16.1",
+        "SM.C18.0",
+        "SM.C18.1",
+        "SM.C20.2",
+        "SM.C24.0",
+        "SM.C24.1",
+        "SM.C26.0",
+        "SM.C26.1",
+        "Ala",
+        "Arg",
+        "Asn",
+        "Asp",
+        "Cit",
+        "Glu",
+        "Gly",
+        "His",
+        "Ile",
+        "Lys",
+        "Met",
+        "Orn",
+        "Phe",
+        "Pro",
+        "Ser",
+        "Thr",
+        "Trp",
+        "Tyr",
+        "Val",
+        "Creatinine",
+        "Kynurenine",
+        "Sarcosine",
+        "Serotonin",
+        "Spermidine",
+        "t4.OH.Pro",
+        "SDMA"
+      ]
+    },
+    "blocks": [
+      "p180",
+      "nmr"
+    ],
+    "covariate_columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "covariates": {
+      "age": {
+        "coding": "numeric",
+        "column": "AGE",
+        "file": "clinical"
+      },
+      "apoe4": {
+        "coding": "categorical",
+        "column": "APOE4",
+        "file": "clinical",
+        "levels": [
+          0,
+          1,
+          2
+        ]
+      },
+      "education": {
+        "coding": "numeric",
+        "column": "PTEDUCAT",
+        "file": "clinical"
+      },
+      "phase": {
+        "coding": "categorical",
+        "column": "ORIGPROT",
+        "file": "clinical",
+        "levels": [
+          "ADNI1",
+          "ADNI2GO"
+        ],
+        "map": {
+          "ADNI1": "ADNI1",
+          "ADNI2": "ADNI2GO",
+          "ADNIGO": "ADNI2GO"
+        }
+      },
+      "statin": {
+        "coding": "categorical",
+        "column": "HMG CoA reductase inhibitors",
+        "file": "medication",
+        "levels": [
+          0,
+          1
+        ],
+        "visit": "sc"
+      }
+    },
+    "covariates_applied": false,
+    "group_column": "sex",
+    "group_values": [
+      "Female",
+      "Male"
+    ],
+    "motco_transform": "identity",
+    "rows": "the primary export's header and the lines of the kept participants, in export order, copied as bytes; no floor recomputed, no value transformed, no dx_bl written",
+    "sample_column": "rid",
+    "stage_column": "stage",
+    "stage_order": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "units": "log2(x + floor)"
+  },
+  "stage_arm": {
+    "analysis": "the primary's (ANALYSIS_* constants and MOTCO's defaults; no latent adjustment)",
+    "change": "adni-stage-sensitivity",
+    "constant": "STAGE_SENSITIVITY_ARM",
+    "drop": [
+      "SMC",
+      "EMCI"
+    ],
+    "floors": "the primary export's (EXPORT_FEATURE_RULE over the exported participants); the arm's rows are the primary export's rows",
+    "keep": [
+      "CN",
+      "LMCI",
+      "AD"
+    ],
+    "name": "cn_lmci_ad",
+    "source": "dx_bl",
+    "stage_map": {
+      "AD": "AD",
+      "CN": "CN",
+      "LMCI": "MCI"
+    }
+  },
+  "step": "stage-sensitivity",
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}
