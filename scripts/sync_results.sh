@@ -3,7 +3,8 @@
 #
 # ADNI is controlled-access (DUA): every participant-level file is excluded,
 # so the raw files, the cleaned matrices, the cohort table, the MOTCO input
-# blocks, latent_scores.csv and analysis_metadata.csv never leave the machine
+# blocks (the primary's and each export variant's), latent_scores.csv and
+# analysis_metadata.csv never leave the machine
 # they were made on. Only aggregate outputs move (result.json,
 # stage_means.csv, pls_loadings.csv, manifests incl. cleaned/*/clean_manifest.json,
 # summary.md, stage_counts.csv, diagnostics tables). The filter list below mirrors .gitignore and
@@ -42,6 +43,7 @@ filters=(
     --exclude '/cohort/*.csv'
     --include '/motco_input/**manifest*'
     --exclude '/motco_input/**.csv'
+    --exclude '/motco_export_sensitivity/*/motco_input/*.csv'
     --exclude 'latent_scores.csv'
     --exclude 'analysis_metadata.csv'
 )
@@ -66,6 +68,7 @@ if [ "$direction" = pull ] && [ -d "${ADNI_SYNC_TARGET:-$local_dir}" ]; then
         \( \( -path './cleaned/*' ! -type d ! -name clean_manifest.json \) \
            -o -path './cohort/*.csv' ! -name stage_counts.csv \
            -o \( -path './motco_input/*' -name '*.csv' ! -name '*manifest*' \) \
+           -o -path './motco_export_sensitivity/*/motco_input/*.csv' \
            -o -name latent_scores.csv -o -name analysis_metadata.csv \) -print)
     if [ -n "$found" ]; then
         echo "[sync_results] participant-level files present after the pull:" >&2
