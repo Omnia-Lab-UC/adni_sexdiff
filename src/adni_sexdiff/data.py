@@ -6692,9 +6692,26 @@ _REPORT_TITLE = "MOTCO case-study report: ADNI serum metabolomics, sex × stage"
 _REPORT_NAME_RE = re.compile(
     "^" + re.escape(REPORT_NAME.split("{date}")[0]) + r"(\d{4}-\d{2}-\d{2})" + re.escape(REPORT_NAME.split("{date}")[1]) + "$"
 )
-#: The nine manifests the report reads, in pipeline order: (label, role in
-#: ``REPORT_INPUT_FILES``, file name in that role). The label names the step
-#: in every provenance table and under "Findings".
+def _variant_role(variant: str, key: str) -> str:
+    """The role of ``REPORT_INPUT_FILES`` of a variant's subdirectory, by its key in ``EXPORT_SENSITIVITY_SUBDIRS``."""
+    return f"export-sensitivity/{variant}/{EXPORT_SENSITIVITY_SUBDIRS[key]}"
+
+
+def _variant_labels(variant: str) -> dict[str, str]:
+    """The labels of a variant's four manifests, in pipeline order (design D2 of ``adni-report-variants``)."""
+    return {
+        "export": f"export-sensitivity {variant} (export)",
+        "analysis": f"export-sensitivity {variant} (analysis)",
+        "comparison": f"export-sensitivity {variant} (comparison)",
+        "diagnostics": f"axis-diagnostics ({variant})",
+    }
+
+
+#: The 17 manifests the report reads, in pipeline order: (label, role in
+#: ``REPORT_INPUT_FILES``, file name in that role); the primary's and the
+#: arm's nine, then four per variant of ``EXPORT_VARIANTS`` in registry
+#: order. The label names the step in every provenance table and under
+#: "Findings".
 _REPORT_MANIFESTS: tuple[tuple[str, str, str], ...] = (
     *((f"clean {platform}", "cleaned", f"{platform}/{CLEAN_MANIFEST}") for platform in PLATFORMS),
     ("cohort", "cohort", COHORT_MANIFEST),
@@ -6704,6 +6721,12 @@ _REPORT_MANIFESTS: tuple[tuple[str, str, str], ...] = (
     ("latent-sensitivity (analysis)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}", ANALYSIS_MANIFEST),
     ("latent-sensitivity (comparison)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}", LATENT_SENSITIVITY_MANIFEST),
     ("axis-diagnostics (arm)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}", DIAGNOSTICS_MANIFEST),
+    *(
+        (_variant_labels(variant)[key], _variant_role(variant, key), name)
+        for variant in EXPORT_VARIANTS
+        for key, name in (("export", EXPORT_MANIFEST), ("analysis", ANALYSIS_MANIFEST),
+                          ("comparison", EXPORT_SENSITIVITY_MANIFEST), ("diagnostics", DIAGNOSTICS_MANIFEST))
+    ),
 )
 #: The packages whose versions every manifest that records them must agree on.
 _REPORT_PINNED_PACKAGES: tuple[str, ...] = ("motco", "scikit-learn", "metabo_adni")
@@ -6724,10 +6747,11 @@ def _report_date(path: Path) -> str:
 
 
 def _report_dirs(
-    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir
 ) -> dict[str, Path]:
-    """The directory of every role of ``REPORT_INPUT_FILES`` from the six flags (design D7)."""
+    """The directory of every role of ``REPORT_INPUT_FILES`` from the seven directory flags (design D7)."""
     sensitivity = Path(sensitivity_dir) if sensitivity_dir is not None else Path(LATENT_SENSITIVITY_DIR)
+    variants = Path(export_sensitivity_dir) if export_sensitivity_dir is not None else Path(EXPORT_SENSITIVITY_DIR)
     dirs = {
         "cleaned": Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR),
         "cohort": Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR),
@@ -6737,6 +6761,9 @@ def _report_dirs(
     }
     for sub in LATENT_SENSITIVITY_SUBDIRS.values():
         dirs[f"sensitivity/{sub}"] = sensitivity / sub
+    for variant in EXPORT_VARIANTS:
+        for key, sub in EXPORT_SENSITIVITY_SUBDIRS.items():
+            dirs[_variant_role(variant, key)] = variants / variant / sub
     return dirs
 
 
@@ -6757,6 +6784,14 @@ def _report_rerun(role: str, name: str, dirs: dict[str, Path]) -> str:
             f"`adni-sexdiff axis-diagnostics --analysis-dir {dirs[f'sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}']} "
             f"--out-dir {dirs[role]}`"
         )
+    if role.startswith("export-sensitivity/"):
+        variant = role.split("/")[1]
+        if role == _variant_role(variant, "diagnostics"):
+            return (
+                f"`adni-sexdiff axis-diagnostics --input-dir {dirs[_variant_role(variant, 'export')]} --analysis-dir "
+                f"{dirs[_variant_role(variant, 'analysis')]} --out-dir {dirs[role]}`"
+            )
+        return f"`adni-sexdiff export-sensitivity --variant {variant} --force`, then the variant's `axis-diagnostics`"
     return "`adni-sexdiff latent-sensitivity`"
 
 
@@ -6782,14 +6817,15 @@ def _load_report_inputs(
     analysis_dir=None,
     diagnostics_dir=None,
     sensitivity_dir=None,
+    export_sensitivity_dir=None,
     log: str = "[report]",
 ) -> dict:
-    """Read and gate every input of ``report`` (design D3 of ``adni-report``), before anything is written.
+    """Read and gate every input of ``report`` (design D3 of ``adni-report`` and ``adni-report-variants``), before anything is written.
 
     Parameters
     ----------
-    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir:
-        The six directories (``_report_dirs``); ``None`` is the pipeline's.
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir:
+        The seven directories (``_report_dirs``); ``None`` is the pipeline's.
     log:
         The progress prefix.
 
@@ -6799,9 +6835,12 @@ def _load_report_inputs(
         ``dirs`` (role → directory), ``files`` (role → name → ``path``,
         ``sha256``, ``bytes``), ``manifests`` and ``manifest_paths`` (label →
         parsed manifest and its path, in ``_REPORT_MANIFESTS`` order),
-        ``records`` (``primary`` and ``arm``: the two ``result.json``),
-        ``tables`` (``stage_counts``, ``comparison``, ``diagnostics`` and
-        ``arm_diagnostics``, each CSV read as text), ``provenance`` (one row
+        ``records`` (``primary`` and ``arm``: the two ``result.json``;
+        ``variants``: variant → its ``result.json``), ``tables``
+        (``stage_counts``, ``comparison``, ``diagnostics`` and
+        ``arm_diagnostics``; ``variants``: variant → ``comparison``,
+        ``bridge`` (``None`` without a bridge role) and ``diagnostics``;
+        each CSV read as text), ``provenance`` (one row
         per input file: path, sha256, bytes, where it is recorded),
         ``chain`` (one row per link: the manifest key, the upstream value,
         the hash, ``ok``, the step to rerun), ``versions`` (the consistent
@@ -6817,22 +6856,29 @@ def _load_report_inputs(
     value its own manifest records under ``outputs`` (manifests are hashed
     for the chain, not checked against themselves); (3) the primary is the
     primary (no latent adjustment recorded or in the record, ``is_primary``
-    in its diagnostics) and the arm is ``LATENT_SENSITIVITY_ARM`` (its
-    conditioning and name, ``is_primary`` false in its diagnostics); (4)
-    reported runs: the primary and the arm record ``n_jobs =
-    REPORTED_N_JOBS`` in manifest and record, every ``numerics`` block
-    present records ``pinned`` true, and every manifest that records MOTCO,
-    scikit-learn or metabo_adni records the same version; (5) the chain,
-    link by link from the clean manifests to the arm diagnostics. The
-    identity and reported-run gates read a manifest's own content, so they
-    run before the chain: an arm given as the primary, an unreported run or
-    an unpinned manifest is named as such, not as a broken link. No
-    participant-level file is opened or hashed: the hashes of ``cohort.csv``,
-    the export CSVs, ``latent_scores.csv`` and ``analysis_metadata.csv`` are
-    the ones the manifests recorded (``equals_*`` flags are read, not
-    recomputed).
+    in its diagnostics), the arm is ``LATENT_SENSITIVITY_ARM`` (its
+    conditioning and name, ``is_primary`` false in its diagnostics) and each
+    directory of ``EXPORT_VARIANTS`` holds that variant (its export, analysis
+    and comparison manifests name it, its export manifest's ``variant``
+    block equals the registry entry, its analysis records no latent
+    adjustment, its diagnostics record ``is_primary`` false and its name);
+    the bridge table of a variant with hook ``factors`` is then checked
+    against ``bridge.table.sha256`` of its export manifest, the one place
+    the step records it; (4) reported runs: the primary, the arm and every
+    variant analysis record ``n_jobs = REPORTED_N_JOBS`` in manifest and
+    record, every ``numerics`` block present records ``pinned`` true, and
+    every manifest that records MOTCO, scikit-learn or metabo_adni records
+    the same version; (5) the chain, link by link from the clean manifests
+    to the arm's and every variant's diagnostics. The identity and
+    reported-run gates read a manifest's own content, so they run before
+    the chain: an arm given as the primary, swapped variant directories, an
+    unreported run or an unpinned manifest is named as such, not as a broken
+    link. No participant-level file is opened or hashed: the hashes of
+    ``cohort.csv``, the export CSVs of the primary and of every variant,
+    ``latent_scores.csv`` and ``analysis_metadata.csv`` are the ones the
+    manifests recorded (``equals_*`` flags are read, not recomputed).
     """
-    dirs = _report_dirs(cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir)
+    dirs = _report_dirs(cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir)
 
     # (1) every input present
     absent = []
@@ -6860,17 +6906,22 @@ def _load_report_inputs(
         manifests[label] = json.loads(manifest_paths[label].read_text())
         manifest_of_role.setdefault(role, {})[name] = label
     n_files = sum(len(v) for v in files.values())
-    print(f"{log} inputs: {n_files} files hashed under {len(dirs)} directories; {len(manifests)} manifests read")
+    print(f"{log} inputs: {n_files} files hashed under {len(files)} directories; {len(manifests)} manifests read")
 
     # (2) every aggregate file against its own manifest
     provenance: list[dict] = []
     checked = 0
     for role, names in REPORT_INPUT_FILES.items():
-        role_manifests = manifest_of_role[role]
+        role_manifests = manifest_of_role.get(role, {})
         for name in names:
             entry = files[role][name]
             if name in role_manifests:
                 provenance.append({**entry, "role": role, "name": name, "recorded_in": "hashed for the chain (recorded by the manifests downstream)"})
+                continue
+            if not role_manifests:
+                # a bridge table: recorded by its variant's export manifest, checked once that manifest is identified (gate 3)
+                label = _variant_labels(role.split("/")[1])["export"]
+                provenance.append({**entry, "role": role, "name": name, "recorded_in": f"{label}: bridge.table.sha256"})
                 continue
             (label,) = role_manifests.values()
             recorded = manifests[label].get("outputs", {}).get(name, {}).get("sha256")
@@ -6886,7 +6937,10 @@ def _load_report_inputs(
                 )
             checked += 1
             provenance.append({**entry, "role": role, "name": name, "recorded_in": f"{label}: outputs.{name}.sha256"})
-    print(f"{log} {checked} aggregate files hash to the values their manifests record; {len(manifests)} manifests hashed for the chain")
+    print(
+        f"{log} {checked} aggregate files hash to the values their manifests record under outputs; {len(manifests)} "
+        "manifests hashed for the chain"
+    )
 
     a_role = "analysis"
     s_role = f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}"
@@ -6928,10 +6982,72 @@ def _load_report_inputs(
         f"{log} primary: {dirs[a_role]} (rank {primary['latent']['selected_lv']}, latent adjustment none); arm: "
         f"{dirs[s_role]} ({arm_name}, `{conditioning}`-conditioned, rank {arm['latent']['selected_lv']})"
     )
+    variant_records: dict[str, dict] = {}
+    for variant, spec in EXPORT_VARIANTS.items():
+        labels = _variant_labels(variant)
+        e_role, va_role, b_role = (_variant_role(variant, k) for k in ("export", "analysis", "bridge"))
+        rerun = _report_rerun(e_role, "", dirs)
+        v_dir = dirs[e_role].parent
+        for key in ("export", "analysis", "comparison"):
+            recorded = (manifests[labels[key]].get("variant") or {}).get("name")
+            if recorded != variant:
+                raise RuntimeError(
+                    f"{v_dir} is not the variant {variant!r}: {manifest_paths[labels[key]]} records the variant {recorded!r}; "
+                    f"point --export-sensitivity-dir at the root whose {variant}/ holds that variant's outputs, or rerun "
+                    f"{rerun}; nothing was written"
+                )
+        recorded_spec = manifests[labels["export"]]["variant"]
+        for field in ("block", "hook", "rule", "setting", "change"):
+            if recorded_spec.get(field) != spec.get(field):
+                raise RuntimeError(
+                    f"{manifest_paths[labels['export']]} records the variant {variant!r} with {field} "
+                    f"{recorded_spec.get(field)!r}, but EXPORT_VARIANTS[{variant!r}][{field!r}] is {spec.get(field)!r}: the "
+                    f"registry entry moved after the run; rerun {rerun}; nothing was written"
+                )
+        record = json.loads(files[va_role][ANALYSIS_RESULT]["path"].read_text())
+        latent = manifests[labels["analysis"]].get("settings", {}).get("latent_adjustment")
+        if latent is not None or "latent_adjustment" in record:
+            raise RuntimeError(
+                f"{dirs[va_role]} is not the variant's analysis: {ANALYSIS_MANIFEST} records latent adjustment {latent!r}"
+                + (f" and {ANALYSIS_RESULT} carries a latent_adjustment block" if "latent_adjustment" in record else "")
+                + f" (a variant records None, the primary's setting); rerun {rerun}; nothing was written"
+            )
+        diag_where = str(manifest_paths[labels["diagnostics"]])
+        is_primary = _get(manifests[labels["diagnostics"]], "inputs.analysis.is_primary", where=diag_where)
+        read_variant = _get(manifests[labels["diagnostics"]], "inputs.analysis.export_variant", where=diag_where)
+        if is_primary is not False or read_variant != variant:
+            raise RuntimeError(
+                f"{diag_where} records inputs.analysis.is_primary {is_primary!r} and export_variant {read_variant!r}: the "
+                f"diagnostics of {variant!r} must read that variant (is_primary false, export_variant {variant!r}); rerun "
+                f"{_report_rerun(_variant_role(variant, 'diagnostics'), '', dirs)}; nothing was written"
+            )
+        if b_role in files:
+            name = EXPORT_SENSITIVITY_BRIDGE_TABLE
+            entry = files[b_role][name]
+            recorded = _get(manifests[labels["export"]], "bridge.table.sha256", where=str(manifest_paths[labels["export"]]))
+            if recorded != entry["sha256"]:
+                raise RuntimeError(
+                    f"{entry['path']}: sha256 {entry['sha256']} differs from the hash {manifest_paths[labels['export']]} "
+                    f"records under bridge.table.sha256 ({recorded}); rerun {rerun}; nothing was written"
+                )
+        variant_records[variant] = record
+    print(
+        f"{log} variants ({', '.join(f'`{v}`' for v in EXPORT_VARIANTS)}, `EXPORT_VARIANTS`): "
+        + "; ".join(
+            f"{variant}: {dirs[_variant_role(variant, 'analysis')].parent} (rank {record['latent']['selected_lv']}, latent "
+            "adjustment none" + (", bridge table as recorded" if _variant_role(variant, "bridge") in files else "") + ")"
+            for variant, record in variant_records.items()
+        )
+    )
 
     # (4) reported runs: n_jobs, pinned numerics, consistent versions
     arm_rerun = "`adni-sexdiff latent-sensitivity`"
-    for label, record, rerun in (("analyze", primary, "`adni-sexdiff analyze`"), ("latent-sensitivity (analysis)", arm, arm_rerun)):
+    reported = [("analyze", primary, "`adni-sexdiff analyze`"), ("latent-sensitivity (analysis)", arm, arm_rerun)]
+    reported += [
+        (_variant_labels(v)["analysis"], record, f"`adni-sexdiff export-sensitivity --variant {v} --force`")
+        for v, record in variant_records.items()
+    ]
+    for label, record, rerun in reported:
         for where, value in ((f"{manifest_paths[label]} (settings.n_jobs)", manifests[label].get("settings", {}).get("n_jobs")),
                              (f"{manifest_paths[label].parent / ANALYSIS_RESULT} (measurement.n_jobs)", record.get("measurement", {}).get("n_jobs"))):
             if value != REPORTED_N_JOBS:
@@ -6967,7 +7083,8 @@ def _load_report_inputs(
         if first is not None:
             versions[pkg] = first[1]
     print(
-        f"{log} reported runs: primary and arm n_jobs {REPORTED_N_JOBS}; numerics pinned in {len(manifests) - len(numerics_absent)} "
+        f"{log} reported runs: primary, arm and {len(variant_records)} variants n_jobs {REPORTED_N_JOBS}; numerics pinned in "
+        f"{len(manifests) - len(numerics_absent)} "
         f"manifests, absent in {len(numerics_absent)}; versions consistent ("
         + ", ".join(f"{k} {v}" for k, v in versions.items()) + ")"
     )
@@ -6980,25 +7097,25 @@ def _load_report_inputs(
     cohort_sha = sha["cohort"][COHORT_MANIFEST]
     primary_sha = {ANALYSIS_RESULT: sha[a_role][ANALYSIS_RESULT], ANALYSIS_MANIFEST: sha[a_role][ANALYSIS_MANIFEST]}
     arm_sha = {ANALYSIS_RESULT: sha[s_role][ANALYSIS_RESULT], ANALYSIS_MANIFEST: sha[s_role][ANALYSIS_MANIFEST]}
-    export_outputs = manifests["export"].get("outputs", {})
     chain: list[dict] = []
 
     def link(label: str, keys: list[str], upstream: str, now: str, rerun: str) -> None:
         recorded = _get(manifests[label], keys, where=str(manifest_paths[label]))
         chain.append({"link": f"{label}: {'.'.join(keys)}", "upstream": upstream, "sha256": now, "recorded": recorded, "ok": recorded == now, "rerun": rerun})
 
-    def export_file_links(label: str, rerun: str) -> None:
-        link(label, ["inputs", "export_manifest", "sha256"], f"sha256({files['export'][EXPORT_MANIFEST]['path']})", export_sha, rerun)
+    def export_file_links(label: str, rerun: str, *, export_role: str = "export", export_label: str = "export") -> None:
+        outputs = manifests[export_label].get("outputs", {})
+        link(label, ["inputs", "export_manifest", "sha256"], f"sha256({files[export_role][EXPORT_MANIFEST]['path']})", sha[export_role][EXPORT_MANIFEST], rerun)
         for name in ANALYSIS_INPUT_FILES:
             if name == EXPORT_MANIFEST:
                 continue
-            link(label, ["inputs", "files", name, "recorded"], f"export: outputs.{name}.sha256", export_outputs.get(name, {}).get("sha256"), rerun)
+            link(label, ["inputs", "files", name, "recorded"], f"{export_label}: outputs.{name}.sha256", outputs.get(name, {}).get("sha256"), rerun)
 
-    def diagnostics_links(label: str, analysis_label: str, analysis_sha: dict, rerun: str) -> None:
+    def diagnostics_links(label: str, analysis_label: str, analysis_sha: dict, rerun: str, *, export_role: str = "export") -> None:
         link(label, ["inputs", "analysis", "analysis_manifest", "sha256"], f"sha256({manifest_paths[analysis_label]})", analysis_sha[ANALYSIS_MANIFEST], rerun)
         link(label, ["inputs", "analysis", "files", ANALYSIS_RESULT, "sha256"], f"{analysis_label}: outputs.{ANALYSIS_RESULT}.sha256",
              manifests[analysis_label].get("outputs", {}).get(ANALYSIS_RESULT, {}).get("sha256"), rerun)
-        link(label, ["inputs", "export", "export_manifest", "sha256"], f"sha256({files['export'][EXPORT_MANIFEST]['path']})", export_sha, rerun)
+        link(label, ["inputs", "export", "export_manifest", "sha256"], f"sha256({files[export_role][EXPORT_MANIFEST]['path']})", sha[export_role][EXPORT_MANIFEST], rerun)
         link(label, ["inputs", "cohort", "files", COHORT_MANIFEST, "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, rerun)
 
     for platform in PLATFORMS:
@@ -7020,6 +7137,31 @@ def _load_report_inputs(
     link("latent-sensitivity (comparison)", ["inputs", "export", "export_manifest", "sha256"], f"sha256({files['export'][EXPORT_MANIFEST]['path']})", export_sha, arm_rerun)
     link("latent-sensitivity (comparison)", ["inputs", "cohort", "files", COHORT_MANIFEST, "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, arm_rerun)
     diagnostics_links("axis-diagnostics (arm)", "latent-sensitivity (analysis)", arm_sha, _report_rerun(ad_role, "", dirs))
+    export_path = files["export"][EXPORT_MANIFEST]["path"]
+    for variant in EXPORT_VARIANTS:
+        labels = _variant_labels(variant)
+        ve_role, va_role, vb_role = (_variant_role(variant, k) for k in ("export", "analysis", "bridge"))
+        rerun = _report_rerun(ve_role, "", dirs)
+        variant_sha = {name: sha[va_role][name] for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST)}
+        for platform in PLATFORMS:
+            clean_path = files["cleaned"][f"{platform}/{CLEAN_MANIFEST}"]["path"]
+            link(labels["export"], ["inputs", "clean", platform, "manifest", "sha256"], f"sha256({clean_path})", sha["cleaned"][f"{platform}/{CLEAN_MANIFEST}"], rerun)
+        link(labels["export"], ["inputs", "cohort", "manifest", "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, rerun)
+        link(labels["export"], ["reference", "manifest", "sha256"], f"sha256({export_path})", export_sha, rerun)
+        export_file_links(labels["analysis"], rerun, export_role=ve_role, export_label=labels["export"])
+        for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+            link(labels["analysis"], ["reference", "files", name, "sha256"], f"sha256({files[a_role][name]['path']})", primary_sha[name], rerun)
+        link(labels["analysis"], ["reference", "export", "manifest", "sha256"], f"sha256({export_path})", export_sha, rerun)
+        for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+            link(labels["comparison"], ["reference", "files", name, "sha256"], f"sha256({files[a_role][name]['path']})", primary_sha[name], rerun)
+        for name in (ANALYSIS_RESULT, ANALYSIS_MANIFEST):
+            link(labels["comparison"], ["inputs", "variant", "analysis", "files", name, "sha256"], f"sha256({files[va_role][name]['path']})", variant_sha[name], rerun)
+        link(labels["comparison"], ["inputs", "variant", "export", "manifest", "sha256"], f"sha256({files[ve_role][EXPORT_MANIFEST]['path']})", sha[ve_role][EXPORT_MANIFEST], rerun)
+        link(labels["comparison"], ["inputs", "primary", "export", "manifest", "sha256"], f"sha256({export_path})", export_sha, rerun)
+        if vb_role in files:
+            name = EXPORT_SENSITIVITY_BRIDGE_TABLE
+            link(labels["comparison"], ["inputs", "variant", "bridge", "sha256"], f"sha256({files[vb_role][name]['path']})", sha[vb_role][name], rerun)
+        diagnostics_links(labels["diagnostics"], labels["analysis"], variant_sha, _report_rerun(_variant_role(variant, "diagnostics"), "", dirs), export_role=ve_role)
     for row in chain:
         if not row["ok"]:
             label = row["link"].split(":")[0]
@@ -7028,7 +7170,7 @@ def _load_report_inputs(
                 f"{row['sha256']}; the upstream output was regenerated after this step, rerun {row['rerun']} (then every "
                 "step after it); nothing was written"
             )
-    print(f"{log} chain: {len(chain)} links hold from the clean manifests to the arm diagnostics")
+    print(f"{log} chain: {len(chain)} links hold from the clean manifests to the arm's and every variant's diagnostics")
 
     # findings of the report itself (design D8)
     findings: list[str] = []
@@ -7057,12 +7199,23 @@ def _load_report_inputs(
         "files": files,
         "manifests": manifests,
         "manifest_paths": manifest_paths,
-        "records": {"primary": primary, "arm": arm},
+        "records": {"primary": primary, "arm": arm, "variants": variant_records},
         "tables": {
             "stage_counts": read_csv("cohort", COHORT_COUNTS),
             "comparison": read_csv(c_role, LATENT_SENSITIVITY_TABLE),
             "diagnostics": diagnostics_tables("diagnostics"),
             "arm_diagnostics": diagnostics_tables(ad_role),
+            "variants": {
+                variant: {
+                    "comparison": read_csv(_variant_role(variant, "comparison"), EXPORT_SENSITIVITY_TABLE),
+                    "bridge": (
+                        read_csv(_variant_role(variant, "bridge"), EXPORT_SENSITIVITY_BRIDGE_TABLE)
+                        if _variant_role(variant, "bridge") in files else None
+                    ),
+                    "diagnostics": diagnostics_tables(_variant_role(variant, "diagnostics")),
+                }
+                for variant in EXPORT_VARIANTS
+            },
         },
         "provenance": provenance,
         "chain": chain,
@@ -7286,8 +7439,13 @@ def _components_rows(components: pd.DataFrame) -> tuple[list[dict], list[str]]:
     return rows, columns
 
 
+def _section_ref(title: str) -> str:
+    """``section <n>``: the 1-based place of ``title`` in ``REPORT_SECTIONS``, so no section number in the text is a literal."""
+    return f"section {REPORT_SECTIONS.index(title) + 1}"
+
+
 def _diagnostics_section(b: _ReportBuilder, tables: dict, manifest: dict, *, prefix: str = "") -> None:
-    """The flagged rows, the components table and the block PCs of one diagnostics run (sections 6 and 7)."""
+    """The flagged rows, the components table and the block PCs of one diagnostics run (the primary's, the arm's or a variant's)."""
     counts = manifest.get("counts", {})
     variables = [v["name"] if isinstance(v, dict) else v for v in manifest.get("settings", {}).get("DIAGNOSTIC_VARIABLES", [])]
     threshold = manifest.get("settings", {}).get("DIAGNOSTIC_CORRELATION_THRESHOLD")
@@ -7336,7 +7494,7 @@ def _diagnostics_section(b: _ReportBuilder, tables: dict, manifest: dict, *, pre
     b.table(f"{prefix}Block principal components", block_rows, block_columns, align="l" + "r" * (len(block_columns) - 1))
     rows = counts.get("rows", {})
     b.para(
-        "The full tables are referenced by hash (section 2): "
+        f"The full tables are referenced by hash ({_section_ref('Provenance')}): "
         + ", ".join(f"`{name}` ({_count(rows.get(key))} rows)" for name, key in (
             (DIAGNOSTICS_AXIS_CORRELATIONS, "axis_correlations"), (DIAGNOSTICS_BLOCK_PCS, "block_pcs"),
             (DIAGNOSTICS_GEOMETRY_SHARES, "geometry_shares"), (DIAGNOSTICS_COMPONENTS, "components")))
@@ -7344,8 +7502,196 @@ def _diagnostics_section(b: _ReportBuilder, tables: dict, manifest: dict, *, pre
     )
 
 
+def _first_component_rows(analyses: list[tuple[str, dict]]) -> list[dict]:
+    """Each analysis' first latent component against ``phase``, read from its ``axis_correlations.csv``."""
+    rows = []
+    for label, tables in analyses:
+        axis = tables["axis"]
+        comps = list(dict.fromkeys(axis["component"]))
+        sub = axis[(axis["component"] == comps[0]) & (axis["variable"] == "phase")] if comps else axis.iloc[0:0]
+        r = sub.iloc[0] if len(sub) else None
+        rows.append({
+            "analysis": label, "component": comps[0] if comps else "n/a", "sd": _num(r["component_sd"], ".4g") if r is not None else "n/a",
+            "rho with phase": _num(r["spearman"], ".3f") if r is not None else "n/a",
+            "rho | design": _num(r["partial_spearman"], ".3f") if r is not None else "n/a",
+            "flag": ("+".join(f for f, on in (("raw", r["flag_raw"] == "True"), ("partial", r["flag_partial"] == "True")) if on) or "none") if r is not None else "n/a",
+        })
+    return rows
+
+
+def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[str], p_status: dict) -> None:
+    """The "Export sensitivity" section: the primary beside every variant of ``EXPORT_VARIANTS`` (design D4 of ``adni-report-variants``).
+
+    Every value is read from a variant's ``export_sensitivity.csv``, its
+    comparison and export manifests, its ``result.json``, ``nist_bridge.csv``
+    and its diagnostics files; the primary's rows from the first registered
+    variant's ``export_sensitivity.csv`` (the chain checked that every
+    comparison references the primary's record now on disk). The status
+    sentences are ``_export_variant_status_line`` and the variant lines
+    ``_export_variant_lines``, string-equal to each ``export_sensitivity.md``.
+    """
+    dirs, manifests = inputs["dirs"], inputs["manifests"]
+    primary, records = inputs["records"]["primary"], inputs["records"]["variants"]
+    variants = list(EXPORT_VARIANTS)
+    labels = {v: _variant_labels(v) for v in variants}
+    rows = {v: {r["analysis"]: r for r in inputs["tables"]["variants"][v]["comparison"].to_dict("records")} for v in variants}
+    p_row = rows[variants[0]]["primary"]
+    v_rows = {v: rows[v][v] for v in variants}
+    statuses = {v: manifests[labels[v]["comparison"]].get("counts", {}).get("statuses", {}) for v in variants}
+    v_status = {v: {s: _rejected(records[v]["p_values"].get(s)) for s in ANALYSIS_STATISTICS} for v in variants}
+    rules = _section_ref("Reading rules")
+    ref_files = manifests[labels[variants[0]]["comparison"]].get("reference", {}).get("files", {})
+    b.para(
+        f"The primary (`{dirs['analysis']}`, `{ANALYSIS_RESULT}` sha256 `{ref_files.get(ANALYSIS_RESULT, {}).get('sha256')}`) beside "
+        "its predeclared export variants (`EXPORT_VARIANTS`): "
+        + "; ".join(
+            f"`{v}` (change `{EXPORT_VARIANTS[v]['change']}`: {EXPORT_VARIANTS[v]['setting']}; `{dirs[_variant_role(v, 'analysis')].parent}`)"
+            for v in variants
+        )
+        + ". Every other export and analysis setting is the primary's. Every table in this section quotes a variant and is "
+        f"read under `READING_RULES` and `EXPORT_VARIANT_READING_RULES` ({rules}): the primary row comes first and its "
+        "status is the result; a variant never replaces it (variant rule 1), and a status that differs is run-handling "
+        "dependence (variant rule 2)."
+    )
+    stat_rows = []
+    for s in ANALYSIS_STATISTICS:
+        for label, row in (("primary", p_row), *((v, v_rows[v]) for v in variants)):
+            stat_rows.append({
+                "row": f"{s} {label}", "statistic": s, "analysis": label, "observed": _num(row[f"{s}_observed"]),
+                "p (RRPP)": _num(row[f"{s}_p"]), "rejected": _yes_no(row[f"{s}_rejected"]),
+                "null mean": _num(row[f"{s}_null_mean"]), "null sd": _num(row[f"{s}_null_sd"]), "null q95": _num(row[f"{s}_null_q95"]),
+                "status": "the result" if label == "primary" else _text(statuses[label].get(s)),
+            })
+    b.table("Statistics: primary and variants", stat_rows, ["row", "statistic", "analysis", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "status"], align="lllrrlrrrl")
+    for v in variants:
+        v_row = v_rows[v]
+        b.para(
+            f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected "
+            f"rank, floor, eigengap and null summary (reading rule 2, variant rule 3): primary rank {_count(p_row['selected_rank'])} "
+            f"(floor {ANALYSIS_RANK_FLOOR}, pooled relative eigengap {_num(p_row['eigengap'])}); {v} rank "
+            f"{_count(v_row['selected_rank'])} (floor {ANALYSIS_RANK_FLOOR}, eigengap {_num(v_row['eigengap'])})"
+            + (
+                "; the ranks differ, which is reported, not ranked (variant rule 3)."
+                if p_row["selected_rank"] != v_row["selected_rank"] else "; the ranks are equal."
+            )
+        )
+    for v in variants:
+        b.heading(f"Status per statistic: `{v}`")
+        b.bullets([
+            _export_variant_status_line(s, statuses[v].get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
+        ])
+    perms = {
+        "primary": primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {},
+        **{v: records[v].get("config_spectrum", {}).get("permutation_pooled_eigengap") or {} for v in variants},
+    }
+    all_rows = {"primary": p_row, **v_rows}
+    space_rows = [
+        {"quantity": "PLS-DA rank (selection)", **{k: f"{_count(r['selected_rank'])} (`{r['component_selection']}`)" for k, r in all_rows.items()}},
+        {"quantity": "rank floor (`ANALYSIS_RANK_FLOOR`)", **{k: str(ANALYSIS_RANK_FLOOR) for k in all_rows}},
+        {"quantity": "cv_mean_auroc", **{k: _num(r["cv_mean_auroc"]) for k, r in all_rows.items()}},
+        {"quantity": "CV repeats completed", **{k: _count(r["cv_repeats_completed"]) for k, r in all_rows.items()}},
+        {"quantity": "pooled relative eigengap", **{k: _num(r["eigengap"]) for k, r in all_rows.items()}},
+        {"quantity": "eigengap permutation null q05 / q50 / q95",
+         **{k: f"{_fmt(q.get('q05'))} / {_fmt(q.get('q50'))} / {_fmt(q.get('q95'))}" for k, q in perms.items()}},
+    ]
+    b.table("Latent space: primary and variants", space_rows, ["quantity", *all_rows], align="l" + "r" * len(all_rows))
+    b.para(
+        "Each variant shares with the primary the cleaned tables, the participants, the NMR block, the covariates and their "
+        "design, the cells, the settings, the CV folds, the seed and the permutations; it differs only in the p180 values "
+        "(variant rule 2)."
+    )
+    e_manifest = manifests["export"]
+    exports = {"primary": e_manifest, **{v: manifests[labels[v]["export"]] for v in variants}}
+    offset_rows = []
+    for p in e_manifest.get("settings", {}).get("blocks", EXPORT_BLOCKS):
+        for label, m in exports.items():
+            o = m.get("counts", {}).get("phase_offset", {}).get(p, {})
+            e = m.get("expected", {}).get("phase_offset", {}).get(p, {})
+            offset_rows.append({
+                "row": f"{p} {label}", "block": p, "export": label,
+                "median |d|": _num(o.get("median_abs_d"), ".2f"), "max |d|": _num(o.get("max_abs_d"), ".2f"),
+                "|d| > 0.5": _count(o.get("abs_d_gt_0_5")), "|d| > 1": _count(o.get("abs_d_gt_1")),
+                "|corr(PC1, phase)|": _num(o.get("abs_corr_pc1_phase"), ".2f"), "|corr(PC2, phase)|": _num(o.get("abs_corr_pc2_phase"), ".2f"),
+                "expected |d| > 0.5": _count(e.get("abs_d_gt_0_5")), "expected |d| > 1": _count(e.get("abs_d_gt_1")),
+            })
+    b.para(
+        "The run offset per block (`phase`, ADNI1 against ADNI2GO, on each export's scale over the exported participants), "
+        "as the primary export manifest and each variant export manifest record it (`counts.phase_offset`), beside the "
+        "predeclared counts (`EXPORT_EXPECTED_COUNTS`, `EXPORT_VARIANT_EXPECTED_COUNTS`; `n/a` where none is predeclared):"
+    )
+    b.table("Run offset per export", offset_rows, ["row", "block", "export", "median |d|", "max |d|", "|d| > 0.5", "|d| > 1", "|corr(PC1, phase)|", "|corr(PC2, phase)|", "expected |d| > 0.5", "expected |d| > 1"], align="lllrrrrrrrr")
+    flat = {v: _flatten(manifests[labels[v]["export"]].get("counts", {})) for v in variants}
+    flat_e = {v: _flatten(manifests[labels[v]["export"]].get("expected", {})) for v in variants}
+    keys = dict.fromkeys(
+        k for v in variants
+        for k in _flatten({key: value for key, value in EXPORT_VARIANT_EXPECTED_COUNTS[v].items() if key not in ("analysis", "phase_offset")})
+    )
+    count_rows = [
+        {"quantity": key, **{c: _text(src[v].get(key)) for v in variants for c, src in ((v, flat), (f"{v} expected", flat_e))}}
+        for key in keys
+    ]
+    b.para(
+        "Each variant export's counts beside its predeclared ones (`EXPORT_VARIANT_EXPECTED_COUNTS`, every key but the run "
+        "offset above and the analysis', which `export-sensitivity` compares itself; a deviation is copied under "
+        f"{_section_ref('Findings')}), as its export manifest records them (`counts`, `expected`):"
+    )
+    b.table("Variant exports against the predeclared counts", count_rows, ["quantity", *(c for v in variants for c in (v, f"{v} expected"))], align="l" + "r" * (2 * len(variants)))
+    for v in variants:
+        m = manifests[labels[v]["export"]]
+        b.heading(f"Export variant `{v}`")
+        b.para(*_export_variant_lines(m))
+        bridge = m.get("bridge")
+        if not bridge:
+            continue
+        observed, expected = bridge.get("summary", {}).get("p180_bridged", {}), m.get("expected", {}).get("p180_bridged", {})
+        b.table(f"{v}: NIST bridge per kit", [
+            {"kit": "not bridged" if k == "not_bridged" else k, "metabolites": _count(observed.get(k)), "expected": _count(expected.get(k))}
+            for k in dict.fromkeys([*observed, *expected])
+        ], ["kit", "metabolites", "expected"], align="lrr")
+        rule = bridge.get("rule", {})
+        runs = [rule.get("reference_run"), rule.get("bridged_run")]
+        table = inputs["tables"]["variants"][v]["bridge"]
+        unbridged = table[table["bridged"] == "False"]
+        b.table(f"{v}: Unbridged metabolites", [
+            {
+                "metabolite": f"`{r['metabolite']}`", "kit": r["kit"], "NIST column": _text(r["nist_column"]),
+                **{f"{c} {run}": _count(r[f"{key}_{run}"]) for run in runs for c, key in (("replicates", "replicates"), ("valid", "valid"), ("ISTD flags", "istd_flags"))},
+                "b": _num(r["b"], "+.3f"),
+            }
+            for r in unbridged.to_dict("records")
+        ], ["metabolite", "kit", "NIST column", *(f"{c} {run}" for run in runs for c in ("replicates", "valid", "ISTD flags")), "b"], align="lll" + "r" * (3 * len(runs) + 1))
+        info = bridge.get("table", {})
+        b.para(
+            f"Each unbridged metabolite keeps factor {_text(rule.get('unbridged_factor'))} (`NIST_BRIDGE_RULE`: bridged when at "
+            f"least {_text(rule.get('inclusion_share'))} of its replicates are valid in each run). The full table `{info.get('name')}` "
+            f"(sha256 `{info.get('sha256')}`, {_count(info.get('rows'))} rows) is referenced by hash ({_section_ref('Provenance')}); "
+            "the factor of every metabolite is in the variant export manifest (`bridge.factors_log2`)."
+        )
+    for v in variants:
+        d_manifest = manifests[labels[v]["diagnostics"]]
+        b.para(
+            f"Axis diagnostics of `{v}` (`{dirs[_variant_role(v, 'diagnostics')]}`, rank "
+            f"{_count(d_manifest.get('counts', {}).get('components'))}, `is_primary` "
+            f"{_text(d_manifest.get('inputs', {}).get('analysis', {}).get('is_primary'))}, export variant "
+            f"`{_text(d_manifest.get('inputs', {}).get('analysis', {}).get('export_variant'))}`): a component of the variant "
+            "that tracks a variable here is a measurement-space finding about the variant; it never reinterprets either "
+            "analysis' statistics and is never grounds to adopt the variant (variant rule 7)."
+        )
+        _diagnostics_section(b, inputs["tables"]["variants"][v]["diagnostics"], d_manifest, prefix=f"{v}: ")
+    b.table("First component against phase", _first_component_rows([
+        ("primary", inputs["tables"]["diagnostics"]), *((v, inputs["tables"]["variants"][v]["diagnostics"]) for v in variants)
+    ]), ["analysis", "component", "sd", "rho with phase", "rho | design", "flag"], align="llrrrl")
+    for v in variants:
+        settings = manifests[labels[v]["analysis"]].get("settings", {})
+        b.para(
+            f"The `motco analyze` command that reproduces `{v}`'s analysis directory (`cli_equivalent`; "
+            + _text(settings.get("cli_equivalent", {}).get("note")) + "):"
+        )
+        b.code(_text(settings.get("cli_equivalent", {}).get("command")))
+
+
 def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
-    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``).
+    """Render the case-study report from the loaded inputs (design D4 of ``adni-report`` and ``adni-report-variants``).
 
     Parameters
     ----------
@@ -7362,17 +7708,20 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
 
     Notes
     -----
-    The ten sections of ``REPORT_SECTIONS``, in order, each table titled by
-    a level-3 heading and keyed by its first column. Every number is read
-    from a record, a manifest or a CSV and formatted with the digits of the
-    summary it belongs to (``_fmt`` with six significant digits for record
-    values, p-values as recorded, counts as integers, correlations and
-    shares as ``diagnostics.md`` prints them); no statistic, correlation,
-    mean or count is computed here. The reading sentences are
-    ``_statistic_reading_line`` and ``_arm_status_line``, the ones
-    ``summary.md`` and ``latent_sensitivity.md`` print; the reading rules are
-    the constants, verbatim. The body depends on the inputs and ``date``
-    only: no revision, host, time or runtime of the report run is written.
+    The eleven sections of ``REPORT_SECTIONS``, in order, each table titled
+    by a level-3 heading and keyed by its first column; every reference to
+    another section is numbered from ``REPORT_SECTIONS`` (``_section_ref``).
+    Every number is read from a record, a manifest or a CSV and formatted
+    with the digits of the summary it belongs to (``_fmt`` with six
+    significant digits for record values, p-values as recorded, counts as
+    integers, correlations and shares as ``diagnostics.md`` prints them); no
+    statistic, correlation, mean or count is computed here. The reading
+    sentences are ``_statistic_reading_line``, ``_arm_status_line`` and
+    ``_export_variant_status_line``, the ones ``summary.md``,
+    ``latent_sensitivity.md`` and ``export_sensitivity.md`` print, and the
+    variant lines are ``_export_variant_lines``; the reading rules are the
+    constants, verbatim. The body depends on the inputs and ``date`` only:
+    no revision, host, time or runtime of the report run is written.
     """
     b = _ReportBuilder()
     dirs, files, manifests, paths = inputs["dirs"], inputs["files"], inputs["manifests"], inputs["manifest_paths"]
@@ -7394,12 +7743,13 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
 
     b.lines.append(f"# {_REPORT_TITLE} — {date}")
     b.para(
-        "Generated in full by `adni-sexdiff report` (change `adni-report`) from the kept aggregate outputs of the pipeline: "
-        "every number is copied from a record, a manifest or a CSV and formatted with the digits of the summary it belongs "
-        "to, every reading sentence is the one `summary.md` or `latent_sensitivity.md` prints, and the reading rules are "
-        "the constants, verbatim. The primary analysis stays primary in every table; the arm is read beside it under "
-        "`READING_RULES` and `LATENT_SENSITIVITY_READING_RULES` (section 9). `adni-sexdiff report --check` compares this "
-        "file with the outputs cell by cell. No value here is participant-level."
+        "Generated in full by `adni-sexdiff report` (changes `adni-report` and `adni-report-variants`) from the kept "
+        "aggregate outputs of the pipeline: every number is copied from a record, a manifest or a CSV and formatted with "
+        "the digits of the summary it belongs to, every reading sentence is the one `summary.md`, `latent_sensitivity.md` "
+        "or `export_sensitivity.md` prints, and the reading rules are the constants, verbatim. The primary analysis stays "
+        "primary in every table; the arm is read beside it under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`, "
+        f"and each export variant under `READING_RULES` and `EXPORT_VARIANT_READING_RULES` ({_section_ref('Reading rules')}). "
+        "`adni-sexdiff report --check` compares this file with the outputs cell by cell. No value here is participant-level."
     )
 
     # 1. Summary ---------------------------------------------------------------------------
@@ -7421,16 +7771,38 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
             for s in ANALYSIS_STATISTICS
         )
     )
-    b.para("Reading, under `READING_RULES` (section 9):")
+    b.para(f"Reading, under `READING_RULES` ({_section_ref('Reading rules')}):")
     b.bullets([_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS])
     b.para(
         f"The predeclared sensitivity arm `{arm_name}` (`LATENT_SENSITIVITY_ARM`: `{LATENT_SENSITIVITY_ARM['setting']}` = "
-        f"`{LATENT_SENSITIVITY_ARM['conditioning']}`, the same five covariates, every other setting the primary's; section 7) "
+        f"`{LATENT_SENSITIVITY_ARM['conditioning']}`, the same five covariates, every other setting the primary's; "
+        f"{_section_ref('Latent-adjustment sensitivity')}) "
         f"selected rank {arm['latent']['selected_lv']}. Status per statistic (`same` when the rejection under "
         "`ANALYSIS_REJECTION_RULE` equals the primary's, else `differs (basis dependence)`; the primary's status is the "
         "result either way), read under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`:"
     )
     b.bullets([_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
+    variants = list(EXPORT_VARIANTS)
+    v_labels = {v: _variant_labels(v) for v in variants}
+    v_records = inputs["records"]["variants"]
+    v_status = {v: {s: _rejected(v_records[v]["p_values"].get(s)) for s in ANALYSIS_STATISTICS} for v in variants}
+    b.para(
+        "The predeclared export variants "
+        + ", ".join(f"`{v}`" for v in variants)
+        + f" (`EXPORT_VARIANTS`, change `{', '.join(dict.fromkeys(EXPORT_VARIANTS[v]['change'] for v in variants))}`: each "
+        "changes the p180 values only, every other export and analysis setting the primary's; "
+        f"{_section_ref('Export sensitivity')}) selected ranks "
+        + " and ".join(f"{v_records[v]['latent']['selected_lv']} (`{v}`)" for v in variants)
+        + ". Status per statistic (`same` when the rejection under `ANALYSIS_REJECTION_RULE` equals the primary's, else "
+        "`differs (run-handling dependence)`; the primary's status is the result either way), read under `READING_RULES` "
+        "and `EXPORT_VARIANT_READING_RULES`:"
+    )
+    for v in variants:
+        v_statuses = manifests[v_labels[v]["comparison"]].get("counts", {}).get("statuses", {})
+        b.para(f"`{v}` (rank {v_records[v]['latent']['selected_lv']}):")
+        b.bullets([
+            _export_variant_status_line(s, v_statuses.get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
+        ])
 
     def flagged_components(manifest: dict) -> str:
         per = manifest.get("counts", {}).get("per_component", {})
@@ -7443,9 +7815,16 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "reporting threshold, not an adoption rule): in the primary, "
         f"{_count(d_flagged.get('axis_raw'))} latent-component rows flagged on the raw correlation and "
         f"{_count(d_flagged.get('axis_partial'))} on the partial, the flagged components {flagged_components(d_manifest)} "
-        f"(section 6); in the arm, {_count(ad_flagged.get('axis_raw'))} and {_count(ad_flagged.get('axis_partial'))}, the "
-        f"flagged components {flagged_components(ad_manifest)} (section 7). A flagged row is a measurement-space finding, "
-        "never a change of a statistic."
+        f"({_section_ref('Axis diagnostics of the primary')}); in the arm, {_count(ad_flagged.get('axis_raw'))} and "
+        f"{_count(ad_flagged.get('axis_partial'))}, the flagged components {flagged_components(ad_manifest)} "
+        f"({_section_ref('Latent-adjustment sensitivity')}); "
+        + "; ".join(
+            f"in `{v}`, {_count(f.get('axis_raw'))} and {_count(f.get('axis_partial'))}, the flagged components "
+            f"{flagged_components(manifests[v_labels[v]['diagnostics']])}"
+            for v in variants
+            for f in [manifests[v_labels[v]["diagnostics"]].get("counts", {}).get("flagged", {})]
+        )
+        + f" ({_section_ref('Export sensitivity')}). A flagged row is a measurement-space finding, never a change of a statistic."
     )
 
     # 2. Provenance ------------------------------------------------------------------------
@@ -7496,6 +7875,28 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
                 "recorded in": ", ".join(lbl for lbl, _ in group),
             })
     b.table("Raw LONI inputs", raw_rows, ["file", "sha256", "bytes", "predeclared", "repair", "recorded in"], align="llrlll")
+    qc: dict[tuple[str, str], dict] = {}
+    for v in variants:
+        recorded = manifests[v_labels[v]["export"]].get("inputs", {}).get("qc") or {}
+        for kind in ("archives", "workbooks"):
+            for e in recorded.get(kind, []):
+                key = (e.get("member") or e.get("name"), e.get("sha256"))
+                qc.setdefault(key, {"entry": e, "labels": []})["labels"].append(v_labels[v]["export"])
+    if qc:
+        b.para(
+            "The QC archives and the NIST SRM 1950 workbook members `export-sensitivity` read in place through the data root's "
+            "top-level symlinks, as the variant export manifests record them (`inputs.qc`), each beside its predeclared sha256 "
+            "(`RAW_INPUT_SHA256` for the archives, `NIST_BRIDGE_WORKBOOK_SHA256` for the members):"
+        )
+        b.table("QC archives and NIST workbooks", [
+            {
+                "file": name, "location": f"member of `{e['archive']}`" if e.get("member") else f"data root, symlink to `{_text(e.get('target'))}`",
+                "run": _text(e.get("run")), "kit": _text(e.get("kit")), "sha256": _text(digest), "bytes": _count(e.get("bytes")),
+                "predeclared sha256": _text(e.get("predeclared_sha256")), "predeclared": _text(e.get("predeclared")),
+                "recorded in": ", ".join(info["labels"]),
+            }
+            for (name, digest), info in qc.items() for e in [info["entry"]]
+        ], ["file", "location", "run", "kit", "sha256", "bytes", "predeclared sha256", "predeclared", "recorded in"], align="lllllrlll")
     chain_rows = [
         {"link": r["link"], "upstream": r["upstream"], "sha256": _text(r["sha256"]), "ok": "yes" if r["ok"] else "no", "rerun on failure": r["rerun"]}
         for r in inputs["chain"]
@@ -7572,7 +7973,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para(
         f"Per sex × stage cell of the analysis cohort, copied from `{COHORT_MANIFEST}` (`descriptives`, set "
         f"`{descriptives.get('set')}`), not recomputed: n, age and education mean (sd), and counts per level of `apoe4` "
-        "(0 / 1 / 2), `phase` (ADNI1 / ADNI2GO) and `statin` (0 / 1). The covariate roles of the arm (section 7) are read "
+        f"(0 / 1 / 2), `phase` (ADNI1 / ADNI2GO) and `statin` (0 / 1). The covariate roles of the arm ({_section_ref('Latent-adjustment sensitivity')}) are read "
         "beside this table."
     )
     desc_rows = []
@@ -7698,7 +8099,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         {"setting": "`ANALYSIS_SEED`", "value": _text(ps.get("ANALYSIS_SEED")), "note": "the RRPP seed (one stream per worker)"},
         {"setting": "`ANALYSIS_ALPHA`", "value": _text(ps.get("ANALYSIS_ALPHA")), "note": f"rejected when {ps.get('ANALYSIS_REJECTION_RULE')} (`ANALYSIS_REJECTION_RULE`)"},
         {"setting": "`ANALYSIS_RANK_FLOOR`", "value": _text(ps.get("ANALYSIS_RANK_FLOOR")), "note": f"`min_components` {_text(ps.get('min_components'))}, checked equal to MOTCO's default before any input is read"},
-        {"setting": "`ANALYSIS_LATENT_ADJUSTMENT`", "value": "none" if ps.get("ANALYSIS_LATENT_ADJUSTMENT") is None else _text(ps.get("ANALYSIS_LATENT_ADJUSTMENT")), "note": "the covariate-blind basis of MOTCO's validated path; the `stage`-conditioned arm is section 7"},
+        {"setting": "`ANALYSIS_LATENT_ADJUSTMENT`", "value": "none" if ps.get("ANALYSIS_LATENT_ADJUSTMENT") is None else _text(ps.get("ANALYSIS_LATENT_ADJUSTMENT")), "note": f"the covariate-blind basis of MOTCO's validated path; the `stage`-conditioned arm is {_section_ref('Latent-adjustment sensitivity')}"},
         {"setting": "`ANALYSIS_MISSING_COVARIATES`", "value": _text(ps.get("ANALYSIS_MISSING_COVARIATES")), "note": "nothing imputed; a missing value stops the step"},
         {"setting": "`n_jobs`", "value": _text(ps.get("n_jobs")), "note": f"reported runs use `REPORTED_N_JOBS` = {_text(ps.get('REPORTED_N_JOBS'))}"},
         {"setting": "entry point", "value": f"`{ps.get('entry_point')}`", "note": "one call; never assembled from `motco plsr` + `motco de`"},
@@ -7721,7 +8122,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     )
     stat_columns = ["statistic", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "note"]
     b.table("Statistics", _statistics_rows(primary), stat_columns, align="lrrlrrrl")
-    b.para("Reading, under the rules of section 9:")
+    b.para(f"Reading, under the rules of {_section_ref('Reading rules')}:")
     b.bullets([_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS])
     b.table("Cell sizes", [{"group": g, **{f"stage {st}": _count(cells[g][st]) for st in stages}} for g in groups], ["group", *(f"stage {st}" for st in stages)], align="l" + "r" * len(stages))
     cv = latent.get("integration_params", {})
@@ -7783,7 +8184,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         f"`{LATENT_SENSITIVITY_ARM['setting']}` = `{adjustment['conditioning']}`, the same five covariates, every other setting "
         f"the primary's; `{dirs[s_role]}`, `{ANALYSIS_RESULT}` sha256 `{cmp_arm.get('files', {}).get(ANALYSIS_RESULT, {}).get('sha256')}`), "
         f"as `{paths['latent-sensitivity (comparison)']}` records them. Every table in this section quotes the arm and is read "
-        "under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES` (section 9): the primary row comes first and its status "
+        f"under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES` ({_section_ref('Reading rules')}): the primary row comes first and its status "
         "is the result; the arm never replaces it (arm rule 1), and a status that differs is basis dependence (arm rule 2)."
     )
     cmp_table_rows = []
@@ -7831,7 +8232,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para(
         "Each covariate's relation to the stage effect (`LATENT_SENSITIVITY_COVARIATE_ROLES`, decided before any run; no "
         "statistic or threshold is computed for it and nothing changes because of it), read beside the per-cell "
-        "descriptives of section 3. Residualizing a covariate that mediates the stage effect removes real stage signal, and "
+        f"descriptives of {_section_ref('Cohort')}. Residualizing a covariate that mediates the stage effect removes real stage signal, and "
         "no data can tell a confounder from a mediator (arm rule 7)."
     )
     b.table("Covariate roles", [
@@ -7851,24 +8252,17 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "reinterprets either analysis' statistics and is never grounds to adopt the arm (arm rule 9)."
     )
     _diagnostics_section(b, inputs["tables"]["arm_diagnostics"], ad_manifest, prefix="Arm: ")
-    first_rows = []
-    for label, tables in (("primary", inputs["tables"]["diagnostics"]), (arm_name, inputs["tables"]["arm_diagnostics"])):
-        axis = tables["axis"]
-        comps = list(dict.fromkeys(axis["component"]))
-        sub = axis[(axis["component"] == comps[0]) & (axis["variable"] == "phase")] if comps else axis.iloc[0:0]
-        r = sub.iloc[0] if len(sub) else None
-        first_rows.append({
-            "analysis": label, "component": comps[0] if comps else "n/a", "sd": _num(r["component_sd"], ".4g") if r is not None else "n/a",
-            "rho with phase": _num(r["spearman"], ".3f") if r is not None else "n/a",
-            "rho | design": _num(r["partial_spearman"], ".3f") if r is not None else "n/a",
-            "flag": ("+".join(f for f, on in (("raw", r["flag_raw"] == "True"), ("partial", r["flag_partial"] == "True")) if on) or "none") if r is not None else "n/a",
-        })
+    first_rows = _first_component_rows([("primary", inputs["tables"]["diagnostics"]), (arm_name, inputs["tables"]["arm_diagnostics"])])
     b.table("First component against phase", first_rows, ["analysis", "component", "sd", "rho with phase", "rho | design", "flag"], align="llrrrl")
     a_settings = a_manifest.get("settings", {})
     b.para("The `motco analyze` command that reproduces the arm's directory (`cli_equivalent`; " + _text(a_settings.get("cli_equivalent", {}).get("note")) + "):")
     b.code(_text(a_settings.get("cli_equivalent", {}).get("command")))
 
-    # 8. Findings --------------------------------------------------------------------------
+    # 8. Export sensitivity ----------------------------------------------------------------
+    b.section(next(sections))
+    _export_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
+
+    # 9. Findings --------------------------------------------------------------------------
     b.section(next(sections))
     b.para("Every deviation from the predeclared counts and every finding of every input manifest, verbatim, under its step; then the report's own.")
     for label, m in manifests.items():
@@ -7884,7 +8278,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     else:
         b.para("None.")
 
-    # 9. Reading rules ---------------------------------------------------------------------
+    # 10. Reading rules --------------------------------------------------------------------
     b.section(next(sections))
     b.heading("READING_RULES")
     b.para("Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):")
@@ -7895,14 +8289,24 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         f"`{LATENT_SENSITIVITY_ARM['change']}` before any run), after `READING_RULES`:"
     )
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)))
+    b.heading("EXPORT_VARIANT_READING_RULES")
+    b.para(_export_variant_rules_heading()[-1])
+    b.para(*(f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)))
 
-    # 10. Reproduction ---------------------------------------------------------------------
+    # 11. Reproduction ---------------------------------------------------------------------
     b.section(next(sections))
     sens_dir = dirs[s_role].parent
+    reads_root = [v for v in variants if manifests[v_labels[v]["export"]].get("variant", {}).get("reads_data_root")]
+    archives = list(dict.fromkeys(
+        e.get("name") for v in reads_root for e in (manifests[v_labels[v]["export"]].get("inputs", {}).get("qc") or {}).get("archives", [])
+    ))
     b.para(
         "The pipeline, in order, each step reading the previous steps' outputs and checking their manifests' hashes; "
-        "`clean` and `cohort` need the data root (`--data-root`, `ADNI_DATA_ROOT` or `data/`), the others read "
-        "`results/` only, and `report` reads committed aggregate files only, so it runs on any clone:"
+        "`clean`, `cohort` and "
+        + (", ".join(f"`export-sensitivity --variant {v}`" for v in reads_root) or "no export variant")
+        + " need the data root (`--data-root`, `ADNI_DATA_ROOT` or `data/`"
+        + (f"; the QC archives {', '.join(f'`{a}`' for a in archives)} are read in place, through top-level symlinks the data root must hold" if archives else "")
+        + "), the others read `results/` only, and `report` reads committed aggregate files only, so it runs on any clone:"
     )
     b.code(
         "uv run adni-sexdiff clean --platform all",
@@ -7912,6 +8316,12 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "uv run adni-sexdiff axis-diagnostics",
         "uv run adni-sexdiff latent-sensitivity",
         f"uv run adni-sexdiff axis-diagnostics --analysis-dir {dirs[s_role]} --out-dir {sens_dir / LATENT_SENSITIVITY_SUBDIRS['diagnostics']}",
+        "uv run adni-sexdiff export-sensitivity --variant all",
+        *(
+            f"uv run adni-sexdiff axis-diagnostics --input-dir {dirs[_variant_role(v, 'export')]} --analysis-dir "
+            f"{dirs[_variant_role(v, 'analysis')]} --out-dir {dirs[_variant_role(v, 'diagnostics')]}"
+            for v in variants
+        ),
         "uv run adni-sexdiff report",
         "uv run adni-sexdiff report --check",
     )
@@ -7921,8 +8331,15 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "compares every table cell by cell and every other line line by line; a regenerated results directory fails it on "
         "the provenance hashes until a new report is written and checked."
     )
-    b.para("MOTCO's CLI equivalents of the two analyses (`cli_equivalent` of the two analysis manifests):")
-    b.code(_text(ps.get("cli_equivalent", {}).get("command")), _text(a_settings.get("cli_equivalent", {}).get("command")))
+    v_settings = [manifests[v_labels[v]["analysis"]].get("settings", {}) for v in variants]
+    b.para(
+        f"MOTCO's CLI equivalents of the {2 + len(variants)} analyses, the primary, the arm and "
+        + ", ".join(f"`{v}`" for v in variants) + " (`cli_equivalent` of their analysis manifests):"
+    )
+    b.code(
+        _text(ps.get("cli_equivalent", {}).get("command")), _text(a_settings.get("cli_equivalent", {}).get("command")),
+        *(_text(vs.get("cli_equivalent", {}).get("command")) for vs in v_settings),
+    )
     return b.text(), b.tables
 
 
@@ -8114,8 +8531,35 @@ def _parse_back(text: str, tables: dict[str, pd.DataFrame]) -> tuple[int, int]:
     return len(tables), n_cells
 
 
+def _check_report_layout(path: Path) -> str:
+    """The report's text, after checking that its level-2 headings are ``REPORT_SECTIONS`` in order (design D6 of ``adni-report-variants``).
+
+    A report written by an earlier layout of ``report`` stops the check
+    before any input gate and before any comparison, naming the report, the
+    sections it lacks and adds, and how to find the revision that committed
+    it, where it checks; nothing is written.
+    """
+    text = path.read_text()
+    titles = [section["title"] for section in parse_report(text)["sections"][1:]]
+    if titles != list(REPORT_SECTIONS):
+        absent = [t for t in REPORT_SECTIONS if t not in titles]
+        extra = [t for t in titles if t not in REPORT_SECTIONS]
+        raise RuntimeError(
+            f"{path} was written by an earlier layout of `report`: its level-2 sections are not REPORT_SECTIONS (absent: "
+            + (", ".join(repr(t) for t in absent) or "none") + "; extra: " + (", ".join(repr(t) for t in extra) or "none")
+            + ("" if absent or extra else "; the order differs")
+            + f"). It checks at the revision that committed it: `git log -1 --format=%H -- {path}`, then `adni-sexdiff report "
+            f"--check --out {path}` in a worktree of that revision (`git worktree add <dir> <revision>`); no cell was compared; "
+            "nothing was written"
+        )
+    return text
+
+
 def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> dict:
     """Compare an existing report with the one the inputs generate (design D6 of ``adni-report``); writes nothing.
+
+    A report whose level-2 headings are not ``REPORT_SECTIONS`` in order
+    stops first (``_check_report_layout``).
 
     Parameters
     ----------
@@ -8136,7 +8580,7 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
     """
     path = Path(path)
     date = _report_date(path)
-    text = path.read_text()
+    text = _check_report_layout(path)
     generated, tables = render_report(inputs, date=date)
     report_parsed, generated_parsed = parse_report(text), parse_report(generated)
     mismatches = _compare_parsed(report_parsed, generated_parsed)
@@ -8171,6 +8615,7 @@ def run_report(
     analysis_dir: str | Path | None = None,
     diagnostics_dir: str | Path | None = None,
     sensitivity_dir: str | Path | None = None,
+    export_sensitivity_dir: str | Path | None = None,
     out: str | Path | None = None,
     check: bool = False,
     force: bool = False,
@@ -8200,6 +8645,13 @@ def run_report(
         ``constants.LATENT_SENSITIVITY_DIR``), read through
         ``LATENT_SENSITIVITY_SUBDIRS``: the arm's three aggregate analysis
         files, the comparison's three files and the arm diagnostics' six.
+    export_sensitivity_dir:
+        The root of ``export-sensitivity`` (default
+        ``constants.EXPORT_SENSITIVITY_DIR``), read per variant of
+        ``EXPORT_VARIANTS`` through ``EXPORT_SENSITIVITY_SUBDIRS``: the bridge
+        table (hook ``factors``), the variant export's manifest, the variant
+        analysis' three aggregate files, the comparison's three files and the
+        variant diagnostics' six. Every registered variant is required.
     out:
         The report path, whose name must match ``constants.REPORT_NAME``
         (``reports/motco-adni-<date>.md``); the date is read from it. Write
@@ -8210,7 +8662,10 @@ def run_report(
         regenerate the report and compare every table cell by cell and every
         other line line by line; every mismatch is named (section, table,
         row key, column, both values; or the line with both texts) and the
-        CLI exits non-zero on any. Nothing is written.
+        CLI exits non-zero on any. A report whose level-2 headings are not
+        ``REPORT_SECTIONS`` (written by an earlier layout) stops before any
+        gate, naming its absent and extra sections and how to find the
+        revision that committed it, where it checks. Nothing is written.
     force:
         Replace an existing report at ``out`` (write mode).
 
@@ -8223,34 +8678,41 @@ def run_report(
 
     Notes
     -----
-    Inputs are the 26 kept aggregate files of ``REPORT_INPUT_FILES`` and
-    nothing else: no participant-level file is opened or required, and the
-    hashes the report quotes for one are the values the manifests record.
-    So the step runs on any clone with the committed tree, needs no data
-    root, no MOTCO call and no pinned numeric environment, and records no
-    numerics. Gates (``_load_report_inputs``), before anything is written
-    and each naming the file or setting, both values and the step to
-    rerun: every input present; every aggregate file hashes to the value
-    its own manifest records; the primary is the primary and the arm is
-    ``LATENT_SENSITIVITY_ARM``; the chain holds link by link from the clean
-    manifests to the arm diagnostics; the primary and the arm are reported
-    runs (``n_jobs = REPORTED_N_JOBS``), every ``numerics`` block present
-    is pinned and every manifest records the same MOTCO, scikit-learn and
-    metabo_adni versions. Write mode also stops on an existing ``out``
-    without ``force``.
+    Inputs are the 53 kept aggregate files of ``REPORT_INPUT_FILES`` (17
+    manifests) and nothing else: no participant-level file is opened or
+    required, and the hashes the report quotes for one are the values the
+    manifests record. So the step runs on any clone with the committed
+    tree, needs no data root, no MOTCO call and no pinned numeric
+    environment, and records no numerics. Gates (``_load_report_inputs``),
+    before anything is written and each naming the file or setting, both
+    values and the step to rerun: every input present; every aggregate file
+    hashes to the value its own manifest records (the bridge table to its
+    variant export manifest's ``bridge.table.sha256``); the primary is the
+    primary, the arm is ``LATENT_SENSITIVITY_ARM`` and each variant
+    directory holds its ``EXPORT_VARIANTS`` entry; the primary, the arm and
+    every variant analysis are reported runs (``n_jobs =
+    REPORTED_N_JOBS``), every ``numerics`` block present is pinned and
+    every manifest records the same MOTCO, scikit-learn and metabo_adni
+    versions; the chain holds link by link (76 links on the committed tree)
+    from the clean manifests to the arm's and every variant's diagnostics.
+    Write mode also stops on an existing ``out`` without ``force``.
 
-    Output contract (``render_report``): one Markdown file with the ten
+    Output contract (``render_report``): one Markdown file with the eleven
     sections of ``REPORT_SECTIONS`` in order (summary; provenance;
     cohort; export; primary analysis; axis diagnostics of the primary;
-    latent-adjustment sensitivity; findings; reading rules;
-    reproduction), every table titled by a level-3 heading and keyed by
-    its first column, every number copied from a record, a manifest or a
-    CSV at the digits of the summary it belongs to, every reading sentence
-    produced by ``_statistic_reading_line`` and ``_arm_status_line`` (the
-    code of ``summary.md`` and ``latent_sensitivity.md``), ``READING_RULES``
-    then ``LATENT_SENSITIVITY_READING_RULES`` verbatim, both constants
-    named beside every table that quotes the arm, and the primary's status
-    the result in every table. The body depends on the inputs and the file
+    latent-adjustment sensitivity; export sensitivity; findings; reading
+    rules; reproduction), every table titled by a level-3 heading and
+    keyed by its first column, every number copied from a record, a
+    manifest or a CSV at the digits of the summary it belongs to, every
+    reading sentence produced by ``_statistic_reading_line``,
+    ``_arm_status_line`` and ``_export_variant_status_line`` (the code of
+    ``summary.md``, ``latent_sensitivity.md`` and
+    ``export_sensitivity.md``), the variant lines by
+    ``_export_variant_lines``, ``READING_RULES``, then
+    ``LATENT_SENSITIVITY_READING_RULES``, then
+    ``EXPORT_VARIANT_READING_RULES`` verbatim, the arm's and the variants'
+    constants named beside every table that quotes them, and the primary's
+    status the result in every table. The body depends on the inputs and the file
     name only (the date is in the name and the title line; no revision,
     host, time or runtime of the report run is written), so two runs on the
     same inputs are byte-identical. The file is written to ``<out>.tmp``,
@@ -8269,7 +8731,8 @@ def run_report(
         if not out_path.is_file():
             raise FileNotFoundError(f"{out_path} does not exist; nothing to check (write one with `adni-sexdiff report`)")
         date = _report_date(out_path)
-        print(f"{log} checking {out_path} (date {date} from its name)")
+        _check_report_layout(out_path)
+        print(f"{log} checking {out_path} (date {date} from its name; its sections are REPORT_SECTIONS)")
     else:
         out_path = Path(out) if out is not None else reports_dir / REPORT_NAME.format(date=date_type.today().isoformat())
         date = _report_date(out_path)
@@ -8277,7 +8740,8 @@ def run_report(
             raise FileExistsError(f"{out_path} exists; pass --force to replace it; nothing was written")
     inputs = _load_report_inputs(
         cleaned_dir=cleaned_dir, cohort_dir=cohort_dir, input_dir=input_dir, analysis_dir=analysis_dir,
-        diagnostics_dir=diagnostics_dir, sensitivity_dir=sensitivity_dir, log=log,
+        diagnostics_dir=diagnostics_dir, sensitivity_dir=sensitivity_dir, export_sensitivity_dir=export_sensitivity_dir,
+        log=log,
     )
     if check:
         return check_report(out_path, inputs, log=log)

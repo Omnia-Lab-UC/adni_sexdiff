@@ -55,13 +55,14 @@ Scientific constants
     and the conventions ``EXPORT_SENSITIVITY_DIR``,
     ``EXPORT_SENSITIVITY_SUBDIRS`` and the output names. Every scientific
     constant the six steps and the two sensitivity steps need is decided; a
-    later variant or arm introduces its own by proposal. The change
-    ``adni-report`` (the
-    ``report`` step) introduces no scientific constant: its conventions
-    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role) and
-    ``REPORT_SECTIONS`` (the report's ten section titles, in order) are
-    defined below, and the report quotes every setting by constant name from
-    the manifests and every number from the records.
+    later variant or arm introduces its own by proposal. The changes
+    ``adni-report`` (the ``report`` step) and ``adni-report-variants`` (the
+    report extended to every export variant) introduce no scientific
+    constant: their conventions ``REPORT_INPUT_FILES`` (every file the step
+    reads, by directory role; 53 with the variants) and ``REPORT_SECTIONS``
+    (the report's eleven section titles, in order) are defined below, and
+    the report quotes every setting by constant name from the manifests and
+    every number from the records.
 """
 
 from __future__ import annotations
@@ -1248,7 +1249,7 @@ assert tuple(EXPORT_VARIANT_EXPECTED_COUNTS) == tuple(EXPORT_VARIANTS), (
 # --- report: conventions ------------------------------------------------------
 
 #: The six files ``axis-diagnostics`` writes, all aggregate; the report reads
-#: them for the primary and for the arm.
+#: them for the primary, for the arm and for every export variant.
 DIAGNOSTICS_FILES: tuple[str, ...] = (
     DIAGNOSTICS_AXIS_CORRELATIONS,
     DIAGNOSTICS_BLOCK_PCS,
@@ -1257,13 +1258,32 @@ DIAGNOSTICS_FILES: tuple[str, ...] = (
     DIAGNOSTICS_SUMMARY,
     DIAGNOSTICS_MANIFEST,
 )
+#: The files the report reads in each subdirectory of an export variant, by
+#: the key of ``EXPORT_SENSITIVITY_SUBDIRS`` (change ``adni-report-variants``):
+#: ``bridge`` only for a variant with hook ``factors``; the variant export's
+#: CSVs, ``features_<platform>.csv`` and the variant analysis'
+#: ``latent_scores.csv``, ``analysis_metadata.csv``, ``stage_means.csv`` and
+#: ``pls_loadings.csv`` are quoted by the hashes their manifests record.
+REPORT_VARIANT_FILES: dict[str, tuple[str, ...]] = {
+    "bridge": (EXPORT_SENSITIVITY_BRIDGE_TABLE,),
+    "export": (EXPORT_MANIFEST,),
+    "analysis": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
+    "comparison": (EXPORT_SENSITIVITY_TABLE, EXPORT_SENSITIVITY_SUMMARY, EXPORT_SENSITIVITY_MANIFEST),
+    "diagnostics": DIAGNOSTICS_FILES,
+}
 #: Every file the ``report`` step reads (change ``adni-report``), by the role
 #: of the directory it lives in: ``cleaned`` (``--cleaned-dir``, paths
 #: relative to the cleaned root), ``cohort`` (``--cohort-dir``), ``export``
 #: (``--input-dir``), ``analysis`` (``--analysis-dir``, the primary),
 #: ``diagnostics`` (``--diagnostics-dir``, the primary's) and the three
 #: subdirectories of ``--sensitivity-dir`` (``LATENT_SENSITIVITY_SUBDIRS``:
-#: the arm's analysis, the comparison and the arm's diagnostics). All 26 are
+#: the arm's analysis, the comparison and the arm's diagnostics), and, per
+#: variant of ``EXPORT_VARIANTS`` in registry order (change
+#: ``adni-report-variants``), the roles ``export-sensitivity/<variant>/<subdir>``
+#: of ``--export-sensitivity-dir`` (``EXPORT_SENSITIVITY_SUBDIRS`` in its
+#: order: the bridge table for a variant with hook ``factors``, the variant
+#: export's manifest, the variant analysis' three aggregate files, the
+#: comparison's three files and the variant diagnostics' six). All 53 are
 #: aggregate and committed; no participant-level file is read, and the
 #: hashes the report quotes for one come from these manifests. No other file
 #: is read.
@@ -1280,8 +1300,15 @@ REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
         LATENT_SENSITIVITY_MANIFEST,
     ),
     f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}": DIAGNOSTICS_FILES,
+    **{
+        f"export-sensitivity/{variant}/{sub}": REPORT_VARIANT_FILES[key]
+        for variant, spec in EXPORT_VARIANTS.items()
+        for key, sub in EXPORT_SENSITIVITY_SUBDIRS.items()
+        if key != "bridge" or spec["hook"] == "factors"
+    },
 }
-#: The report's level-2 sections, in order (design D4 of ``adni-report``).
+#: The report's level-2 sections, in order (design D4 of ``adni-report``;
+#: "Export sensitivity" added by ``adni-report-variants``).
 #: ``report --check`` names a mismatch by section, table, row and column.
 REPORT_SECTIONS: tuple[str, ...] = (
     "Summary",
@@ -1291,6 +1318,7 @@ REPORT_SECTIONS: tuple[str, ...] = (
     "Primary analysis",
     "Axis diagnostics of the primary",
     "Latent-adjustment sensitivity",
+    "Export sensitivity",
     "Findings",
     "Reading rules",
     "Reproduction",
