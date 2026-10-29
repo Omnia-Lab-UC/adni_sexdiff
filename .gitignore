@@ -234,6 +234,10 @@ results/cohort/*.csv
 # manifests stay.
 results/motco_input/**/*.csv
 !results/motco_input/**/*manifest*
+# Each export variant's MOTCO input (export-sensitivity): participant-level, as
+# the primary's, its feature tables with it. Its manifest.json is not a CSV and
+# stays; the bridge table lives in bridge/, outside this pattern.
+results/motco_export_sensitivity/*/motco_input/*.csv
 # MOTCO's per-participant scores and the metadata table the model saw, wherever
 # an analysis is written (primary, sensitivity arms, variants).
 results/**/latent_scores.csv

@@ -43,9 +43,20 @@ Scientific constants
     ``LATENT_SENSITIVITY_EXPECTED_COUNTS`` and the conventions
     ``LATENT_SENSITIVITY_DIR``, ``LATENT_SENSITIVITY_SUBDIRS``,
     ``LATENT_SENSITIVITY_TABLE``, ``LATENT_SENSITIVITY_SUMMARY`` and
-    ``LATENT_SENSITIVITY_MANIFEST``. Every scientific constant the six steps
-    and the sensitivity step need is decided; a later variant or arm
-    introduces its own by proposal. The change ``adni-report`` (the
+    ``LATENT_SENSITIVITY_MANIFEST``; ``EXPORT_VARIANTS`` (the registry of
+    export variants that change only how the p180 assay run is handled:
+    ``nist_bridge`` and ``per_run_standardized``), ``NIST_BRIDGE_RULE`` (the
+    NIST SRM 1950 material, the valid replicate, the half-valid inclusion,
+    the factor ``b``, the reference run and the kits) and
+    ``EXPORT_VARIANT_READING_RULES`` (the seven statements every reader of a
+    variant carries after ``READING_RULES``), by the change
+    ``adni-nist-bridge``, with the predeclared
+    ``EXPORT_VARIANT_EXPECTED_COUNTS`` and ``NIST_BRIDGE_WORKBOOK_SHA256``
+    and the conventions ``EXPORT_SENSITIVITY_DIR``,
+    ``EXPORT_SENSITIVITY_SUBDIRS`` and the output names. Every scientific
+    constant the six steps and the two sensitivity steps need is decided; a
+    later variant or arm introduces its own by proposal. The change
+    ``adni-report`` (the
     ``report`` step) introduces no scientific constant: its conventions
     ``REPORT_INPUT_FILES`` (every file the step reads, by directory role) and
     ``REPORT_SECTIONS`` (the report's ten section titles, in order) are
@@ -86,6 +97,10 @@ COHORT_DIR = "results/cohort"
 MOTCO_INPUT_DIR = "results/motco_input"
 MOTCO_ANALYSIS_DIR = "results/motco_analysis"
 DIAGNOSTICS_DIR = "results/motco_diagnostics"
+#: The output root of ``export-sensitivity`` (change ``adni-nist-bridge``):
+#: one directory per variant of ``EXPORT_VARIANTS``, laid out as
+#: ``EXPORT_SENSITIVITY_SUBDIRS``.
+EXPORT_SENSITIVITY_DIR = "results/motco_export_sensitivity"
 REPORTS_DIR = "reports"
 
 # --- Output file names -----------------------------------------------------
@@ -134,6 +149,9 @@ PARTICIPANT_LEVEL_PATTERNS: tuple[str, ...] = (
     f"{CLEANED_DIR}/**",
     f"{COHORT_DIR}/{COHORT_TABLE}",
     f"{MOTCO_INPUT_DIR}/**/*.csv",
+    # each export variant's MOTCO input (``EXPORT_SENSITIVITY_SUBDIRS["export"]``),
+    # its feature tables with it, as the primary's
+    f"{EXPORT_SENSITIVITY_DIR}/*/motco_input/*.csv",
     f"{RESULTS_DIR}/**/{ANALYSIS_LATENT_SCORES}",
     f"{RESULTS_DIR}/**/{ANALYSIS_METADATA}",
 )
@@ -358,9 +376,12 @@ CLEAN_EXPECTED_COUNTS: dict[str, dict] = {
 #: metabolomics files at ``adni-metabolomics-clean`` (the LONI downloads of
 #: 10-11 July 2024, the UPLC ADNI-GO/2 file with its repair; the medication
 #: table, which ``clean`` does not read, because its spike inventoried it)
-#: and the ADNIMERGE freeze at ``adni-cohort``. A step that finds another
-#: hash records a finding (a fresh download); the predeclared counts hold
-#: for these bytes only.
+#: and the ADNIMERGE freeze at ``adni-cohort``; the two p180 supplement
+#: archives that hold the NIST SRM 1950 QC workbooks at ``adni-nist-bridge``
+#: (read in place by ``export-sensitivity --variant nist_bridge``; their
+#: members' hashes are ``NIST_BRIDGE_WORKBOOK_SHA256``). A step that finds
+#: another hash records a finding (a fresh download); the predeclared counts
+#: hold for these bytes only.
 RAW_INPUT_SHA256: dict[str, str] = {
     "ADMCDUKEP180UPLC_01_15_16.csv": "b99835be2d07460f5c1089fd72276454099d3ec7c14e662c740b496de0dad4fb",
     "ADMCDUKEP180FIA_01_15_16.csv": "0c765d0048f05fdc89f0eaa575b31f655fcefa2faf9fb0da92263836959f7290",
@@ -374,6 +395,8 @@ RAW_INPUT_SHA256: dict[str, str] = {
     "BIOMARK.csv": "0c7bc024fd3de367395c1edf7ab870bb7af37bc66dffaa11312d66570541671d",
     "ADMCPATIENTDRUGCLASSES_20170512.csv": "2f0dd41dfb4c17f679818f19f8a5a41a2de81c30712863286a74e29fdd597343",
     "ADNI_adnimerge_20170629_QT-freeze.csv": "e3eae0464106f0a3df4eb23946e57f1f7fd5f8456eb60af6540654a36a16f7a2",
+    "ADMC_supplement.zip": "dc822b5683990f877f919af9ff521e0bbe5c12ca87a410b4a8bcff67f247544e",
+    "ADMCDUKEP180SUPP_20170410.zip": "c3f9a0874af9ba74fb995da9d9f25dd95fdd6f4c0d0a43b3bff5455c90856332",
 }
 
 
@@ -1001,6 +1024,225 @@ LATENT_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict | int | str | tuple] = {
         "feature_scale": "pooled_standardized",
     },
 }
+
+
+# --- export-sensitivity: conventions ------------------------------------------
+
+#: The subdirectories of each variant's directory
+#: ``<EXPORT_SENSITIVITY_DIR>/<variant>/``: ``bridge`` (``nist_bridge`` only:
+#: the bridge table, reference material only), ``export`` (the variant's MOTCO
+#: input, laid out as ``MOTCO_INPUT_DIR``; its CSVs are participant-level),
+#: ``analysis`` (laid out as ``MOTCO_ANALYSIS_DIR``) and ``comparison``, all
+#: written by ``export-sensitivity``, and ``diagnostics`` (``axis-diagnostics
+#: --input-dir <export> --analysis-dir <analysis> --out-dir <diagnostics>``,
+#: never touched by ``export-sensitivity``).
+EXPORT_SENSITIVITY_SUBDIRS: dict[str, str] = {
+    "bridge": "bridge",
+    "export": "motco_input",
+    "analysis": "analysis",
+    "comparison": "comparison",
+    "diagnostics": "diagnostics",
+}
+#: ``bridge/``: one row per exported p180 metabolite (aggregate).
+EXPORT_SENSITIVITY_BRIDGE_TABLE = "nist_bridge.csv"
+#: ``comparison/``: the primary and the variant side by side.
+EXPORT_SENSITIVITY_TABLE = "export_sensitivity.csv"
+EXPORT_SENSITIVITY_SUMMARY = "export_sensitivity.md"
+EXPORT_SENSITIVITY_MANIFEST = "export_sensitivity_manifest.json"
+
+# --- export-sensitivity: scientific constants ---------------------------------
+
+#: Decided by the change ``adni-nist-bridge`` (2026-10-29, before any run) and
+#: never changed by a flag, a result or a count. The bridge between the two
+#: p180 assay runs, computed from NIST SRM 1950 ("Metabolites in Frozen Human
+#: Plasma", the one material both runs measured) alone: no participant row, no
+#: label and no covariate is read. The material is the rows labelled ``label``
+#: of the sheet ``sheet`` (header on row ``header_row``) of the four QC
+#: workbooks ``workbooks`` (per run, an archive of the data root read in place
+#: and its member per kit). A replicate's cell is valid when it is a positive
+#: number whose status, where the workbook has a status column (``<metabolite>
+#: Status``; only the ADNI-GO/2 workbooks do), is not ``excluded_status`` (the
+#: methods summary: such data "should not be used"); text cells (``< LOD``,
+#: ``No Interception``) are missing. A metabolite is bridged when at least
+#: ``inclusion_share`` of its replicates are valid in each run; its factor
+#: ``b`` is the mean log2 of its valid ``reference_run`` replicates minus that
+#: of its valid ``bridged_run`` replicates, with no plate correction (the spike:
+#: metabo_adni's pool factors would move ``b`` by a median 0.0007 log2); a
+#: metabolite not bridged keeps factor 1. Names are matched within kit with
+#: case and punctuation dropped. On the predeclared bytes the rule bridges 126
+#: of the 133 p180 metabolites (FIA 102, UPLC 24); ``C0``, ``C10:2``, ``C12``,
+#: ``C14:1-OH``, ``C6 (C4:1-DC)``, serotonin and spermidine keep factor 1
+#: (``C0`` because 17 of its 24 ADNI-GO/2 cells are ISTD-flagged).
+NIST_BRIDGE_RULE: dict = {
+    "material": "NIST SRM 1950",
+    "workbooks": {
+        "ADNI1": {
+            "archive": "ADMC_supplement.zip",
+            "members": {
+                "FIA": "admc_supplement/duke_raw_data/4097_FIA_NIST_and_QC_Data.xlsx",
+                "UPLC": "admc_supplement/duke_raw_data/4097_UPLC_NIST_and_QC_Data.xlsx",
+            },
+        },
+        "ADNI2GO": {
+            "archive": "ADMCDUKEP180SUPP_20170410.zip",
+            "members": {
+                "FIA": "4610 FIA p180 QC and NIST Data.xlsx",
+                "UPLC": "4610 UPLC p180 QC and NIST Data.xlsx",
+            },
+        },
+    },
+    "sheet": "NIST SRM 1950 Data",
+    "header_row": 1,
+    "label_column": "Customer Sample Identification",
+    "label": "NIST SRM 1950",
+    "plate_column": "Plate Bar Code",
+    "metabolites_after": "Injection Number",
+    "status_suffix": " Status",
+    "excluded_status": "ISTD Out of Range",
+    "valid": (
+        "a positive number whose status, where the workbook has a status column, is not excluded_status; "
+        "text cells (< LOD, No Interception) are missing"
+    ),
+    "inclusion_share": 0.5,
+    "estimator": (
+        "b = mean log2 of the valid reference_run replicates minus mean log2 of the valid bridged_run replicates; "
+        "every bridged_run concentration is multiplied by 2^b"
+    ),
+    "plate_correction": False,
+    "reference_run": "ADNI1",
+    "bridged_run": "ADNI2GO",
+    "kits": ("FIA", "UPLC"),
+    "name_matching": (
+        "case and punctuation dropped (every character outside 0-9 and a-z), within the first kit whose sheet holds "
+        "the name in both runs"
+    ),
+    "unbridged_factor": 1,
+}
+#: Predeclared by the change ``adni-nist-bridge`` (its spike, 2026-10-29): the
+#: sha256 of each QC workbook of ``NIST_BRIDGE_RULE``, by its member name in
+#: its archive. Another hash is a finding; the predeclared counts hold for
+#: these bytes only.
+NIST_BRIDGE_WORKBOOK_SHA256: dict[str, str] = {
+    "admc_supplement/duke_raw_data/4097_FIA_NIST_and_QC_Data.xlsx": (
+        "b19419d272dc7d19cfa5bc86c65ef1af81a718dbd704175126278babfc9ea6a0"
+    ),
+    "admc_supplement/duke_raw_data/4097_UPLC_NIST_and_QC_Data.xlsx": (
+        "3b966a92cc3c3a1a6277adad4456fe9c9c42c0f495f8523ba4b446e3e16ed4d7"
+    ),
+    "4610 FIA p180 QC and NIST Data.xlsx": "f3873558779ae40202cc62207ddaf57cb6517a0adf3fff53901badda170acb93",
+    "4610 UPLC p180 QC and NIST Data.xlsx": "807575d5b5937e39ae32db0b6812ddff76758ce508155c9b1305795bfbdcb602",
+}
+
+#: Decided by the change ``adni-nist-bridge`` (2026-10-29, before any run): the
+#: registry of export variants ``export-sensitivity`` runs, in this order. Each
+#: changes one p180 setting of the primary export (``block``, through the hook
+#: ``hook`` of the shared export body) and keeps every other setting of
+#: ``EXPORT_FEATURE_RULE``, the participants, the NMR block, the metadata and
+#: the covariates; its analysis keeps every setting of the primary's. A
+#: variant is read beside the primary and never replaces it. ``nist_bridge``
+#: multiplies every cleaned p180 concentration of an ADNI-GO/2 participant (the
+#: run of ``p180_runs.csv``) by 2^b of its metabolite under
+#: ``NIST_BRIDGE_RULE`` before the floors; ``per_run_standardized`` centres
+#: each p180 metabolite on the rule's scale (pooled floors) and divides it by
+#: its population SD within its run. The other registered export variants
+#: (all 245 NMR columns, the raw scale, ``log2(x + 1)``, the generalized log)
+#: join by their own proposals. Never set or changed by a flag, a result or a
+#: count.
+EXPORT_VARIANTS: dict[str, dict] = {
+    "nist_bridge": {
+        "block": "p180",
+        "hook": "factors",
+        "rule": "NIST_BRIDGE_RULE",
+        "reads_data_root": True,
+        "setting": (
+            "every cleaned p180 concentration of a participant whose run in p180_runs.csv is ADNI2GO multiplied by "
+            "2^b of its metabolite under NIST_BRIDGE_RULE before the floors; EXPORT_FEATURE_RULE then unchanged, its "
+            "floors recomputed over the exported participants"
+        ),
+        "change": "adni-nist-bridge",
+    },
+    "per_run_standardized": {
+        "block": "p180",
+        "hook": "standardize_by_run",
+        "rule": None,
+        "reads_data_root": False,
+        "setting": (
+            "the p180 values on the scale of EXPORT_FEATURE_RULE (pooled floors, log2(x + floor)), each metabolite "
+            "centred and divided by its population SD within its run of p180_runs.csv"
+        ),
+        "change": "adni-nist-bridge",
+    },
+}
+
+#: Decided by the change ``adni-nist-bridge``, written before any run: the
+#: binding reading rules of an export variant, printed verbatim after
+#: ``READING_RULES`` in each variant's ``summary.md``, in
+#: ``export_sensitivity.md``, in a variant's ``diagnostics.md`` and in every
+#: report that quotes a variant. The numbers quoted are from the change's
+#: spike, none from a run of a variant.
+EXPORT_VARIANT_READING_RULES: tuple[str, ...] = (
+    "A variant is read beside the primary and never replaces it. No variant result changes a constant, reruns "
+    "the primary or adopts a variant.",
+    "A variant shares with the primary the cleaned tables, the participants, the NMR block, the covariates and "
+    "their design, the cells, the settings, the CV folds, the seed and the permutations. It differs only in the "
+    "p180 values. A rejection status that differs is dependence on the handling of the p180 run, not a result of "
+    "the variant.",
+    "The variant's CV-selected rank, floor, eigengap and `angle` null summary are reported beside its `angle`. A "
+    "rank that differs from the primary's is reported, not ranked.",
+    "`nist_bridge` removes the part of the run offset that NIST SRM 1950 carries, between-run calibration. It "
+    "assumes the run acts as one factor per metabolite, the same in plasma (NIST) and serum (participants). It "
+    "leaves what NIST cannot see: a shift common to most metabolites, sample-handling differences between the "
+    "protocols (the largest residuals are aspartate and glutamate) and the seven unbridged metabolites. `phase` "
+    "stays a covariate of the stage means and carries what remains.",
+    "`per_run_standardized` removes each p180 metabolite's whole difference in mean and spread between the runs, "
+    "whatever its source: calibration, sample handling, and the stage-composition difference the runs carry, since "
+    "SMC and EMCI were enrolled only in ADNI-GO/2. A difference between it and `nist_bridge` is read as the part of "
+    "the run difference that is not calibration, never as evidence for either variant.",
+    "A non-rejection in a variant is no more informative than the primary's: reading rule 3 holds, and no power "
+    "statement exists at this design. A rejection that appears only in a variant is dependence on the run "
+    "handling and is read beside the variant's rank and null summary.",
+    "The variant's export manifest records the run offset per block, and for `nist_bridge` the factor per "
+    "metabolite; both are reported beside the results. A variant component that tracks a variable in its axis "
+    "diagnostic is a measurement-space finding and never grounds to adopt the variant.",
+)
+
+# --- export-sensitivity: predeclared counts -----------------------------------
+
+#: Predeclared by the change ``adni-nist-bridge`` from its spike (``spike.md``,
+#: 2026-10-29; none from a run of a variant), per variant. The export keys:
+#: every key of ``EXPORT_EXPECTED_COUNTS`` (participants, cells, features per
+#: block and family, zero cells, floors not positive, non-finite cells, missing
+#: covariate values) with the p180 run offset replaced by the variant's (the
+#: metabolites with phase |d| above 0.5 and above 1); for ``nist_bridge`` the
+#: bridged p180 metabolites per kit and the unbridged count, and the exported
+#: metabolites with no NIST column; the exported participants whose run in
+#: ``p180_runs.csv`` differs from their ``phase``; and ``nmr.csv``,
+#: ``metadata.csv`` and ``covariates.csv`` equal to the primary export
+#: manifest's hashes. ``analysis``: every key of ``ANALYSIS_EXPECTED_COUNTS``.
+#: The ranks are not predeclared. ``export-sensitivity`` compares each variant
+#: manifest with these and records every difference as a finding; a difference
+#: never stops the step and never changes a setting.
+EXPORT_VARIANT_EXPECTED_COUNTS: dict[str, dict] = {
+    "nist_bridge": {
+        **{key: value for key, value in EXPORT_EXPECTED_COUNTS.items() if key != "phase_offset"},
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 35, "abs_d_gt_1": 8}, "nmr": {"abs_d_gt_1": 0}},
+        "p180_bridged": {"FIA": 102, "UPLC": 24, "not_bridged": 7},
+        "p180_unmatched": 0,
+        "runs_differing_from_phase": 0,
+        "unchanged_equal_primary": {EXPORT_METADATA: True, EXPORT_COVARIATES: True, "nmr.csv": True},
+        "analysis": ANALYSIS_EXPECTED_COUNTS,
+    },
+    "per_run_standardized": {
+        **{key: value for key, value in EXPORT_EXPECTED_COUNTS.items() if key != "phase_offset"},
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 0, "abs_d_gt_1": 0}, "nmr": {"abs_d_gt_1": 0}},
+        "runs_differing_from_phase": 0,
+        "unchanged_equal_primary": {EXPORT_METADATA: True, EXPORT_COVARIATES: True, "nmr.csv": True},
+        "analysis": ANALYSIS_EXPECTED_COUNTS,
+    },
+}
+assert tuple(EXPORT_VARIANT_EXPECTED_COUNTS) == tuple(EXPORT_VARIANTS), (
+    "EXPORT_VARIANT_EXPECTED_COUNTS must predeclare every EXPORT_VARIANTS entry, in its order"
+)
 
 
 # --- report: conventions ------------------------------------------------------

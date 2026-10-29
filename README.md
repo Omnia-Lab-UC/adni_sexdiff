@@ -6,11 +6,11 @@ the first MOTCO application at a well-powered design (n ≈ 1,300). Later ADNI
 layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 
 **Status: every step implemented.** `clean`, `cohort`, `export`,
-`analyze`, `axis-diagnostics`, the sensitivity step `latent-sensitivity`
-and `report` (changes `adni-metabolomics-clean`, `adni-cohort`,
-`adni-export`, `adni-analyze`, `adni-axis-diagnostics`,
-`adni-latent-sensitivity` and `adni-report`); the first six run on a data
-machine, `report` on any clone (it reads committed aggregate files only),
+`analyze`, `axis-diagnostics`, the sensitivity steps `latent-sensitivity`
+and `export-sensitivity`, and `report` (changes `adni-metabolomics-clean`,
+`adni-cohort`, `adni-export`, `adni-analyze`, `adni-axis-diagnostics`,
+`adni-latent-sensitivity`, `adni-nist-bridge` and `adni-report`); every
+step but `report` runs on a data machine, `report` on any clone (it reads committed aggregate files only),
 and the first report is committed under `reports/` and checked by
 `report --check`. The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
@@ -20,8 +20,10 @@ settings (`ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
 diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 `DIAGNOSTIC_CORRELATION_THRESHOLD`) and the sensitivity constants
 (`LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
-`LATENT_SENSITIVITY_READING_RULES`); every constant the six steps and the
-sensitivity step need is decided.
+`LATENT_SENSITIVITY_READING_RULES`; `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`,
+`EXPORT_VARIANT_READING_RULES`); every constant the six steps and the two
+sensitivity steps need is decided. The committed report does not cover the
+export variants yet; a later change extends `report` with them.
 `AGENTS.md` holds the conventions and the hard constraints and is the single
 source of truth.
 
@@ -50,6 +52,12 @@ original names (the QT-PAD ADNIMERGE freeze
 `ADNI_adnimerge_20170629_QT-freeze.csv`). The top level holds the exact names
 the steps read, as relative symlinks into both (for example
 `ADNI_adnimerge_20170629_QT-freeze.csv -> Clinical/ADNI_adnimerge_20170629_QT-freeze.csv`).
+`export-sensitivity --variant nist_bridge` also reads the two p180
+supplement archives in place, through two symlinks made by hand on every
+data machine and the cluster:
+`ln -s Metabolomics/p180/ADMC_supplement.zip <root>/ADMC_supplement.zip` and
+`ln -s Metabolomics/p180/ADMCDUKEP180SUPP_20170410.zip <root>/ADMCDUKEP180SUPP_20170410.zip`
+(nothing is extracted).
 Replicate a root with `rsync -a` (symlinks preserved); never rename the
 archive files.
 
@@ -60,12 +68,12 @@ Project layout:
 ├── data/            # raw ADNI files, uploaded by hand: LONI archive under Metabolomics/, clinical tables under Clinical/, the names the steps read as symlinks (gitignored)
 ├── reports/         # committed case-study reports, generated in full by `report` from the aggregate outputs and checked by `report --check`
 ├── results/         # pipeline outputs; only aggregate files are committed (see .gitignore)
-├── scripts/         # sync_results.sh (aggregate outputs between a machine and the cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py (the changes' read-only spikes)
+├── scripts/         # sync_results.sh (aggregate outputs between a machine and the cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py and spike_nist_bridge.py (the changes' read-only spikes)
 ├── src/
 │   └── adni_sexdiff/
-│       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, latent-sensitivity, report (exits 1 on a --check mismatch)
+│       ├── cli.py         # argparse CLI: clean, cohort, export, analyze, axis-diagnostics, latent-sensitivity, export-sensitivity, report (exits 1 on a --check mismatch)
 │       ├── constants.py   # conventions; scientific constants enter through OpenSpec proposals only
-│       └── data.py        # pipeline steps (clean, cohort, export, analyze, axis-diagnostics, report and the sensitivity step latent-sensitivity)
+│       └── data.py        # pipeline steps (clean, cohort, export, analyze, axis-diagnostics, report and the sensitivity steps latent-sensitivity and export-sensitivity)
 ├── openspec/        # change proposals and specs
 ├── flake.nix        # Python 3.12 + uv; the shell hook runs `uv sync --locked`
 ├── pyproject.toml   # package adni_sexdiff, CLI adni-sexdiff (uv, uv.lock committed)
@@ -90,6 +98,12 @@ Pipeline (each step reads the previous step's outputs only):
      `stage`-conditioned latent-adjustment arm beside the primary, its
      comparison, and `axis-diagnostics` on the arm →
      `results/motco_latent_sensitivity/` (below)
+   - `export-sensitivity` (sensitivity step, after 5) – the predeclared
+     export variants of the p180 run handling (a NIST SRM 1950 bridge of
+     the runs, per-run standardization), each exported, analysed at the
+     primary's settings and compared with the primary, and
+     `axis-diagnostics` on each → `results/motco_export_sensitivity/`
+     (below)
 6. `report` – the case-study report generated in full from the kept
    aggregate outputs (the clean, cohort and export manifests, the primary,
    its diagnostics, the comparison and the arm's diagnostics), or a
@@ -107,6 +121,9 @@ uv run adni-sexdiff analyze
 uv run adni-sexdiff axis-diagnostics
 uv run adni-sexdiff latent-sensitivity
 uv run adni-sexdiff axis-diagnostics --analysis-dir results/motco_latent_sensitivity/analysis --out-dir results/motco_latent_sensitivity/diagnostics
+uv run adni-sexdiff export-sensitivity --variant all
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/nist_bridge/motco_input --analysis-dir results/motco_export_sensitivity/nist_bridge/analysis --out-dir results/motco_export_sensitivity/nist_bridge/diagnostics
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/per_run_standardized/motco_input --analysis-dir results/motco_export_sensitivity/per_run_standardized/analysis --out-dir results/motco_export_sensitivity/per_run_standardized/diagnostics
 uv run adni-sexdiff report
 uv run adni-sexdiff report --check
 ```
@@ -591,10 +608,16 @@ how `latent-sensitivity`'s arm is read (below). The manifest then records
 a finding names the directory and the adjustment; `diagnostics.md` names
 the `stage`-conditioned arm, calls a flagged row a finding about the arm's
 measurement space (the primary stays primary) and prints
-`LATENT_SENSITIVITY_READING_RULES` after `READING_RULES`. Its error hints
-name the command that wrote the analysis read (`adni-sexdiff analyze` or
-`adni-sexdiff latent-sensitivity`, from the manifest's `step`). No other
-flag; no setting is a flag.
+`LATENT_SENSITIVITY_READING_RULES` after `READING_RULES`. With
+`--input-dir` as well, it reads an export variant of `export-sensitivity`
+(below): the manifest records `is_primary` false and the variant's name,
+and `diagnostics.md` names the variant, calls a flagged row a finding
+about the variant's measurement space and prints
+`EXPORT_VARIANT_READING_RULES` after `READING_RULES`. Its error hints
+name the command that wrote the analysis read (`adni-sexdiff analyze`,
+`adni-sexdiff latent-sensitivity` or `adni-sexdiff export-sensitivity
+--variant <name>`, from the manifest's `step`). No other flag; no setting
+is a flag.
 
 The diagnostic reads sex and stage, so it is never a filter: no `export`
 or `analyze` run reads `results/motco_diagnostics/`, and arms and variants
@@ -749,6 +772,138 @@ arm carries no Type I or power claim; an arm axis in the diagnostic is a
 measurement-space finding and never grounds to adopt the arm. No arm value
 changes a constant, selects a covariate, reruns the primary or defines a
 variant.
+
+## `export-sensitivity`
+
+```
+uv run adni-sexdiff export-sensitivity --variant {nist_bridge,per_run_standardized,all} [--data-root DIR] [--cleaned-dir DIR] [--cohort-dir DIR] [--input-dir DIR] [--analysis-dir DIR] [--out-dir DIR] [--n-jobs N] [--force]
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/<variant>/motco_input --analysis-dir results/motco_export_sensitivity/<variant>/analysis --out-dir results/motco_export_sensitivity/<variant>/diagnostics [--force]
+```
+
+A sensitivity step, read beside the primary and never replacing it
+(change `adni-nist-bridge`). The p180 block's first axis is the assay run
+(ADNI-1 against ADNI-GO/2: median |d| 1.12, PC1 correlation 0.73 with
+phase); the primary keeps `phase` as a covariate of the stage means. Each
+registered variant reruns the export with one p180 setting changed,
+analyses it at the primary's settings (one `analyze_trajectories` call
+through the code `analyze` uses: `ANALYSIS_*`, MOTCO's defaults, no
+latent adjustment, `n_jobs = 1`, pinned) and compares it with the
+primary. The participants, the NMR block, the metadata and the covariates
+are the primary's, byte for byte. The variants and the bridge rule are
+constants, never flags; `--variant` selects a registered name (or `all`,
+in registry order), and `--input-dir` and `--analysis-dir` name the
+primary to read as the reference.
+
+Variants (`EXPORT_VARIANTS`):
+
+| variant | p180 setting | reads the data root |
+|---|---|---|
+| `nist_bridge` | every cleaned p180 concentration of an ADNI-GO/2 participant (the run of `p180_runs.csv`) multiplied by 2^b of its metabolite under `NIST_BRIDGE_RULE`, before the floors; `EXPORT_FEATURE_RULE` then unchanged, its floors recomputed | yes: the two QC archives |
+| `per_run_standardized` | the rule's p180 values (pooled floors, `log2(x + floor)`), each metabolite centred and divided by its population SD within its run | no |
+
+The bridge (`NIST_BRIDGE_RULE`), from NIST SRM 1950 alone (the one
+material both runs measured; no participant row, label or covariate is
+read): the rows labelled `NIST SRM 1950` of the sheet `NIST SRM 1950 Data`
+of four QC workbooks, read in place inside `ADMC_supplement.zip` (ADNI-1:
+`4097_FIA_NIST_and_QC_Data.xlsx`, `4097_UPLC_NIST_and_QC_Data.xlsx`) and
+`ADMCDUKEP180SUPP_20170410.zip` (ADNI-GO/2: `4610 FIA p180 QC and NIST
+Data.xlsx`, `4610 UPLC p180 QC and NIST Data.xlsx`). A replicate's cell is
+valid when it is a positive number whose status, where the workbook has a
+status column (ADNI-GO/2 only), is not `ISTD Out of Range`; `< LOD` and
+`No Interception` are text and missing. A metabolite is bridged when at
+least half its replicates are valid in each run; `b` is the mean log2 of
+its valid ADNI-1 replicates minus that of its valid ADNI-GO/2 replicates,
+without plate correction (it would move `b` by a median 0.0007 log2), and
+a metabolite not bridged keeps factor 1. Names are matched within kit with
+case and punctuation dropped. On the predeclared bytes it bridges 126 of
+133 (FIA 102, UPLC 24); `C0`, `C10:2`, `C12`, `C14:1-OH`, `C6 (C4:1-DC)`,
+serotonin and spermidine keep factor 1 (`C0` because 17 of its 24
+ADNI-GO/2 cells are ISTD-flagged). The plate-clustered SE is recorded
+beside `b` and never used by the rule.
+
+Inputs: `results/cleaned/` (`P180.csv`, `p180_runs.csv`, `NMR.csv`, each
+against its `clean_manifest.json`), `results/cohort/` (`cohort.csv`,
+`cohort_manifest.json`), the primary export `results/motco_input/` and the
+primary's `result.json` and `analysis_manifest.json`; for `nist_bridge`
+the two archives at the top of the data root. Nothing under a diagnostics
+directory.
+
+Checks, in this order, before anything is written (a failure names the
+file or setting, both values and the command to rerun, never a
+participant, and nothing is created under the output root): the variant
+name; the gates of `analyze`; an existing variant without `--force`; the
+clean outputs and the cohort chain; the primary export against its
+manifest and against the clean and cohort files now on disk; the primary
+analysis as a chained reference (its recorded export hashes, no latent
+adjustment, the installed MOTCO, the seed and permutations); for
+`nist_bridge`, the archives (an absent one names the file; a missing
+member names the archive and the member). `per_run_standardized` reads no
+data-root file.
+
+Outputs under `results/motco_export_sensitivity/<variant>/`, each
+subdirectory staged as `<sub>.tmp/` and the set renamed together when
+complete; `--force` replaces them, and a replaced variant whose
+`diagnostics/` exists gets a finding (stale until `axis-diagnostics` is
+rerun). Two pinned runs write byte-identical CSVs, `summary.md`,
+`export_sensitivity.md` and bridge table; `result.json` differs only in
+MOTCO's runtime:
+
+| file | content | committed / synced |
+|---|---|---|
+| `bridge/nist_bridge.csv` | `nist_bridge` only: one row per exported p180 metabolite, its kit and NIST column, per run the replicates, valid replicates, ISTD flags, mean log2 and plate-clustered SE, then `b`, its SE, `bridged` and the applied `factor_log2` (reference material only) | yes (aggregate) |
+| `motco_input/p180.csv`, `nmr.csv`, `metadata.csv`, `covariates.csv` | the variant export, laid out as the primary's | no (participant-level; matched by `results/motco_export_sensitivity/*/motco_input/*.csv`) |
+| `motco_input/features_p180.csv`, `features_nmr.csv` | per feature, as the primary's | no (ignored with the other CSVs, regenerable) |
+| `motco_input/manifest.json` | step `export-sensitivity`; the variant; the primary export as `reference` (its manifest hash, output hashes and run offset); the QC archives and members with their hashes beside the predeclared ones and the bridge table's hash, summary and factor per metabolite (`nist_bridge`); the counts with the runs, the participants whose run differs from `phase` and the unchanged files against the primary's; `EXPORT_VARIANT_EXPECTED_COUNTS` beside them with deviations; output hashes; findings | yes (aggregate, no `RID`) |
+| `analysis/result.json`, `pls_loadings.csv`, `stage_means.csv` | as for the primary | yes (aggregate) |
+| `analysis/latent_scores.csv`, `analysis_metadata.csv` | as for the primary | no (participant-level; matched by `results/**/`) |
+| `analysis/analysis_manifest.json` | step `export-sensitivity`; the variant export's five files as inputs; the variant; the primary as `reference` (its two hashes, rank, MOTCO, `n_jobs`, its export); every setting as the primary's; the variant's `analysis` expected counts with deviations; findings | yes (aggregate) |
+| `analysis/summary.md` | the primary's renderer with the variant's title, an "Export variant" section (the setting, the runs, the bridge, the run offset per block of both exports), the variant's note on each reading line and `EXPORT_VARIANT_READING_RULES` after `READING_RULES` | yes (aggregate) |
+| `comparison/export_sensitivity.csv` | the primary row then the variant row: selected rank and mode, `cv_mean_auroc`, CV repeats, eigengap, per statistic observed, p, rejection, null mean, SD and q95; every value read from the two records | yes (aggregate) |
+| `comparison/export_sensitivity.md` | the statistics with a status per statistic (`same`, or `differs (run-handling dependence)`; the primary's status is the result either way), the variant's reading lines, the latent spaces, the export variant section, the findings, `READING_RULES` then `EXPORT_VARIANT_READING_RULES` | yes (aggregate) |
+| `comparison/export_sensitivity_manifest.json` | the inputs (both exports and analyses, the bridge table, the QC files) with sha256 and chains; the settings; the counts (statuses, ranks, run offsets); both expected counts and deviations; output hashes; findings | yes (aggregate) |
+| `diagnostics/` (six files) | `axis-diagnostics` on the variant, run with the second command above | yes (aggregate) |
+
+Predeclared counts (`EXPORT_VARIANT_EXPECTED_COUNTS`, from the change's
+spike, none from a run of a variant), per variant: every key of
+`EXPORT_EXPECTED_COUNTS` with the p180 run offset replaced (phase |d| > 0.5
+/ > 1: `nist_bridge` 35 / 8, `per_run_standardized` 0 / 0); for
+`nist_bridge` 102 FIA and 24 UPLC metabolites bridged, 7 not, 0 without a
+NIST column; 0 participants whose run differs from `phase`; `nmr.csv`,
+`metadata.csv` and `covariates.csv` equal to the primary's; and every key
+of `ANALYSIS_EXPECTED_COUNTS` for the analysis. The ranks are not
+predeclared. A deviation is a finding, never a stop. Findings also record
+every finding of `export` and `analyze`, a QC hash that differs from its
+predeclared value, a metabolite without a NIST column, a variant rank that
+differs from the primary's, a statistic whose status differs (run-handling
+dependence), a primary read with `n_jobs ≠ 1` and stale diagnostics.
+
+Diagnostics on a variant: the second command above writes the six files of
+`axis-diagnostics` under `diagnostics/`, with `is_primary` false, the
+rank-independent expectations checked and a `diagnostics.md` that names
+the variant and prints both sets of reading rules. The bridged block keeps
+a run axis (the spike: a shift common to most metabolites puts the run on
+PC2, ρ 0.58); a flagged row is a measurement-space finding about the
+variant and never grounds to adopt it.
+
+Reading rules (`EXPORT_VARIANT_READING_RULES`, written before any run and
+printed verbatim after `READING_RULES` in each variant's `summary.md`,
+`export_sensitivity.md`, a variant's `diagnostics.md` and every report
+that quotes a variant), in brief: a variant never replaces the primary
+and no variant result changes a constant, reruns the primary or adopts a
+variant; a variant differs from the primary only in the p180 values, so a
+differing status is dependence on the handling of the p180 run; its rank,
+floor, eigengap and null summary are read beside its `angle`;
+`nist_bridge` removes the calibration part of the run offset that NIST
+carries, assuming one factor per metabolite shared by plasma and serum,
+and leaves a common shift, sample handling (aspartate, glutamate) and the
+seven unbridged metabolites to `phase`; `per_run_standardized` removes the
+whole run difference, stage composition included, and a difference
+between the two variants is the part that is not calibration, never
+evidence for either; a variant's non-rejection is no more informative
+than the primary's and a variant-only rejection is run-handling
+dependence; the run offset per block and the bridge factors are reported
+beside the results, and a variant axis in the diagnostic is a
+measurement-space finding.
 
 ## `report`
 

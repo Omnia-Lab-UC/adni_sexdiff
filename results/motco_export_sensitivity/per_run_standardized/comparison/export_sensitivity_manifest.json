@@ -1,0 +1,485 @@
+{
+  "counts": {
+    "cv_mean_auroc": {
+      "per_run_standardized": 0.5998117500309984,
+      "primary": 0.5995142920769246
+    },
+    "eigengap": {
+      "per_run_standardized": 0.9094803980537736,
+      "primary": 0.7439897653827622
+    },
+    "phase_offset": {
+      "per_run_standardized": {
+        "nmr": {
+          "abs_corr_pc1_phase": 0.1349148196786109,
+          "abs_corr_pc2_phase": 0.07177054898291936,
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 0.6722749103659197,
+          "median_abs_d": 0.20765838704530382
+        },
+        "p180": {
+          "abs_corr_pc1_phase": 1.1737934026887378e-15,
+          "abs_corr_pc2_phase": 8.991171156257307e-15,
+          "abs_d_gt_0_5": 0,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 1.4167545372508418e-13,
+          "median_abs_d": 8.711566608695641e-15
+        }
+      },
+      "primary": {
+        "nmr": {
+          "abs_corr_pc1_phase": 0.134914819678611,
+          "abs_corr_pc2_phase": 0.07177054898291932,
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 0.6722749103659197,
+          "median_abs_d": 0.20765838704530382
+        },
+        "p180": {
+          "abs_corr_pc1_phase": 0.7338041282644211,
+          "abs_corr_pc2_phase": 0.3982350519508593,
+          "abs_d_gt_0_5": 109,
+          "abs_d_gt_1": 80,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 2.876015830557166,
+          "median_abs_d": 1.121003151194811
+        }
+      }
+    },
+    "ranks": {
+      "per_run_standardized": 4,
+      "primary": 8
+    },
+    "rejected": {
+      "per_run_standardized": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "primary": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      }
+    },
+    "rows": 2,
+    "runs": {
+      "ADNI1": 684,
+      "ADNI2GO": 817
+    },
+    "statuses": {
+      "angle": "same",
+      "delta": "same",
+      "shape": "same"
+    }
+  },
+  "created_at": "2026-10-29T13:59:53+00:00",
+  "deviations": [],
+  "expected": {
+    "analysis": {
+      "component_selection": "cv",
+      "covariate_levels": {
+        "apoe4": {
+          "0": 810,
+          "1": 542,
+          "2": 149
+        },
+        "phase": {
+          "ADNI1": 684,
+          "ADNI2GO": 817
+        },
+        "statin": {
+          "0": 797,
+          "1": 704
+        }
+      },
+      "design_columns": [
+        "age",
+        "education",
+        "apoe4[1]",
+        "apoe4[2]",
+        "phase[ADNI2GO]",
+        "statin[1]"
+      ],
+      "dropped": 0,
+      "features": {
+        "joint": 298,
+        "nmr": 165,
+        "p180": 133
+      },
+      "min_components": 2,
+      "participants": 1501,
+      "permutations": 9999,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      }
+    },
+    "export": {
+      "features": {
+        "nmr": {
+          "cleaned": 245,
+          "derived": {
+            "degree": 1,
+            "percentage": 72,
+            "ratio": 4,
+            "size": 3
+          },
+          "kept": 165
+        },
+        "p180": {
+          "cleaned": 133,
+          "derived": {
+            "degree": 0,
+            "percentage": 0,
+            "ratio": 0,
+            "size": 0
+          },
+          "kept": 133
+        }
+      },
+      "floors_not_positive": {
+        "nmr": 0,
+        "p180": 0
+      },
+      "metabolites_with_zeros": {
+        "nmr": 3,
+        "p180": 0
+      },
+      "missing_covariate_values": 0,
+      "non_finite": {
+        "nmr": 0,
+        "p180": 0
+      },
+      "participants": 1501,
+      "phase_offset": {
+        "nmr": {
+          "abs_d_gt_1": 0
+        },
+        "p180": {
+          "abs_d_gt_0_5": 0,
+          "abs_d_gt_1": 0
+        }
+      },
+      "runs_differing_from_phase": 0,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      },
+      "unchanged_equal_primary": {
+        "covariates.csv": true,
+        "metadata.csv": true,
+        "nmr.csv": true
+      },
+      "zero_cells": {
+        "nmr": 41,
+        "p180": 0
+      }
+    }
+  },
+  "findings": [
+    "the variant per_run_standardized's CV-selected rank 4 differs from the primary's 8: reported beside angle, not ranked (variant rule 3)"
+  ],
+  "git_revision": {
+    "commit": "94a004658a6fe0e895fb8df3b51bd573d6c2e1b1",
+    "dirty": false
+  },
+  "inputs": {
+    "primary": {
+      "analysis": {
+        "chain": {
+          "covariates.csv": true,
+          "metadata.csv": true,
+          "nmr.csv": true,
+          "p180.csv": true
+        },
+        "created_at": "2026-10-27T18:14:42+00:00",
+        "dir": "results/motco_analysis",
+        "files": {
+          "analysis_manifest.json": {
+            "bytes": 11512,
+            "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+          },
+          "result.json": {
+            "bytes": 7818,
+            "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+          }
+        },
+        "git_revision": {
+          "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+          "dirty": false
+        },
+        "latent_adjustment": null,
+        "motco": "0.10.0",
+        "n_jobs": 1,
+        "primary_records_export": true,
+        "seed_and_permutations_equal_constants": true,
+        "selected_rank": 8
+      },
+      "export": {
+        "chain": {
+          "cohort.csv": true,
+          "cohort_manifest.json": true,
+          "nmr/NMR.csv": true,
+          "p180/P180.csv": true
+        },
+        "dir": "results/motco_input",
+        "files": {
+          "covariates.csv": {
+            "bytes": 35630,
+            "equals_export_manifest": true,
+            "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+            "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+          },
+          "manifest.json": {
+            "bytes": 14840,
+            "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+          },
+          "metadata.csv": {
+            "bytes": 21092,
+            "equals_export_manifest": true,
+            "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+            "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+          },
+          "nmr.csv": {
+            "bytes": 4802997,
+            "equals_export_manifest": true,
+            "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+            "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+          },
+          "p180.csv": {
+            "bytes": 3756402,
+            "equals_export_manifest": true,
+            "recorded": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e",
+            "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+          }
+        },
+        "manifest": {
+          "name": "manifest.json",
+          "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+        }
+      }
+    },
+    "variant": {
+      "analysis": {
+        "dir": "results/motco_export_sensitivity/per_run_standardized/analysis",
+        "files": {
+          "analysis_manifest.json": {
+            "bytes": 14195,
+            "sha256": "bfbebaae8b50ee44bb9bb8c5104c17c769d0ffb28d6cfd1209b6d04918af8c31"
+          },
+          "result.json": {
+            "bytes": 6909,
+            "sha256": "15250f6c93c5b94ee821dae1dad41c1497026f877b1b487cfce09137107a9a27"
+          }
+        },
+        "n_jobs": 1,
+        "selected_rank": 4
+      },
+      "bridge": null,
+      "export": {
+        "dir": "results/motco_export_sensitivity/per_run_standardized/motco_input",
+        "files": {
+          "covariates.csv": {
+            "bytes": 35630,
+            "equals_export_manifest": true,
+            "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+            "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+          },
+          "manifest.json": {
+            "bytes": 18766,
+            "sha256": "9827243de549660001fa3cf4b61d6b6d8fa2118b7af7cb1c15b3047c2fbd0f6e"
+          },
+          "metadata.csv": {
+            "bytes": 21092,
+            "equals_export_manifest": true,
+            "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+            "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+          },
+          "nmr.csv": {
+            "bytes": 4802997,
+            "equals_export_manifest": true,
+            "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+            "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+          },
+          "p180.csv": {
+            "bytes": 3932519,
+            "equals_export_manifest": true,
+            "recorded": "6cb3a25dedd9029ca6421e37e01b7c1267c905a1e2e330321a7917bf83930182",
+            "sha256": "6cb3a25dedd9029ca6421e37e01b7c1267c905a1e2e330321a7917bf83930182"
+          }
+        },
+        "manifest": {
+          "name": "manifest.json",
+          "sha256": "9827243de549660001fa3cf4b61d6b6d8fa2118b7af7cb1c15b3047c2fbd0f6e"
+        }
+      }
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "export_sensitivity.csv": {
+      "bytes": 1068,
+      "participant_level": false,
+      "sha256": "fd841cf7615ab814fdffca35f42454a4593774da26eddc656fe81d85634e2969"
+    },
+    "export_sensitivity.md": {
+      "bytes": 10777,
+      "participant_level": false,
+      "sha256": "2c3530a9a17571db1c7847bf512dd93b5eabe587fb58d203cf40144378b67d30"
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-27T18:14:42+00:00",
+    "dir": "results/motco_analysis",
+    "export": {
+      "dir": "results/motco_input",
+      "manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      }
+    },
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 11512,
+        "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+      },
+      "result.json": {
+        "bytes": 7818,
+        "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+      }
+    },
+    "git_revision": {
+      "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+      "dirty": false
+    },
+    "latent_adjustment": null,
+    "motco": "0.10.0",
+    "n_jobs": 1,
+    "selected_rank": 8
+  },
+  "settings": {
+    "ANALYSIS_ALPHA": 0.05,
+    "ANALYSIS_RANK_FLOOR": 2,
+    "ANALYSIS_REJECTION_RULE": "p <= alpha",
+    "EXPORT_VARIANTS": {
+      "per_run_standardized": {
+        "block": "p180",
+        "change": "adni-nist-bridge",
+        "hook": "standardize_by_run",
+        "reads_data_root": false,
+        "rule": null,
+        "setting": "the p180 values on the scale of EXPORT_FEATURE_RULE (pooled floors, log2(x + floor)), each metabolite centred and divided by its population SD within its run of p180_runs.csv"
+      }
+    },
+    "REPORTED_N_JOBS": 1,
+    "columns": [
+      "analysis",
+      "directory",
+      "export_variant",
+      "selected_rank",
+      "component_selection",
+      "cv_mean_auroc",
+      "cv_repeats_completed",
+      "eigengap",
+      "delta_observed",
+      "delta_p",
+      "delta_rejected",
+      "delta_null_mean",
+      "delta_null_sd",
+      "delta_null_q95",
+      "angle_observed",
+      "angle_p",
+      "angle_rejected",
+      "angle_null_mean",
+      "angle_null_sd",
+      "angle_null_q95",
+      "shape_observed",
+      "shape_p",
+      "shape_rejected",
+      "shape_null_mean",
+      "shape_null_sd",
+      "shape_null_q95"
+    ],
+    "n_jobs": 1,
+    "status_rule": "'same' when both rejections under ANALYSIS_REJECTION_RULE are equal, else 'differs (run-handling dependence)'; the primary's status is the result either way"
+  },
+  "step": "export-sensitivity",
+  "variant": {
+    "block": "p180",
+    "change": "adni-nist-bridge",
+    "constant": "EXPORT_VARIANTS",
+    "hook": "standardize_by_run",
+    "name": "per_run_standardized",
+    "reads_data_root": false,
+    "rule": null,
+    "setting": "the p180 values on the scale of EXPORT_FEATURE_RULE (pooled floors, log2(x + floor)), each metabolite centred and divided by its population SD within its run of p180_runs.csv"
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

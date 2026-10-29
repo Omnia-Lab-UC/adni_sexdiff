@@ -2,7 +2,8 @@
 
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
-``report``) and one per sensitivity step (``latent-sensitivity``), each
+``report``) and one per sensitivity step (``latent-sensitivity``,
+``export-sensitivity``), each
 printing ``[command]``-prefixed progress messages that name files and
 counts, never a participant. ``report --check`` exits 1 on any mismatch.
 """
@@ -18,6 +19,9 @@ from .constants import (
     DATA_ROOT_ENV,
     DEFAULT_DATA_ROOT,
     DIAGNOSTICS_DIR,
+    EXPORT_SENSITIVITY_DIR,
+    EXPORT_SENSITIVITY_SUBDIRS,
+    EXPORT_VARIANTS,
     LATENT_SENSITIVITY_DIR,
     LATENT_SENSITIVITY_SUBDIRS,
     MOTCO_ANALYSIS_DIR,
@@ -33,6 +37,7 @@ from .data import (
     run_clean,
     run_cohort,
     run_export,
+    run_export_sensitivity,
     run_latent_sensitivity,
     run_report,
 )
@@ -150,6 +155,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_force(p)
 
+    written = ", ".join(EXPORT_SENSITIVITY_SUBDIRS[k] for k in ("bridge", "export", "analysis", "comparison"))
+    p = sub.add_parser(
+        "export-sensitivity",
+        help="Predeclared export variants of the p180 run handling (EXPORT_VARIANTS: " + ", ".join(EXPORT_VARIANTS)
+        + "): each reruns the export with its one p180 setting, analyses it at the primary's settings and compares it "
+        f"with the primary, read beside it and never replacing it -> {EXPORT_SENSITIVITY_DIR}/<variant>/{{{written}}}/",
+    )
+    p.add_argument(
+        "--variant", required=True, choices=[*EXPORT_VARIANTS, "all"],
+        help="The registered variant to run, or all of them in registry order (" + ", ".join(EXPORT_VARIANTS) + ")",
+    )
+    _add_data_root(p)
+    p.add_argument("--cleaned-dir", type=Path, default=None, help=f"Output root of clean (default: {CLEANED_DIR})")
+    p.add_argument("--cohort-dir", type=Path, default=None, help=f"Output directory of cohort (default: {COHORT_DIR})")
+    p.add_argument(
+        "--input-dir", type=Path, default=None,
+        help=f"The primary export, read as the reference, never written (default: {MOTCO_INPUT_DIR})",
+    )
+    p.add_argument(
+        "--analysis-dir", type=Path, default=None,
+        help=f"The primary's analysis directory, read as the reference, never written (default: {MOTCO_ANALYSIS_DIR})",
+    )
+    p.add_argument(
+        "--out-dir", type=Path, default=None,
+        help=f"Output root; <variant>/{{{written}}}/ are written under it, <variant>/"
+        f"{EXPORT_SENSITIVITY_SUBDIRS['diagnostics']}/ never (default: {EXPORT_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
+        "--n-jobs",
+        type=int,
+        default=REPORTED_N_JOBS,
+        help=f"Parallel jobs for MOTCO's CV and RRPP (default: {REPORTED_N_JOBS}; reported runs use {REPORTED_N_JOBS})",
+    )
+    _add_force(p)
+
     p = sub.add_parser(
         "report",
         help="Write the case-study report from the kept aggregate outputs (no participant-level file is read), or check "
@@ -214,6 +254,18 @@ def main(argv: list[str] | None = None) -> int:
             input_dir=args.input_dir,
             analysis_dir=args.analysis_dir,
             cohort_dir=args.cohort_dir,
+            out_dir=args.out_dir,
+            n_jobs=args.n_jobs,
+            force=args.force,
+        )
+    elif args.command == "export-sensitivity":
+        run_export_sensitivity(
+            variant=args.variant,
+            data_root=args.data_root,
+            cleaned_dir=args.cleaned_dir,
+            cohort_dir=args.cohort_dir,
+            input_dir=args.input_dir,
+            analysis_dir=args.analysis_dir,
             out_dir=args.out_dir,
             n_jobs=args.n_jobs,
             force=args.force,
