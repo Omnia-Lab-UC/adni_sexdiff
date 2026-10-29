@@ -1,0 +1,533 @@
+{
+  "counts": {
+    "component_selection": "cv",
+    "covariate_levels": {
+      "apoe4": {
+        "0": 810,
+        "1": 542,
+        "2": 149
+      },
+      "phase": {
+        "ADNI1": 684,
+        "ADNI2GO": 817
+      },
+      "statin": {
+        "0": 797,
+        "1": 704
+      }
+    },
+    "cv_mean_auroc": 0.5983481199239682,
+    "cv_repeats_completed": 5,
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "dropped": 0,
+    "eigengap": 0.7959275234667829,
+    "features": {
+      "joint": 298,
+      "nmr": 165,
+      "p180": 133
+    },
+    "min_components": 2,
+    "p_values": {
+      "angle": 0.7569,
+      "delta": 0.1366,
+      "shape": 0.9048
+    },
+    "participants": 1501,
+    "permutations": 9999,
+    "rejected": {
+      "angle": false,
+      "delta": false,
+      "shape": false
+    },
+    "runtime_seconds": 26.35854976200062,
+    "selected_rank": 6,
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    },
+    "statistics": {
+      "angle": 13.69608247636032,
+      "delta": 1.0827423977205433,
+      "shape": 0.061949122193313104
+    }
+  },
+  "created_at": "2026-10-29T13:59:26+00:00",
+  "deviations": [],
+  "expected": {
+    "component_selection": "cv",
+    "covariate_levels": {
+      "apoe4": {
+        "0": 810,
+        "1": 542,
+        "2": 149
+      },
+      "phase": {
+        "ADNI1": 684,
+        "ADNI2GO": 817
+      },
+      "statin": {
+        "0": 797,
+        "1": 704
+      }
+    },
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "dropped": 0,
+    "features": {
+      "joint": 298,
+      "nmr": 165,
+      "p180": 133
+    },
+    "min_components": 2,
+    "participants": 1501,
+    "permutations": 9999,
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    }
+  },
+  "findings": [
+    "the variant nist_bridge's CV-selected rank 6 differs from the primary's 8: reported beside angle, not ranked (variant rule 3)"
+  ],
+  "git_revision": {
+    "commit": "94a004658a6fe0e895fb8df3b51bd573d6c2e1b1",
+    "dirty": false
+  },
+  "inputs": {
+    "dir": "results/motco_export_sensitivity/nist_bridge/motco_input",
+    "export_created_at": "2026-10-29T13:58:59+00:00",
+    "export_findings": [],
+    "export_git_revision": {
+      "commit": "94a004658a6fe0e895fb8df3b51bd573d6c2e1b1",
+      "dirty": false
+    },
+    "export_manifest": {
+      "name": "manifest.json",
+      "sha256": "c9be35f6c8f46c04e1334441c6fb8a1b043d1ac5eae827fb4e9515d79578e05c"
+    },
+    "files": {
+      "covariates.csv": {
+        "bytes": 35630,
+        "equals_export_manifest": true,
+        "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+        "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+      },
+      "manifest.json": {
+        "bytes": 30416,
+        "sha256": "c9be35f6c8f46c04e1334441c6fb8a1b043d1ac5eae827fb4e9515d79578e05c"
+      },
+      "metadata.csv": {
+        "bytes": 21092,
+        "equals_export_manifest": true,
+        "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+        "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+      },
+      "nmr.csv": {
+        "bytes": 4802997,
+        "equals_export_manifest": true,
+        "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+        "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+      },
+      "p180.csv": {
+        "bytes": 3749528,
+        "equals_export_manifest": true,
+        "recorded": "5bce3cfc54d25922d32f4d2d0901951a25f005f1903ce0c877c3caa3e84cc383",
+        "sha256": "5bce3cfc54d25922d32f4d2d0901951a25f005f1903ce0c877c3caa3e84cc383"
+      }
+    }
+  },
+  "motco_software": {
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "sklearn": "1.8.0"
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "analysis_metadata.csv": {
+      "bytes": 49750,
+      "participant_level": true,
+      "sha256": "9e47795a312a6f8447e08143ade42f09c7e860b15dce98809e643c2b3cd01bb2"
+    },
+    "latent_scores.csv": {
+      "bytes": 179340,
+      "participant_level": true,
+      "sha256": "d9df596713d568527b5e0e9416c0cc678e43fb92096e917fe1dbdb0fc534e2a0"
+    },
+    "pls_loadings.csv": {
+      "bytes": 41374,
+      "participant_level": false,
+      "sha256": "b040c108a86672e3be761e7979a2d1084b3f1bdc5dcbeda54d70d3b1cbb0da14"
+    },
+    "result.json": {
+      "bytes": 7381,
+      "participant_level": false,
+      "sha256": "dbf60485b704c6d62e48fa00cdd48ac85d80ced14cd8e596fb823076b1504ee4"
+    },
+    "stage_means.csv": {
+      "bytes": 812,
+      "participant_level": false,
+      "sha256": "0e75dda5f221e31374114159a19e4980212ef30aabd9c1e2773c4bd78ccf1fe9"
+    },
+    "summary.md": {
+      "bytes": 10874,
+      "participant_level": false,
+      "sha256": "e0fac31255fcde2db362b327c29fb043d60bbbed33b9f14bc9b78f089cd83623"
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-27T18:14:42+00:00",
+    "dir": "results/motco_analysis",
+    "export": {
+      "dir": "results/motco_input",
+      "manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      }
+    },
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 11512,
+        "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+      },
+      "result.json": {
+        "bytes": 7818,
+        "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+      }
+    },
+    "git_revision": {
+      "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+      "dirty": false
+    },
+    "latent_adjustment": null,
+    "motco": "0.10.0",
+    "n_jobs": 1,
+    "selected_rank": 8
+  },
+  "settings": {
+    "ANALYSIS_ALPHA": 0.05,
+    "ANALYSIS_CATEGORICAL_COVARIATES": [
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "ANALYSIS_COVARIATES": {
+      "age": {
+        "coding": "numeric",
+        "column": "AGE",
+        "file": "clinical"
+      },
+      "apoe4": {
+        "coding": "categorical",
+        "column": "APOE4",
+        "file": "clinical",
+        "levels": [
+          0,
+          1,
+          2
+        ]
+      },
+      "education": {
+        "coding": "numeric",
+        "column": "PTEDUCAT",
+        "file": "clinical"
+      },
+      "phase": {
+        "coding": "categorical",
+        "column": "ORIGPROT",
+        "file": "clinical",
+        "levels": [
+          "ADNI1",
+          "ADNI2GO"
+        ],
+        "map": {
+          "ADNI1": "ADNI1",
+          "ADNI2": "ADNI2GO",
+          "ADNIGO": "ADNI2GO"
+        }
+      },
+      "statin": {
+        "coding": "categorical",
+        "column": "HMG CoA reductase inhibitors",
+        "file": "medication",
+        "levels": [
+          0,
+          1
+        ],
+        "visit": "sc"
+      }
+    },
+    "ANALYSIS_LATENT_ADJUSTMENT": null,
+    "ANALYSIS_MISSING_COVARIATES": "error",
+    "ANALYSIS_PERMUTATIONS": 9999,
+    "ANALYSIS_RANK_FLOOR": 2,
+    "ANALYSIS_REJECTION_RULE": "p <= alpha",
+    "ANALYSIS_SEED": 20261027,
+    "ANALYSIS_STATISTICS": [
+      "delta",
+      "angle",
+      "shape"
+    ],
+    "REPORTED_N_JOBS": 1,
+    "blocks": [
+      {
+        "file": "p180.csv",
+        "n_features": 133,
+        "name": "p180",
+        "transform": "identity",
+        "units": "log2(x + floor)"
+      },
+      {
+        "file": "nmr.csv",
+        "n_features": 165,
+        "name": "nmr",
+        "transform": "identity",
+        "units": "log2(x + floor)"
+      }
+    ],
+    "cli_equivalent": {
+      "argv": [
+        "motco",
+        "analyze",
+        "--block",
+        "p180=results/motco_export_sensitivity/nist_bridge/motco_input/p180.csv",
+        "--block",
+        "nmr=results/motco_export_sensitivity/nist_bridge/motco_input/nmr.csv",
+        "--metadata",
+        "results/motco_export_sensitivity/nist_bridge/analysis/analysis_metadata.csv",
+        "--sample-col",
+        "rid",
+        "--group-col",
+        "sex",
+        "--stage-col",
+        "stage",
+        "--stage-order",
+        "CN,MCI,AD",
+        "--group-order",
+        "Female,Male",
+        "--covariate",
+        "age",
+        "--covariate",
+        "education",
+        "--categorical-covariate",
+        "apoe4",
+        "--categorical-covariate",
+        "phase",
+        "--categorical-covariate",
+        "statin",
+        "--missing-covariates",
+        "error",
+        "--permutations",
+        "9999",
+        "--seed",
+        "20261027",
+        "--n-jobs",
+        "1",
+        "--min-components",
+        "2",
+        "--out-dir",
+        "OUT_DIR"
+      ],
+      "command": "motco analyze --block p180=results/motco_export_sensitivity/nist_bridge/motco_input/p180.csv --block nmr=results/motco_export_sensitivity/nist_bridge/motco_input/nmr.csv --metadata results/motco_export_sensitivity/nist_bridge/analysis/analysis_metadata.csv --sample-col rid --group-col sex --stage-col stage --stage-order CN,MCI,AD --group-order Female,Male --covariate age --covariate education --categorical-covariate apoe4 --categorical-covariate phase --categorical-covariate statin --missing-covariates error --permutations 9999 --seed 20261027 --n-jobs 1 --min-components 2 --out-dir OUT_DIR",
+      "note": "replace OUT_DIR with a new directory; paths are relative to the directory analyze ran in"
+    },
+    "covariates": {
+      "columns": [
+        "age",
+        "education",
+        "apoe4",
+        "phase",
+        "statin"
+      ],
+      "design_columns": [
+        "age",
+        "education",
+        "apoe4[1]",
+        "apoe4[2]",
+        "phase[ADNI2GO]",
+        "statin[1]"
+      ],
+      "kinds": {
+        "age": "numeric",
+        "apoe4": "categorical",
+        "education": "numeric",
+        "phase": "categorical",
+        "statin": "categorical"
+      },
+      "levels": {
+        "apoe4": [
+          "0",
+          "1",
+          "2"
+        ],
+        "phase": [
+          "ADNI1",
+          "ADNI2GO"
+        ],
+        "statin": [
+          "0",
+          "1"
+        ]
+      },
+      "lsmean_reference": "pooled_mean",
+      "missing_policy": "error",
+      "n_dropped": 0,
+      "reference_levels": {
+        "apoe4": "0",
+        "phase": "ADNI1",
+        "statin": "0"
+      },
+      "reference_row": {
+        "age": 73.70299800133249,
+        "apoe4[1]": 0.36109260493004663,
+        "apoe4[2]": 0.09926715522984676,
+        "education": 15.927381745502998,
+        "phase[ADNI2GO]": 0.5443037974683544,
+        "statin[1]": 0.46902065289806794
+      }
+    },
+    "covariates_imputed": false,
+    "entry_point": "motco.analysis.analyze_trajectories",
+    "group_column": "sex",
+    "group_order": [
+      "Female",
+      "Male"
+    ],
+    "interactions": null,
+    "latent_adjustment": null,
+    "metadata_file": "analysis_metadata.csv",
+    "min_components": 2,
+    "motco_defaults_used": {
+      "attribution": false,
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "cv_as_run": {
+        "cv1_splits": 3,
+        "cv2_splits": 4,
+        "max_components": 20,
+        "min_components": 2,
+        "n_repeats": 5,
+        "random_state": 1203,
+        "selected_lv": 6,
+        "stage_col": "stage"
+      },
+      "forced_components": null,
+      "max_components": 20,
+      "n_repeats": 5,
+      "orientation_estimator": "net_displacement",
+      "random_state": 1203,
+      "stated_by_proposal": {
+        "cv1_splits": 3,
+        "cv2_splits": 4,
+        "forced_components": null,
+        "max_components": 20,
+        "n_repeats": 5,
+        "orientation_estimator": "net_displacement",
+        "random_state": 1203
+      }
+    },
+    "n_jobs": 1,
+    "n_jobs_note": "RRPP draws depend on n_jobs (one seed stream per worker); reported runs use REPORTED_N_JOBS",
+    "predeclared_sensitivity": {
+      "change": "adni-latent-sensitivity",
+      "conditioning": "stage",
+      "setting": "covariate_latent_adjustment"
+    },
+    "sample_column": "rid",
+    "stage_column": "stage",
+    "stage_order": [
+      "CN",
+      "MCI",
+      "AD"
+    ]
+  },
+  "step": "export-sensitivity",
+  "variant": {
+    "block": "p180",
+    "change": "adni-nist-bridge",
+    "constant": "EXPORT_VARIANTS",
+    "hook": "factors",
+    "name": "nist_bridge",
+    "reads_data_root": true,
+    "rule": "NIST_BRIDGE_RULE",
+    "setting": "every cleaned p180 concentration of a participant whose run in p180_runs.csv is ADNI2GO multiplied by 2^b of its metabolite under NIST_BRIDGE_RULE before the floors; EXPORT_FEATURE_RULE then unchanged, its floors recomputed over the exported participants"
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

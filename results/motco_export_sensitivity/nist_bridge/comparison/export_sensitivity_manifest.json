@@ -1,0 +1,639 @@
+{
+  "counts": {
+    "cv_mean_auroc": {
+      "nist_bridge": 0.5983481199239682,
+      "primary": 0.5995142920769246
+    },
+    "eigengap": {
+      "nist_bridge": 0.7959275234667829,
+      "primary": 0.7439897653827622
+    },
+    "p180_bridged": {
+      "FIA": 102,
+      "UPLC": 24,
+      "not_bridged": 7
+    },
+    "phase_offset": {
+      "nist_bridge": {
+        "nmr": {
+          "abs_corr_pc1_phase": 0.1349148196786109,
+          "abs_corr_pc2_phase": 0.07177054898291936,
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 0.6722749103659197,
+          "median_abs_d": 0.20765838704530382
+        },
+        "p180": {
+          "abs_corr_pc1_phase": 0.21513276813676735,
+          "abs_corr_pc2_phase": 0.5833663608139878,
+          "abs_d_gt_0_5": 35,
+          "abs_d_gt_1": 8,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 2.876015830557166,
+          "median_abs_d": 0.289966748909691
+        }
+      },
+      "primary": {
+        "nmr": {
+          "abs_corr_pc1_phase": 0.134914819678611,
+          "abs_corr_pc2_phase": 0.07177054898291932,
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 0.6722749103659197,
+          "median_abs_d": 0.20765838704530382
+        },
+        "p180": {
+          "abs_corr_pc1_phase": 0.7338041282644211,
+          "abs_corr_pc2_phase": 0.3982350519508593,
+          "abs_d_gt_0_5": 109,
+          "abs_d_gt_1": 80,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 2.876015830557166,
+          "median_abs_d": 1.121003151194811
+        }
+      }
+    },
+    "ranks": {
+      "nist_bridge": 6,
+      "primary": 8
+    },
+    "rejected": {
+      "nist_bridge": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "primary": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      }
+    },
+    "rows": 2,
+    "runs": {
+      "ADNI1": 684,
+      "ADNI2GO": 817
+    },
+    "statuses": {
+      "angle": "same",
+      "delta": "same",
+      "shape": "same"
+    }
+  },
+  "created_at": "2026-10-29T13:59:26+00:00",
+  "deviations": [],
+  "expected": {
+    "analysis": {
+      "component_selection": "cv",
+      "covariate_levels": {
+        "apoe4": {
+          "0": 810,
+          "1": 542,
+          "2": 149
+        },
+        "phase": {
+          "ADNI1": 684,
+          "ADNI2GO": 817
+        },
+        "statin": {
+          "0": 797,
+          "1": 704
+        }
+      },
+      "design_columns": [
+        "age",
+        "education",
+        "apoe4[1]",
+        "apoe4[2]",
+        "phase[ADNI2GO]",
+        "statin[1]"
+      ],
+      "dropped": 0,
+      "features": {
+        "joint": 298,
+        "nmr": 165,
+        "p180": 133
+      },
+      "min_components": 2,
+      "participants": 1501,
+      "permutations": 9999,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      }
+    },
+    "export": {
+      "features": {
+        "nmr": {
+          "cleaned": 245,
+          "derived": {
+            "degree": 1,
+            "percentage": 72,
+            "ratio": 4,
+            "size": 3
+          },
+          "kept": 165
+        },
+        "p180": {
+          "cleaned": 133,
+          "derived": {
+            "degree": 0,
+            "percentage": 0,
+            "ratio": 0,
+            "size": 0
+          },
+          "kept": 133
+        }
+      },
+      "floors_not_positive": {
+        "nmr": 0,
+        "p180": 0
+      },
+      "metabolites_with_zeros": {
+        "nmr": 3,
+        "p180": 0
+      },
+      "missing_covariate_values": 0,
+      "non_finite": {
+        "nmr": 0,
+        "p180": 0
+      },
+      "p180_bridged": {
+        "FIA": 102,
+        "UPLC": 24,
+        "not_bridged": 7
+      },
+      "p180_unmatched": 0,
+      "participants": 1501,
+      "phase_offset": {
+        "nmr": {
+          "abs_d_gt_1": 0
+        },
+        "p180": {
+          "abs_d_gt_0_5": 35,
+          "abs_d_gt_1": 8
+        }
+      },
+      "runs_differing_from_phase": 0,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      },
+      "unchanged_equal_primary": {
+        "covariates.csv": true,
+        "metadata.csv": true,
+        "nmr.csv": true
+      },
+      "zero_cells": {
+        "nmr": 41,
+        "p180": 0
+      }
+    }
+  },
+  "findings": [
+    "the variant nist_bridge's CV-selected rank 6 differs from the primary's 8: reported beside angle, not ranked (variant rule 3)"
+  ],
+  "git_revision": {
+    "commit": "94a004658a6fe0e895fb8df3b51bd573d6c2e1b1",
+    "dirty": false
+  },
+  "inputs": {
+    "primary": {
+      "analysis": {
+        "chain": {
+          "covariates.csv": true,
+          "metadata.csv": true,
+          "nmr.csv": true,
+          "p180.csv": true
+        },
+        "created_at": "2026-10-27T18:14:42+00:00",
+        "dir": "results/motco_analysis",
+        "files": {
+          "analysis_manifest.json": {
+            "bytes": 11512,
+            "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+          },
+          "result.json": {
+            "bytes": 7818,
+            "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+          }
+        },
+        "git_revision": {
+          "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+          "dirty": false
+        },
+        "latent_adjustment": null,
+        "motco": "0.10.0",
+        "n_jobs": 1,
+        "primary_records_export": true,
+        "seed_and_permutations_equal_constants": true,
+        "selected_rank": 8
+      },
+      "export": {
+        "chain": {
+          "cohort.csv": true,
+          "cohort_manifest.json": true,
+          "nmr/NMR.csv": true,
+          "p180/P180.csv": true
+        },
+        "dir": "results/motco_input",
+        "files": {
+          "covariates.csv": {
+            "bytes": 35630,
+            "equals_export_manifest": true,
+            "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+            "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+          },
+          "manifest.json": {
+            "bytes": 14840,
+            "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+          },
+          "metadata.csv": {
+            "bytes": 21092,
+            "equals_export_manifest": true,
+            "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+            "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+          },
+          "nmr.csv": {
+            "bytes": 4802997,
+            "equals_export_manifest": true,
+            "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+            "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+          },
+          "p180.csv": {
+            "bytes": 3756402,
+            "equals_export_manifest": true,
+            "recorded": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e",
+            "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+          }
+        },
+        "manifest": {
+          "name": "manifest.json",
+          "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+        }
+      }
+    },
+    "qc": {
+      "archives": [
+        {
+          "bytes": 4394499,
+          "name": "ADMC_supplement.zip",
+          "predeclared": true,
+          "predeclared_sha256": "dc822b5683990f877f919af9ff521e0bbe5c12ca87a410b4a8bcff67f247544e",
+          "repair": null,
+          "sha256": "dc822b5683990f877f919af9ff521e0bbe5c12ca87a410b4a8bcff67f247544e",
+          "target": "Metabolomics/p180/ADMC_supplement.zip"
+        },
+        {
+          "bytes": 3279354,
+          "name": "ADMCDUKEP180SUPP_20170410.zip",
+          "predeclared": true,
+          "predeclared_sha256": "c3f9a0874af9ba74fb995da9d9f25dd95fdd6f4c0d0a43b3bff5455c90856332",
+          "repair": null,
+          "sha256": "c3f9a0874af9ba74fb995da9d9f25dd95fdd6f4c0d0a43b3bff5455c90856332",
+          "target": "Metabolomics/p180/ADMCDUKEP180SUPP_20170410.zip"
+        }
+      ],
+      "workbooks": [
+        {
+          "archive": "ADMC_supplement.zip",
+          "bytes": 260956,
+          "kit": "FIA",
+          "member": "admc_supplement/duke_raw_data/4097_FIA_NIST_and_QC_Data.xlsx",
+          "metabolite_columns": 142,
+          "plates": 11,
+          "predeclared": true,
+          "predeclared_sha256": "b19419d272dc7d19cfa5bc86c65ef1af81a718dbd704175126278babfc9ea6a0",
+          "replicates": 33,
+          "run": "ADNI1",
+          "sha256": "b19419d272dc7d19cfa5bc86c65ef1af81a718dbd704175126278babfc9ea6a0",
+          "status_columns": false,
+          "statuses": {},
+          "text_cells": 867
+        },
+        {
+          "archive": "ADMC_supplement.zip",
+          "bytes": 251801,
+          "kit": "UPLC",
+          "member": "admc_supplement/duke_raw_data/4097_UPLC_NIST_and_QC_Data.xlsx",
+          "metabolite_columns": 41,
+          "plates": 11,
+          "predeclared": true,
+          "predeclared_sha256": "3b966a92cc3c3a1a6277adad4456fe9c9c42c0f495f8523ba4b446e3e16ed4d7",
+          "replicates": 33,
+          "run": "ADNI1",
+          "sha256": "3b966a92cc3c3a1a6277adad4456fe9c9c42c0f495f8523ba4b446e3e16ed4d7",
+          "status_columns": false,
+          "statuses": {},
+          "text_cells": 330
+        },
+        {
+          "archive": "ADMCDUKEP180SUPP_20170410.zip",
+          "bytes": 86693,
+          "kit": "FIA",
+          "member": "4610 FIA p180 QC and NIST Data.xlsx",
+          "metabolite_columns": 141,
+          "plates": 12,
+          "predeclared": true,
+          "predeclared_sha256": "f3873558779ae40202cc62207ddaf57cb6517a0adf3fff53901badda170acb93",
+          "replicates": 24,
+          "run": "ADNI2GO",
+          "sha256": "f3873558779ae40202cc62207ddaf57cb6517a0adf3fff53901badda170acb93",
+          "status_columns": true,
+          "statuses": {
+            "< LOD": 385,
+            "<Lowest CS": 179,
+            "ISTD Out of Range": 41,
+            "Semi Quant.": 2748,
+            "Valid": 31
+          },
+          "text_cells": 385
+        },
+        {
+          "archive": "ADMCDUKEP180SUPP_20170410.zip",
+          "bytes": 73711,
+          "kit": "UPLC",
+          "member": "4610 UPLC p180 QC and NIST Data.xlsx",
+          "metabolite_columns": 41,
+          "plates": 12,
+          "predeclared": true,
+          "predeclared_sha256": "807575d5b5937e39ae32db0b6812ddff76758ce508155c9b1305795bfbdcb602",
+          "replicates": 24,
+          "run": "ADNI2GO",
+          "sha256": "807575d5b5937e39ae32db0b6812ddff76758ce508155c9b1305795bfbdcb602",
+          "status_columns": true,
+          "statuses": {
+            "< LOD": 216,
+            "<Lowest CS": 128,
+            "Valid": 640
+          },
+          "text_cells": 216
+        }
+      ]
+    },
+    "variant": {
+      "analysis": {
+        "dir": "results/motco_export_sensitivity/nist_bridge/analysis",
+        "files": {
+          "analysis_manifest.json": {
+            "bytes": 14196,
+            "sha256": "70b71d57e058beb47bf33e7b3566262393638ac92726eea2ca5732e5d867d5e9"
+          },
+          "result.json": {
+            "bytes": 7381,
+            "sha256": "dbf60485b704c6d62e48fa00cdd48ac85d80ced14cd8e596fb823076b1504ee4"
+          }
+        },
+        "n_jobs": 1,
+        "selected_rank": 6
+      },
+      "bridge": {
+        "bytes": 24372,
+        "name": "bridge/nist_bridge.csv",
+        "participant_level": false,
+        "rows": 133,
+        "sha256": "bcfcf7460a6fb049f89cbe2f39b4c009d1214074fa7e4ab24a3b037b76b87fd3"
+      },
+      "export": {
+        "dir": "results/motco_export_sensitivity/nist_bridge/motco_input",
+        "files": {
+          "covariates.csv": {
+            "bytes": 35630,
+            "equals_export_manifest": true,
+            "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+            "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+          },
+          "manifest.json": {
+            "bytes": 30416,
+            "sha256": "c9be35f6c8f46c04e1334441c6fb8a1b043d1ac5eae827fb4e9515d79578e05c"
+          },
+          "metadata.csv": {
+            "bytes": 21092,
+            "equals_export_manifest": true,
+            "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+            "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+          },
+          "nmr.csv": {
+            "bytes": 4802997,
+            "equals_export_manifest": true,
+            "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+            "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+          },
+          "p180.csv": {
+            "bytes": 3749528,
+            "equals_export_manifest": true,
+            "recorded": "5bce3cfc54d25922d32f4d2d0901951a25f005f1903ce0c877c3caa3e84cc383",
+            "sha256": "5bce3cfc54d25922d32f4d2d0901951a25f005f1903ce0c877c3caa3e84cc383"
+          }
+        },
+        "manifest": {
+          "name": "manifest.json",
+          "sha256": "c9be35f6c8f46c04e1334441c6fb8a1b043d1ac5eae827fb4e9515d79578e05c"
+        }
+      }
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "export_sensitivity.csv": {
+      "bytes": 1054,
+      "participant_level": false,
+      "sha256": "806293461dfa48260c69a6655e4ec54a2b443d231e454abf8e924cd198026db0"
+    },
+    "export_sensitivity.md": {
+      "bytes": 11500,
+      "participant_level": false,
+      "sha256": "10a06206fded07ccc9f218228a5ac21fee293a6b23b7f014d7ff301a8407bd13"
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-27T18:14:42+00:00",
+    "dir": "results/motco_analysis",
+    "export": {
+      "dir": "results/motco_input",
+      "manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      }
+    },
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 11512,
+        "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+      },
+      "result.json": {
+        "bytes": 7818,
+        "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+      }
+    },
+    "git_revision": {
+      "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+      "dirty": false
+    },
+    "latent_adjustment": null,
+    "motco": "0.10.0",
+    "n_jobs": 1,
+    "selected_rank": 8
+  },
+  "settings": {
+    "ANALYSIS_ALPHA": 0.05,
+    "ANALYSIS_RANK_FLOOR": 2,
+    "ANALYSIS_REJECTION_RULE": "p <= alpha",
+    "EXPORT_VARIANTS": {
+      "nist_bridge": {
+        "block": "p180",
+        "change": "adni-nist-bridge",
+        "hook": "factors",
+        "reads_data_root": true,
+        "rule": "NIST_BRIDGE_RULE",
+        "setting": "every cleaned p180 concentration of a participant whose run in p180_runs.csv is ADNI2GO multiplied by 2^b of its metabolite under NIST_BRIDGE_RULE before the floors; EXPORT_FEATURE_RULE then unchanged, its floors recomputed over the exported participants"
+      }
+    },
+    "NIST_BRIDGE_RULE": {
+      "bridged_run": "ADNI2GO",
+      "estimator": "b = mean log2 of the valid reference_run replicates minus mean log2 of the valid bridged_run replicates; every bridged_run concentration is multiplied by 2^b",
+      "excluded_status": "ISTD Out of Range",
+      "header_row": 1,
+      "inclusion_share": 0.5,
+      "kits": [
+        "FIA",
+        "UPLC"
+      ],
+      "label": "NIST SRM 1950",
+      "label_column": "Customer Sample Identification",
+      "material": "NIST SRM 1950",
+      "metabolites_after": "Injection Number",
+      "name_matching": "case and punctuation dropped (every character outside 0-9 and a-z), within the first kit whose sheet holds the name in both runs",
+      "plate_column": "Plate Bar Code",
+      "plate_correction": false,
+      "reference_run": "ADNI1",
+      "sheet": "NIST SRM 1950 Data",
+      "status_suffix": " Status",
+      "unbridged_factor": 1,
+      "valid": "a positive number whose status, where the workbook has a status column, is not excluded_status; text cells (< LOD, No Interception) are missing",
+      "workbooks": {
+        "ADNI1": {
+          "archive": "ADMC_supplement.zip",
+          "members": {
+            "FIA": "admc_supplement/duke_raw_data/4097_FIA_NIST_and_QC_Data.xlsx",
+            "UPLC": "admc_supplement/duke_raw_data/4097_UPLC_NIST_and_QC_Data.xlsx"
+          }
+        },
+        "ADNI2GO": {
+          "archive": "ADMCDUKEP180SUPP_20170410.zip",
+          "members": {
+            "FIA": "4610 FIA p180 QC and NIST Data.xlsx",
+            "UPLC": "4610 UPLC p180 QC and NIST Data.xlsx"
+          }
+        }
+      }
+    },
+    "REPORTED_N_JOBS": 1,
+    "columns": [
+      "analysis",
+      "directory",
+      "export_variant",
+      "selected_rank",
+      "component_selection",
+      "cv_mean_auroc",
+      "cv_repeats_completed",
+      "eigengap",
+      "delta_observed",
+      "delta_p",
+      "delta_rejected",
+      "delta_null_mean",
+      "delta_null_sd",
+      "delta_null_q95",
+      "angle_observed",
+      "angle_p",
+      "angle_rejected",
+      "angle_null_mean",
+      "angle_null_sd",
+      "angle_null_q95",
+      "shape_observed",
+      "shape_p",
+      "shape_rejected",
+      "shape_null_mean",
+      "shape_null_sd",
+      "shape_null_q95"
+    ],
+    "n_jobs": 1,
+    "status_rule": "'same' when both rejections under ANALYSIS_REJECTION_RULE are equal, else 'differs (run-handling dependence)'; the primary's status is the result either way"
+  },
+  "step": "export-sensitivity",
+  "variant": {
+    "block": "p180",
+    "change": "adni-nist-bridge",
+    "constant": "EXPORT_VARIANTS",
+    "hook": "factors",
+    "name": "nist_bridge",
+    "reads_data_root": true,
+    "rule": "NIST_BRIDGE_RULE",
+    "setting": "every cleaned p180 concentration of a participant whose run in p180_runs.csv is ADNI2GO multiplied by 2^b of its metabolite under NIST_BRIDGE_RULE before the floors; EXPORT_FEATURE_RULE then unchanged, its floors recomputed over the exported participants"
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

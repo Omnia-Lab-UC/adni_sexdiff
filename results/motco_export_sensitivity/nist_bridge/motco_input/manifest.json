@@ -1,0 +1,1135 @@
+{
+  "bridge": {
+    "constant": "NIST_BRIDGE_RULE",
+    "factors_log2": {
+      "Ala": 0.05453209644206325,
+      "Arg": 0.2820999711564065,
+      "Asn": 0.05551255247840192,
+      "Asp": -0.09057425950478848,
+      "C0": 0.0,
+      "C10": 0.3457598981331911,
+      "C10.2": 0.0,
+      "C12": 0.0,
+      "C14.1": -0.6157565644017446,
+      "C14.1.OH": 0.0,
+      "C14.2": -0.08093776800441876,
+      "C16": -0.06536590486327798,
+      "C16.1": -0.18577167393330551,
+      "C18": -0.09032822644658633,
+      "C18.1": -0.05614198745682364,
+      "C18.2": -0.2511561445334589,
+      "C2": 0.06169227487646678,
+      "C3": -0.1134025998216055,
+      "C4": -0.021649418495131467,
+      "C5": -0.09764117087273272,
+      "C6..C4.1.DC.": 0.0,
+      "C7.DC": -0.3388183817892738,
+      "C9": -0.12607775358202655,
+      "Cit": 0.03307048368843901,
+      "Creatinine": 0.03384356890967943,
+      "Glu": 0.04939572092202926,
+      "Gly": 0.1399934967449603,
+      "His": 0.07307831096996242,
+      "Ile": 0.09997998077657311,
+      "Kynurenine": -0.07735359839230938,
+      "Lys": 0.27226620234150456,
+      "Met": 0.07229908813236996,
+      "Orn": 0.23650507187764713,
+      "PC.aa.C28.1": 0.3954579210464504,
+      "PC.aa.C30.0": 0.38480101697281455,
+      "PC.aa.C32.0": 0.4118633922203161,
+      "PC.aa.C32.1": 0.28923694890032614,
+      "PC.aa.C32.3": 0.3778656582526716,
+      "PC.aa.C34.3": 0.2683357308869674,
+      "PC.aa.C34.4": 0.30418879059934945,
+      "PC.aa.C36.0": -0.3316505142643931,
+      "PC.aa.C36.1": 0.6459767818824975,
+      "PC.aa.C36.3": 0.20551168444658785,
+      "PC.aa.C36.5": 0.23204587552651423,
+      "PC.aa.C36.6": 0.2979329480547168,
+      "PC.aa.C38.0": 0.41677366430309004,
+      "PC.aa.C38.3": 0.3656686185364153,
+      "PC.aa.C38.4": 0.24554126428645695,
+      "PC.aa.C38.5": 0.27890524369294756,
+      "PC.aa.C38.6": 0.21821655330878187,
+      "PC.aa.C40.2": 0.5135178041315851,
+      "PC.aa.C40.3": 0.6016045363428578,
+      "PC.aa.C40.4": 0.2680952803312713,
+      "PC.aa.C40.5": 0.2703139317000942,
+      "PC.aa.C40.6": 0.20148889622655952,
+      "PC.aa.C42.0": 0.3914246709661364,
+      "PC.aa.C42.1": 0.3794062491920682,
+      "PC.aa.C42.2": 0.4276116447125595,
+      "PC.aa.C42.4": 0.4138887287983253,
+      "PC.aa.C42.5": 0.3221991582195465,
+      "PC.aa.C42.6": 0.4898229676638972,
+      "PC.ae.C30.0": 0.5967682562673442,
+      "PC.ae.C30.2": 0.8146323140411007,
+      "PC.ae.C32.1": 0.4648418178780459,
+      "PC.ae.C32.2": 0.4872473136666712,
+      "PC.ae.C34.0": 0.46436309918929586,
+      "PC.ae.C34.1": 0.4405424128977149,
+      "PC.ae.C34.2": 0.3513641377026038,
+      "PC.ae.C34.3": 0.36693898072290176,
+      "PC.ae.C36.0": 0.5513078442343939,
+      "PC.ae.C36.1": 0.44992930959737754,
+      "PC.ae.C36.2": 0.4095317108202874,
+      "PC.ae.C36.3": 0.3824465663372134,
+      "PC.ae.C36.4": 0.3815284081363495,
+      "PC.ae.C36.5": 0.3159543209349711,
+      "PC.ae.C38.0": 0.4916910045306658,
+      "PC.ae.C38.2": 0.403262019461104,
+      "PC.ae.C38.3": 0.43831505490438594,
+      "PC.ae.C38.4": 0.38295582814050855,
+      "PC.ae.C38.5": 0.3197802868110644,
+      "PC.ae.C38.6": 0.35024407940514646,
+      "PC.ae.C40.1": 0.4716134716447084,
+      "PC.ae.C40.2": 0.3896700770974697,
+      "PC.ae.C40.3": 0.47982922315880905,
+      "PC.ae.C40.4": 0.36128370800508136,
+      "PC.ae.C40.5": 0.36153841101898654,
+      "PC.ae.C40.6": 0.31018449393808845,
+      "PC.ae.C42.1": 0.6029947023138975,
+      "PC.ae.C42.2": 0.4222206894948999,
+      "PC.ae.C42.3": 0.44838488727400505,
+      "PC.ae.C42.4": 0.3667625613774098,
+      "PC.ae.C42.5": 0.29881797782382974,
+      "PC.ae.C44.3": 0.5294770945552538,
+      "PC.ae.C44.4": 0.3710644735642332,
+      "PC.ae.C44.5": 0.3027512044427604,
+      "PC.ae.C44.6": 0.22273541988474088,
+      "Phe": 0.045083606316532965,
+      "Pro": -0.03007355964128955,
+      "SDMA": -0.03190399940508293,
+      "SM..OH..C14.1": 0.33784088352572716,
+      "SM..OH..C16.1": 0.3029486092018683,
+      "SM..OH..C22.1": 0.3117268632599828,
+      "SM..OH..C22.2": 0.3031850487045791,
+      "SM..OH..C24.1": 0.2752722723912429,
+      "SM.C16.0": 0.28675179254824723,
+      "SM.C16.1": 0.3072601823335752,
+      "SM.C18.0": 0.2959828951148271,
+      "SM.C18.1": 0.2736421392216366,
+      "SM.C20.2": 0.47610767236490564,
+      "SM.C24.0": 0.3005062873500446,
+      "SM.C24.1": 0.36074254136994544,
+      "SM.C26.0": 0.7062657683517934,
+      "SM.C26.1": 0.35235102974056054,
+      "Sarcosine": 0.0347688548568541,
+      "Ser": 0.1503403110982502,
+      "Serotonin": 0.0,
+      "Spermidine": 0.0,
+      "Thr": 0.035419603448809234,
+      "Trp": 0.09108129707613255,
+      "Tyr": 0.07623105060463597,
+      "Val": 0.1423441700763659,
+      "lysoPC.a.C16.0": 0.30059797873483074,
+      "lysoPC.a.C16.1": 0.32694289672978805,
+      "lysoPC.a.C17.0": 0.35097529648323783,
+      "lysoPC.a.C18.0": 0.38531342705587956,
+      "lysoPC.a.C18.1": 0.36108457635866564,
+      "lysoPC.a.C18.2": 0.3334321280445369,
+      "lysoPC.a.C20.3": 0.42641250318994295,
+      "lysoPC.a.C20.4": 0.35978217929643597,
+      "lysoPC.a.C24.0": 0.70671667126912,
+      "lysoPC.a.C28.0": 0.8223439553348102,
+      "lysoPC.a.C28.1": 0.7130839434395044,
+      "t4.OH.Pro": -0.04376207577206337
+    },
+    "rule": {
+      "bridged_run": "ADNI2GO",
+      "estimator": "b = mean log2 of the valid reference_run replicates minus mean log2 of the valid bridged_run replicates; every bridged_run concentration is multiplied by 2^b",
+      "excluded_status": "ISTD Out of Range",
+      "header_row": 1,
+      "inclusion_share": 0.5,
+      "kits": [
+        "FIA",
+        "UPLC"
+      ],
+      "label": "NIST SRM 1950",
+      "label_column": "Customer Sample Identification",
+      "material": "NIST SRM 1950",
+      "metabolites_after": "Injection Number",
+      "name_matching": "case and punctuation dropped (every character outside 0-9 and a-z), within the first kit whose sheet holds the name in both runs",
+      "plate_column": "Plate Bar Code",
+      "plate_correction": false,
+      "reference_run": "ADNI1",
+      "sheet": "NIST SRM 1950 Data",
+      "status_suffix": " Status",
+      "unbridged_factor": 1,
+      "valid": "a positive number whose status, where the workbook has a status column, is not excluded_status; text cells (< LOD, No Interception) are missing",
+      "workbooks": {
+        "ADNI1": {
+          "archive": "ADMC_supplement.zip",
+          "members": {
+            "FIA": "admc_supplement/duke_raw_data/4097_FIA_NIST_and_QC_Data.xlsx",
+            "UPLC": "admc_supplement/duke_raw_data/4097_UPLC_NIST_and_QC_Data.xlsx"
+          }
+        },
+        "ADNI2GO": {
+          "archive": "ADMCDUKEP180SUPP_20170410.zip",
+          "members": {
+            "FIA": "4610 FIA p180 QC and NIST Data.xlsx",
+            "UPLC": "4610 UPLC p180 QC and NIST Data.xlsx"
+          }
+        }
+      }
+    },
+    "summary": {
+      "factor_log2_bridged": {
+        "max": 0.8223439553348102,
+        "median_abs": 0.32098972251530544,
+        "min": -0.6157565644017446,
+        "positive": 108,
+        "q05": -0.1094622425843873,
+        "q25": 0.10998335976866991,
+        "q50": 0.3109556785990356,
+        "q75": 0.4013109948574406,
+        "q95": 0.6026471608211376
+      },
+      "metabolites": 133,
+      "not_bridged": [
+        "C0",
+        "C10.2",
+        "C12",
+        "C14.1.OH",
+        "C6..C4.1.DC.",
+        "Serotonin",
+        "Spermidine"
+      ],
+      "p180_bridged": {
+        "FIA": 102,
+        "UPLC": 24,
+        "not_bridged": 7
+      },
+      "unmatched": []
+    },
+    "table": {
+      "bytes": 24372,
+      "name": "bridge/nist_bridge.csv",
+      "participant_level": false,
+      "rows": 133,
+      "sha256": "bcfcf7460a6fb049f89cbe2f39b4c009d1214074fa7e4ab24a3b037b76b87fd3"
+    }
+  },
+  "counts": {
+    "block_shares": {
+      "nmr": 0.5536912751677853,
+      "p180": 0.4463087248322148
+    },
+    "features": {
+      "nmr": {
+        "cleaned": 245,
+        "derived": {
+          "degree": 1,
+          "percentage": 72,
+          "ratio": 4,
+          "size": 3
+        },
+        "kept": 165
+      },
+      "p180": {
+        "cleaned": 133,
+        "derived": {
+          "degree": 0,
+          "percentage": 0,
+          "ratio": 0,
+          "size": 0
+        },
+        "kept": 133
+      }
+    },
+    "floors_not_positive": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "joint_features": 298,
+    "metabolites_with_zeros": {
+      "nmr": 3,
+      "p180": 0
+    },
+    "missing_covariate_values": 0,
+    "non_finite": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "p180_bridged": {
+      "FIA": 102,
+      "UPLC": 24,
+      "not_bridged": 7
+    },
+    "p180_unmatched": 0,
+    "participants": 1501,
+    "phase_offset": {
+      "nmr": {
+        "abs_corr_pc1_phase": 0.1349148196786109,
+        "abs_corr_pc2_phase": 0.07177054898291936,
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 0.6722749103659197,
+        "median_abs_d": 0.20765838704530382
+      },
+      "p180": {
+        "abs_corr_pc1_phase": 0.21513276813676735,
+        "abs_corr_pc2_phase": 0.5833663608139878,
+        "abs_d_gt_0_5": 35,
+        "abs_d_gt_1": 8,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 2.876015830557166,
+        "median_abs_d": 0.289966748909691
+      }
+    },
+    "runs": {
+      "ADNI1": 684,
+      "ADNI2GO": 817
+    },
+    "runs_differing_from_phase": 0,
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    },
+    "shape": {
+      "nmr": {
+        "abs_skew_gt_1": 3,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 4,
+        "max_abs_z_gt_8": 1,
+        "median_abs_skew": 0.17827974010201486,
+        "skew_lt_minus_1": 1
+      },
+      "p180": {
+        "abs_skew_gt_1": 2,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 25,
+        "max_abs_z_gt_8": 2,
+        "median_abs_skew": 0.30828115713632853,
+        "skew_lt_minus_1": 0
+      }
+    },
+    "spectrum": {
+      "nmr": {
+        "effective_rank": 3.7726150869621864,
+        "features": 165,
+        "numerical_rank": 165,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.9201938345984545,
+        "pc1_3_share": 0.7698923488782725,
+        "pc1_share": 0.4377998009428942
+      },
+      "p180": {
+        "effective_rank": 8.442972598061587,
+        "features": 133,
+        "numerical_rank": 133,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.7000806343279496,
+        "pc1_3_share": 0.4574717320294982,
+        "pc1_share": 0.30910147064049825
+      }
+    },
+    "unchanged_equal_primary": {
+      "covariates.csv": true,
+      "metadata.csv": true,
+      "nmr.csv": true
+    },
+    "zero_cells": {
+      "nmr": 41,
+      "p180": 0
+    }
+  },
+  "created_at": "2026-10-29T13:58:59+00:00",
+  "deviations": [],
+  "expected": {
+    "features": {
+      "nmr": {
+        "cleaned": 245,
+        "derived": {
+          "degree": 1,
+          "percentage": 72,
+          "ratio": 4,
+          "size": 3
+        },
+        "kept": 165
+      },
+      "p180": {
+        "cleaned": 133,
+        "derived": {
+          "degree": 0,
+          "percentage": 0,
+          "ratio": 0,
+          "size": 0
+        },
+        "kept": 133
+      }
+    },
+    "floors_not_positive": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "metabolites_with_zeros": {
+      "nmr": 3,
+      "p180": 0
+    },
+    "missing_covariate_values": 0,
+    "non_finite": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "p180_bridged": {
+      "FIA": 102,
+      "UPLC": 24,
+      "not_bridged": 7
+    },
+    "p180_unmatched": 0,
+    "participants": 1501,
+    "phase_offset": {
+      "nmr": {
+        "abs_d_gt_1": 0
+      },
+      "p180": {
+        "abs_d_gt_0_5": 35,
+        "abs_d_gt_1": 8
+      }
+    },
+    "runs_differing_from_phase": 0,
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    },
+    "unchanged_equal_primary": {
+      "covariates.csv": true,
+      "metadata.csv": true,
+      "nmr.csv": true
+    },
+    "zero_cells": {
+      "nmr": 41,
+      "p180": 0
+    }
+  },
+  "findings": [],
+  "git_revision": {
+    "commit": "94a004658a6fe0e895fb8df3b51bd573d6c2e1b1",
+    "dirty": false
+  },
+  "inputs": {
+    "chain": {
+      "nmr/NMR.csv": true,
+      "p180/P180.csv": true,
+      "p180/p180_runs.csv": true
+    },
+    "clean": {
+      "nmr": {
+        "manifest": {
+          "name": "nmr/clean_manifest.json",
+          "sha256": "089df72cd5891029a791d1704578d5ef049efe9c25dd99cc41511e1ce64f7657"
+        },
+        "outputs": {
+          "NMR.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "e711d62cf03f9da3f761fb18bfe4acb2d5fdf15fab6695fa5ed3901fa45d3159"
+          }
+        }
+      },
+      "p180": {
+        "manifest": {
+          "name": "p180/clean_manifest.json",
+          "sha256": "6f11a627648d17a5c1294420fd3ed32c1e125c8c0cb53b37d3f3d247fb5f78ce"
+        },
+        "outputs": {
+          "P180.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "33b18bd2187173179aa280ee74fc0a8f37ca2f155cdd37d4f87412631132ff9d"
+          },
+          "p180_runs.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "4c3d7b972428548b94a1f2762ccfa9d460f29929a5f19304fe28a69271d0197d"
+          }
+        }
+      }
+    },
+    "cohort": {
+      "manifest": {
+        "name": "cohort_manifest.json",
+        "sha256": "dcb65a530bfc41f3d77bec08ad530bc81dede9f90ac2b4580d88e2e156d1e630"
+      },
+      "outputs": {
+        "cohort.csv": {
+          "equals_cohort_manifest": true,
+          "sha256": "fe70cbf2e38f21ab25c9f32bfb1c503387b8eab2babf96aba7a286ea02b109ce"
+        }
+      }
+    },
+    "qc": {
+      "archives": [
+        {
+          "bytes": 4394499,
+          "name": "ADMC_supplement.zip",
+          "predeclared": true,
+          "predeclared_sha256": "dc822b5683990f877f919af9ff521e0bbe5c12ca87a410b4a8bcff67f247544e",
+          "repair": null,
+          "sha256": "dc822b5683990f877f919af9ff521e0bbe5c12ca87a410b4a8bcff67f247544e",
+          "target": "Metabolomics/p180/ADMC_supplement.zip"
+        },
+        {
+          "bytes": 3279354,
+          "name": "ADMCDUKEP180SUPP_20170410.zip",
+          "predeclared": true,
+          "predeclared_sha256": "c3f9a0874af9ba74fb995da9d9f25dd95fdd6f4c0d0a43b3bff5455c90856332",
+          "repair": null,
+          "sha256": "c3f9a0874af9ba74fb995da9d9f25dd95fdd6f4c0d0a43b3bff5455c90856332",
+          "target": "Metabolomics/p180/ADMCDUKEP180SUPP_20170410.zip"
+        }
+      ],
+      "workbooks": [
+        {
+          "archive": "ADMC_supplement.zip",
+          "bytes": 260956,
+          "kit": "FIA",
+          "member": "admc_supplement/duke_raw_data/4097_FIA_NIST_and_QC_Data.xlsx",
+          "metabolite_columns": 142,
+          "plates": 11,
+          "predeclared": true,
+          "predeclared_sha256": "b19419d272dc7d19cfa5bc86c65ef1af81a718dbd704175126278babfc9ea6a0",
+          "replicates": 33,
+          "run": "ADNI1",
+          "sha256": "b19419d272dc7d19cfa5bc86c65ef1af81a718dbd704175126278babfc9ea6a0",
+          "status_columns": false,
+          "statuses": {},
+          "text_cells": 867
+        },
+        {
+          "archive": "ADMC_supplement.zip",
+          "bytes": 251801,
+          "kit": "UPLC",
+          "member": "admc_supplement/duke_raw_data/4097_UPLC_NIST_and_QC_Data.xlsx",
+          "metabolite_columns": 41,
+          "plates": 11,
+          "predeclared": true,
+          "predeclared_sha256": "3b966a92cc3c3a1a6277adad4456fe9c9c42c0f495f8523ba4b446e3e16ed4d7",
+          "replicates": 33,
+          "run": "ADNI1",
+          "sha256": "3b966a92cc3c3a1a6277adad4456fe9c9c42c0f495f8523ba4b446e3e16ed4d7",
+          "status_columns": false,
+          "statuses": {},
+          "text_cells": 330
+        },
+        {
+          "archive": "ADMCDUKEP180SUPP_20170410.zip",
+          "bytes": 86693,
+          "kit": "FIA",
+          "member": "4610 FIA p180 QC and NIST Data.xlsx",
+          "metabolite_columns": 141,
+          "plates": 12,
+          "predeclared": true,
+          "predeclared_sha256": "f3873558779ae40202cc62207ddaf57cb6517a0adf3fff53901badda170acb93",
+          "replicates": 24,
+          "run": "ADNI2GO",
+          "sha256": "f3873558779ae40202cc62207ddaf57cb6517a0adf3fff53901badda170acb93",
+          "status_columns": true,
+          "statuses": {
+            "< LOD": 385,
+            "<Lowest CS": 179,
+            "ISTD Out of Range": 41,
+            "Semi Quant.": 2748,
+            "Valid": 31
+          },
+          "text_cells": 385
+        },
+        {
+          "archive": "ADMCDUKEP180SUPP_20170410.zip",
+          "bytes": 73711,
+          "kit": "UPLC",
+          "member": "4610 UPLC p180 QC and NIST Data.xlsx",
+          "metabolite_columns": 41,
+          "plates": 12,
+          "predeclared": true,
+          "predeclared_sha256": "807575d5b5937e39ae32db0b6812ddff76758ce508155c9b1305795bfbdcb602",
+          "replicates": 24,
+          "run": "ADNI2GO",
+          "sha256": "807575d5b5937e39ae32db0b6812ddff76758ce508155c9b1305795bfbdcb602",
+          "status_columns": true,
+          "statuses": {
+            "< LOD": 216,
+            "<Lowest CS": 128,
+            "Valid": 640
+          },
+          "text_cells": 216
+        }
+      ]
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "covariates.csv": {
+      "bytes": 35630,
+      "participant_level": true,
+      "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+    },
+    "features_nmr.csv": {
+      "bytes": 32858,
+      "participant_level": false,
+      "sha256": "d4495f6aae38985460a118582e8e3250f9c56b8e27fc38d64bedc5b14514b9ee"
+    },
+    "features_p180.csv": {
+      "bytes": 21786,
+      "participant_level": false,
+      "sha256": "b8caddb635e4e36c3cd422207127ba88fef953b6f704012377e9bc2ef65e30a8"
+    },
+    "metadata.csv": {
+      "bytes": 21092,
+      "participant_level": true,
+      "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+    },
+    "nmr.csv": {
+      "bytes": 4802997,
+      "participant_level": true,
+      "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+    },
+    "p180.csv": {
+      "bytes": 3749528,
+      "participant_level": true,
+      "sha256": "5bce3cfc54d25922d32f4d2d0901951a25f005f1903ce0c877c3caa3e84cc383"
+    }
+  },
+  "reference": {
+    "chain": {
+      "cohort.csv": true,
+      "cohort_manifest.json": true,
+      "nmr/NMR.csv": true,
+      "p180/P180.csv": true
+    },
+    "created_at": "2026-10-27T14:13:06+00:00",
+    "dir": "results/motco_input",
+    "git_revision": {
+      "commit": "b10da517bed5919012610813aa8d7cdd778ce7bf",
+      "dirty": false
+    },
+    "manifest": {
+      "name": "manifest.json",
+      "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+    },
+    "outputs": {
+      "covariates.csv": {
+        "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+      },
+      "features_nmr.csv": {
+        "sha256": "d4495f6aae38985460a118582e8e3250f9c56b8e27fc38d64bedc5b14514b9ee"
+      },
+      "features_p180.csv": {
+        "sha256": "7793776534d580f9a49e0ad95e0d8f6ecef3b5a7ff3c02f64dd07c905f4bb5ee"
+      },
+      "metadata.csv": {
+        "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+      },
+      "nmr.csv": {
+        "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+      },
+      "p180.csv": {
+        "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+      }
+    },
+    "phase_offset": {
+      "nmr": {
+        "abs_corr_pc1_phase": 0.134914819678611,
+        "abs_corr_pc2_phase": 0.07177054898291932,
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 0.6722749103659197,
+        "median_abs_d": 0.20765838704530382
+      },
+      "p180": {
+        "abs_corr_pc1_phase": 0.7338041282644211,
+        "abs_corr_pc2_phase": 0.3982350519508593,
+        "abs_d_gt_0_5": 109,
+        "abs_d_gt_1": 80,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 2.876015830557166,
+        "median_abs_d": 1.121003151194811
+      }
+    }
+  },
+  "settings": {
+    "EXPORT_FEATURE_RULE": {
+      "membership": {
+        "nmr": {
+          "derived": {
+            "degree": [
+              "equals",
+              "UNSATURATION"
+            ],
+            "percentage": [
+              "endswith",
+              "_PCT"
+            ],
+            "ratio": [
+              "contains",
+              "_BY_"
+            ],
+            "size": [
+              "endswith",
+              "_SIZE"
+            ]
+          }
+        },
+        "p180": {
+          "derived": {}
+        }
+      },
+      "scale": {
+        "floor_method": "linear",
+        "floor_quantile": 0.05,
+        "motco_transform": "identity",
+        "transform": "log2(x + floor)"
+      }
+    },
+    "block_columns": {
+      "nmr": [
+        "TOTAL_C",
+        "NON_HDL_C",
+        "REMNANT_C",
+        "VLDL_C",
+        "CLINICAL_LDL_C",
+        "LDL_C",
+        "HDL_C",
+        "TOTAL_TG",
+        "VLDL_TG",
+        "LDL_TG",
+        "HDL_TG",
+        "TOTAL_PL",
+        "VLDL_PL",
+        "LDL_PL",
+        "HDL_PL",
+        "TOTAL_CE",
+        "VLDL_CE",
+        "LDL_CE",
+        "HDL_CE",
+        "TOTAL_FC",
+        "VLDL_FC",
+        "LDL_FC",
+        "HDL_FC",
+        "TOTAL_L",
+        "VLDL_L",
+        "LDL_L",
+        "HDL_L",
+        "TOTAL_P",
+        "VLDL_P",
+        "LDL_P",
+        "HDL_P",
+        "PHOSPHOGLYC",
+        "CHOLINES",
+        "PHOSPHATIDYLC",
+        "SPHINGOMYELINS",
+        "APOB",
+        "APOA1",
+        "TOTAL_FA",
+        "OMEGA_3",
+        "OMEGA_6",
+        "PUFA",
+        "MUFA",
+        "SFA",
+        "LA",
+        "DHA",
+        "ALA",
+        "GLN",
+        "GLY",
+        "HIS",
+        "TOTAL_BCAA",
+        "ILE",
+        "LEU",
+        "VAL",
+        "PHE",
+        "TYR",
+        "GLUCOSE",
+        "LACTATE",
+        "PYRUVATE",
+        "CITRATE",
+        "GLYCEROL",
+        "BOHBUTYRATE",
+        "ACETATE",
+        "ACETOACETATE",
+        "ACETONE",
+        "CREATININE",
+        "ALBUMIN",
+        "GLYCA",
+        "XXL_VLDL_P",
+        "XXL_VLDL_L",
+        "XXL_VLDL_PL",
+        "XXL_VLDL_C",
+        "XXL_VLDL_CE",
+        "XXL_VLDL_FC",
+        "XXL_VLDL_TG",
+        "XL_VLDL_P",
+        "XL_VLDL_L",
+        "XL_VLDL_PL",
+        "XL_VLDL_C",
+        "XL_VLDL_CE",
+        "XL_VLDL_FC",
+        "XL_VLDL_TG",
+        "L_VLDL_P",
+        "L_VLDL_L",
+        "L_VLDL_PL",
+        "L_VLDL_C",
+        "L_VLDL_CE",
+        "L_VLDL_FC",
+        "L_VLDL_TG",
+        "M_VLDL_P",
+        "M_VLDL_L",
+        "M_VLDL_PL",
+        "M_VLDL_C",
+        "M_VLDL_CE",
+        "M_VLDL_FC",
+        "M_VLDL_TG",
+        "S_VLDL_P",
+        "S_VLDL_L",
+        "S_VLDL_PL",
+        "S_VLDL_C",
+        "S_VLDL_CE",
+        "S_VLDL_FC",
+        "S_VLDL_TG",
+        "XS_VLDL_P",
+        "XS_VLDL_L",
+        "XS_VLDL_PL",
+        "XS_VLDL_C",
+        "XS_VLDL_CE",
+        "XS_VLDL_FC",
+        "XS_VLDL_TG",
+        "IDL_P",
+        "IDL_L",
+        "IDL_PL",
+        "IDL_C",
+        "IDL_CE",
+        "IDL_FC",
+        "IDL_TG",
+        "L_LDL_P",
+        "L_LDL_L",
+        "L_LDL_PL",
+        "L_LDL_C",
+        "L_LDL_CE",
+        "L_LDL_FC",
+        "L_LDL_TG",
+        "M_LDL_P",
+        "M_LDL_L",
+        "M_LDL_PL",
+        "M_LDL_C",
+        "M_LDL_CE",
+        "M_LDL_FC",
+        "M_LDL_TG",
+        "S_LDL_P",
+        "S_LDL_L",
+        "S_LDL_PL",
+        "S_LDL_C",
+        "S_LDL_CE",
+        "S_LDL_FC",
+        "S_LDL_TG",
+        "XL_HDL_P",
+        "XL_HDL_L",
+        "XL_HDL_PL",
+        "XL_HDL_C",
+        "XL_HDL_CE",
+        "XL_HDL_FC",
+        "XL_HDL_TG",
+        "L_HDL_P",
+        "L_HDL_L",
+        "L_HDL_PL",
+        "L_HDL_C",
+        "L_HDL_CE",
+        "L_HDL_FC",
+        "L_HDL_TG",
+        "M_HDL_P",
+        "M_HDL_L",
+        "M_HDL_PL",
+        "M_HDL_C",
+        "M_HDL_CE",
+        "M_HDL_FC",
+        "M_HDL_TG",
+        "S_HDL_P",
+        "S_HDL_L",
+        "S_HDL_PL",
+        "S_HDL_C",
+        "S_HDL_CE",
+        "S_HDL_FC",
+        "S_HDL_TG"
+      ],
+      "p180": [
+        "C0",
+        "C10",
+        "C10.2",
+        "C12",
+        "C14.1",
+        "C14.1.OH",
+        "C14.2",
+        "C16",
+        "C16.1",
+        "C18",
+        "C18.1",
+        "C18.2",
+        "C2",
+        "C3",
+        "C4",
+        "C6..C4.1.DC.",
+        "C5",
+        "C7.DC",
+        "C9",
+        "lysoPC.a.C16.0",
+        "lysoPC.a.C16.1",
+        "lysoPC.a.C17.0",
+        "lysoPC.a.C18.0",
+        "lysoPC.a.C18.1",
+        "lysoPC.a.C18.2",
+        "lysoPC.a.C20.3",
+        "lysoPC.a.C20.4",
+        "lysoPC.a.C24.0",
+        "lysoPC.a.C28.0",
+        "lysoPC.a.C28.1",
+        "PC.aa.C28.1",
+        "PC.aa.C30.0",
+        "PC.aa.C32.0",
+        "PC.aa.C32.1",
+        "PC.aa.C32.3",
+        "PC.aa.C34.3",
+        "PC.aa.C34.4",
+        "PC.aa.C36.0",
+        "PC.aa.C36.1",
+        "PC.aa.C36.3",
+        "PC.aa.C36.5",
+        "PC.aa.C36.6",
+        "PC.aa.C38.0",
+        "PC.aa.C38.3",
+        "PC.aa.C38.4",
+        "PC.aa.C38.5",
+        "PC.aa.C38.6",
+        "PC.aa.C40.2",
+        "PC.aa.C40.3",
+        "PC.aa.C40.4",
+        "PC.aa.C40.5",
+        "PC.aa.C40.6",
+        "PC.aa.C42.0",
+        "PC.aa.C42.1",
+        "PC.aa.C42.2",
+        "PC.aa.C42.4",
+        "PC.aa.C42.5",
+        "PC.aa.C42.6",
+        "PC.ae.C30.0",
+        "PC.ae.C30.2",
+        "PC.ae.C32.1",
+        "PC.ae.C32.2",
+        "PC.ae.C34.0",
+        "PC.ae.C34.1",
+        "PC.ae.C34.2",
+        "PC.ae.C34.3",
+        "PC.ae.C36.0",
+        "PC.ae.C36.1",
+        "PC.ae.C36.2",
+        "PC.ae.C36.3",
+        "PC.ae.C36.4",
+        "PC.ae.C36.5",
+        "PC.ae.C38.0",
+        "PC.ae.C38.2",
+        "PC.ae.C38.3",
+        "PC.ae.C38.4",
+        "PC.ae.C38.5",
+        "PC.ae.C38.6",
+        "PC.ae.C40.1",
+        "PC.ae.C40.2",
+        "PC.ae.C40.3",
+        "PC.ae.C40.4",
+        "PC.ae.C40.5",
+        "PC.ae.C40.6",
+        "PC.ae.C42.1",
+        "PC.ae.C42.2",
+        "PC.ae.C42.3",
+        "PC.ae.C42.4",
+        "PC.ae.C42.5",
+        "PC.ae.C44.3",
+        "PC.ae.C44.4",
+        "PC.ae.C44.5",
+        "PC.ae.C44.6",
+        "SM..OH..C14.1",
+        "SM..OH..C16.1",
+        "SM..OH..C22.1",
+        "SM..OH..C22.2",
+        "SM..OH..C24.1",
+        "SM.C16.0",
+        "SM.C16.1",
+        "SM.C18.0",
+        "SM.C18.1",
+        "SM.C20.2",
+        "SM.C24.0",
+        "SM.C24.1",
+        "SM.C26.0",
+        "SM.C26.1",
+        "Ala",
+        "Arg",
+        "Asn",
+        "Asp",
+        "Cit",
+        "Glu",
+        "Gly",
+        "His",
+        "Ile",
+        "Lys",
+        "Met",
+        "Orn",
+        "Phe",
+        "Pro",
+        "Ser",
+        "Thr",
+        "Trp",
+        "Tyr",
+        "Val",
+        "Creatinine",
+        "Kynurenine",
+        "Sarcosine",
+        "Serotonin",
+        "Spermidine",
+        "t4.OH.Pro",
+        "SDMA"
+      ]
+    },
+    "blocks": [
+      "p180",
+      "nmr"
+    ],
+    "covariate_columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "covariates": {
+      "age": {
+        "coding": "numeric",
+        "column": "AGE",
+        "file": "clinical"
+      },
+      "apoe4": {
+        "coding": "categorical",
+        "column": "APOE4",
+        "file": "clinical",
+        "levels": [
+          0,
+          1,
+          2
+        ]
+      },
+      "education": {
+        "coding": "numeric",
+        "column": "PTEDUCAT",
+        "file": "clinical"
+      },
+      "phase": {
+        "coding": "categorical",
+        "column": "ORIGPROT",
+        "file": "clinical",
+        "levels": [
+          "ADNI1",
+          "ADNI2GO"
+        ],
+        "map": {
+          "ADNI1": "ADNI1",
+          "ADNI2": "ADNI2GO",
+          "ADNIGO": "ADNI2GO"
+        }
+      },
+      "statin": {
+        "coding": "categorical",
+        "column": "HMG CoA reductase inhibitors",
+        "file": "medication",
+        "levels": [
+          0,
+          1
+        ],
+        "visit": "sc"
+      }
+    },
+    "covariates_applied": false,
+    "group_column": "sex",
+    "group_values": [
+      "Female",
+      "Male"
+    ],
+    "motco_transform": "identity",
+    "sample_column": "rid",
+    "stage_column": "stage",
+    "stage_order": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "units": "log2(x + floor)"
+  },
+  "step": "export-sensitivity",
+  "variant": {
+    "block": "p180",
+    "change": "adni-nist-bridge",
+    "constant": "EXPORT_VARIANTS",
+    "hook": "factors",
+    "name": "nist_bridge",
+    "reads_data_root": true,
+    "rule": "NIST_BRIDGE_RULE",
+    "setting": "every cleaned p180 concentration of a participant whose run in p180_runs.csv is ADNI2GO multiplied by 2^b of its metabolite under NIST_BRIDGE_RULE before the floors; EXPORT_FEATURE_RULE then unchanged, its floors recomputed over the exported participants"
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}
