@@ -11,9 +11,12 @@ so are the sensitivity steps ``latent-sensitivity`` (change
 ``adni-latent-sensitivity``: the predeclared ``stage``-conditioned
 latent-adjustment arm), ``export-sensitivity`` (change
 ``adni-nist-bridge``: the predeclared export variants of the p180 run
-handling, a NIST SRM 1950 bridge and per-run standardization) and
+handling, a NIST SRM 1950 bridge and per-run standardization),
 ``stage-sensitivity`` (change ``adni-stage-sensitivity``: the predeclared
-CN / LMCI / AD arm), each read beside the primary and never replacing it. Every scientific constant
+CN / LMCI / AD arm) and ``rank-sensitivity`` (change
+``adni-rank-sensitivity``: the predeclared forced-rank ladder after an
+anchor run at the primary's rank), each read beside the primary and never
+replacing it. Every scientific constant
 the steps need is decided and lives in ``constants``; a variant or arm
 enters only through a proposal.
 
@@ -22,10 +25,12 @@ The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_motco_version``, ``check_motco_rank_floor``), the shared export
 function (``_run_export``, the body of ``export`` that a variant calls with
 its one p180 hook), the shared analysis function
-(``_run_trajectory_analysis``, the body of ``analyze`` that the arm and the
-variants call with their one differing input or setting), the shared reading sentences
+(``_run_trajectory_analysis``, the body of ``analyze`` that the arms, the
+variants and the ranks of the sweep call with their one differing input or
+setting), the shared reading sentences
 (``_statistic_reading_line``, ``_arm_status_line``,
-``_export_variant_status_line``, ``_stage_arm_status_line``: the code of
+``_export_variant_status_line``, ``_stage_arm_status_line``,
+``_rank_status_line``: the code of
 ``summary.md``, the comparison documents and the report) and the manifest
 and output-directory helpers (``_git_revision``, ``_software_versions``,
 ``_write_manifest``, ``_finalize_output_dir``) are shared by every step.
@@ -153,6 +158,15 @@ from .constants import (
     NUMERIC_SETTINGS,
     PARTICIPANT_ID_COLUMN,
     PLATFORMS,
+    RANK_SENSITIVITY_DIR,
+    RANK_SENSITIVITY_EXPECTED_COUNTS,
+    RANK_SENSITIVITY_LADDER,
+    RANK_SENSITIVITY_MANIFEST,
+    RANK_SENSITIVITY_RANK_DIR,
+    RANK_SENSITIVITY_READING_RULES,
+    RANK_SENSITIVITY_SUBDIRS,
+    RANK_SENSITIVITY_SUMMARY,
+    RANK_SENSITIVITY_TABLE,
     RAW_INPUT_SHA256,
     READING_RULES,
     REPORT_INPUT_FILES,
@@ -2510,13 +2524,18 @@ def _fmt(value, spec: str = ".6g") -> str:
     return "n/a" if value is None else format(value, spec)
 
 
-def _analysis_cli_equivalent(input_dir: Path, metadata_path: Path, params, n_jobs: int) -> dict:
+def _analysis_cli_equivalent(
+    input_dir: Path, metadata_path: Path, params, n_jobs: int, *, forced_components: int | None = None
+) -> dict:
     """The ``motco analyze`` command that reproduces the analysis directory from its inputs.
 
     Covariate flags are emitted in ``ANALYSIS_COVARIATES`` order, ``--covariate``
     for a numeric covariate and ``--categorical-covariate`` for a categorical
     one (MOTCO's CLI keeps the declaration order across both flags). Only the
     settings the step passes appear; the rest are MOTCO's defaults.
+    ``--forced-components`` appears only for a forced rank (``forced_components``
+    not ``None``: a rank of the ``rank-sensitivity`` sweep, change
+    ``adni-rank-sensitivity``), so every other command is unchanged.
     """
     import shlex
 
@@ -2535,8 +2554,11 @@ def _analysis_cli_equivalent(input_dir: Path, metadata_path: Path, params, n_job
         argv += ["--latent-adjustment", params.covariate_latent_adjustment]
     argv += [
         "--permutations", str(params.permutations), "--seed", str(params.seed), "--n-jobs", str(n_jobs),
-        "--min-components", str(params.resolved_min_components), "--out-dir", "OUT_DIR",
+        "--min-components", str(params.resolved_min_components),
     ]
+    if forced_components is not None:
+        argv += ["--forced-components", str(forced_components)]
+    argv += ["--out-dir", "OUT_DIR"]
     return {
         "command": shlex.join(argv),
         "argv": argv,
@@ -2552,6 +2574,7 @@ def _statistic_reading_line(
     arm: bool = False,
     variant: str | None = None,
     stage_arm: bool = False,
+    rank_sweep: bool = False,
 ) -> str:
     """The reading sentence of one statistic's status, shared by ``summary.md`` and the report (design D5 of ``adni-report``).
 
@@ -2581,13 +2604,21 @@ def _statistic_reading_line(
         definition and the sample, a non-rejection is no more informative
         than the primary's). The default leaves every other sentence as it
         was.
+    rank_sweep:
+        ``True`` for a forced rank of the rank sweep
+        (``RANK_SENSITIVITY_LADDER``, change ``adni-rank-sensitivity``): the
+        sentence carries the sweep's note (a rejection the primary does not
+        make is rank dependence, not a result at that rank; a non-rejection
+        is no more informative than the primary's). The default leaves every
+        other sentence as it was.
 
     Returns
     -------
     str
         The sentence without its list marker, string-equal wherever it is
-        printed (``summary.md`` of the primary, the arms and a variant,
-        ``export_sensitivity.md``, ``stage_sensitivity.md``, the report).
+        printed (``summary.md`` of the primary, the arms, a variant and a
+        rank, ``export_sensitivity.md``, ``stage_sensitivity.md``,
+        ``rank_sensitivity.md``, the report).
     """
     if rejected is None:
         return f"`{statistic}`: no p-value in the record."
@@ -2636,6 +2667,13 @@ def _statistic_reading_line(
         line += (
             " In the CN / LMCI / AD arm this non-rejection is no more informative than the primary's (stage-arm rule 6)."
         )
+    elif rank_sweep and rejected:
+        line += (
+            " At a forced rank, a rejection the primary does not make is rank dependence, not a result at that rank, "
+            "and is read beside the rank's null summary (sweep rules 2 and 5)."
+        )
+    elif rank_sweep:
+        line += " At a forced rank this non-rejection is no more informative than the primary's (sweep rule 5)."
     return line
 
 
@@ -2646,6 +2684,7 @@ def render_analysis_summary(
     n_jobs: int,
     alpha: float = ANALYSIS_ALPHA,
     rank_floor: int = ANALYSIS_RANK_FLOOR,
+    rank_sweep: dict | None = None,
 ) -> str:
     """Render ``summary.md`` from a MOTCO analysis record (``result.json``).
 
@@ -2660,6 +2699,12 @@ def render_analysis_summary(
         The run's ``n_jobs``, shown in the header.
     alpha, rank_floor:
         ``ANALYSIS_ALPHA`` and ``ANALYSIS_RANK_FLOOR``.
+    rank_sweep:
+        For a forced rank of the rank sweep (change
+        ``adni-rank-sensitivity``): ``ladder`` (``RANK_SENSITIVITY_LADDER``
+        with its constant name), ``forced_rank``, ``primary_rank`` and
+        ``anchor`` (the anchor gate's record, ``None`` on the anchor run
+        itself); ``None`` otherwise (see Notes).
 
     Returns
     -------
@@ -2707,6 +2752,17 @@ def render_analysis_summary(
     names the run offset on the arm's rows and
     ``STAGE_SENSITIVITY_READING_RULES`` follows ``READING_RULES`` under its own
     heading; otherwise every byte is unchanged.
+
+    And on ``rank_sweep`` (change ``adni-rank-sensitivity``). With it (a
+    forced rank of ``rank-sensitivity``) the title and header name the
+    forced rank and the ladder, the ``angle`` note reads "forced rank k"
+    instead of the CV-selected rank, the CV line of "Latent space" says that
+    MOTCO skips the cross-validation, a "Rank sweep" section follows "Latent
+    space" (``_rank_sweep_lines``: the ladder, this rank's place in it, the
+    nesting relative to the primary's rank, the anchor and the
+    rank-specific loadings), each reading line carries the sweep's note and
+    ``RANK_SENSITIVITY_READING_RULES`` follows ``READING_RULES`` under its own
+    heading; without it every byte is unchanged.
     """
     design, meas, latent = record["design"], record["measurement"], record["latent"]
     stages, groups = design["stage_levels"], design["group_levels"]
@@ -2718,6 +2774,7 @@ def render_analysis_summary(
     variant = export_manifest.get("variant") or None
     variant_name = variant["name"] if variant else None
     stage_arm = export_manifest.get("stage_arm") or None
+    sweep = rank_sweep or None
     title = "# MOTCO trajectory analysis: ADNI serum metabolomics, sex × stage"
     if adjustment:
         title += f" — `{adjustment['conditioning']}`-conditioned latent-adjustment arm"
@@ -2740,6 +2797,15 @@ def render_analysis_summary(
             f"; latent adjustment: none, as the primary's; CN / LMCI / AD arm `{stage_arm['name']}` "
             f"(`STAGE_SENSITIVITY_ARM`, change `{stage_arm['change']}`: {_stage_arm_definition(stage_arm)}; every "
             "other export and analysis setting the primary's; read beside the primary, never replacing it)."
+        )
+    elif sweep:
+        ladder = sweep["ladder"]
+        title += f" — forced rank {sweep['forced_rank']} (rank sweep)"
+        latent_clause = (
+            f"; latent adjustment: none, as the primary's; forced rank {sweep['forced_rank']} of the rank sweep "
+            f"`{ladder['name']}` (`RANK_SENSITIVITY_LADDER`, change `{ladder['change']}`: `{ladder['setting']}` = "
+            f"{sweep['forced_rank']}, which fixes the rank and skips MOTCO's cross-validation; every other export and "
+            "analysis setting the primary's; read beside the primary, never replacing it)."
         )
     else:
         latent_clause = (
@@ -2771,8 +2837,9 @@ def render_analysis_summary(
         note = ""
         if s == "angle":
             note = (
-                f"degrees, endpoint stages {stages[0]} and {stages[-1]}; CV-selected rank {selected} "
-                f"(rank floor {rank_floor}); pooled relative eigengap {_fmt(eigengap)}"
+                f"degrees, endpoint stages {stages[0]} and {stages[-1]}; "
+                + (f"forced rank {selected}" if sweep else f"CV-selected rank {selected}")
+                + f" (rank floor {rank_floor}); pooled relative eigengap {_fmt(eigengap)}"
             )
             if floor_binding:
                 note += "; the floor is binding: the CV selected the floor rank"
@@ -2785,7 +2852,8 @@ def render_analysis_summary(
     lines += ["", "Reading, under the rules below:", ""]
     lines += [
         "- " + _statistic_reading_line(
-            s, status[s], stages=stages, arm=bool(adjustment), variant=variant_name, stage_arm=bool(stage_arm)
+            s, status[s], stages=stages, arm=bool(adjustment), variant=variant_name, stage_arm=bool(stage_arm),
+            rank_sweep=bool(sweep),
         )
         for s in ANALYSIS_STATISTICS
     ]
@@ -2814,9 +2882,14 @@ def render_analysis_summary(
             if permuted else ""
         ),
         f"- cv_mean_auroc: {_fmt(latent.get('cv_mean_auroc'))}",
-        f"- CV: cv2_splits {cv.get('cv2_splits')}, cv1_splits {cv.get('cv1_splits')}, n_repeats {cv.get('n_repeats')} "
-        f"({latent.get('cv_repeats_completed')} completed), max_components {cv.get('max_components')}, "
-        f"rank floor {cv.get('min_components', 1)}, random_state {cv.get('random_state')}",
+        (
+            f"- CV: none (MOTCO skips the cross-validation at a forced rank; {latent.get('cv_repeats_completed')} "
+            "repeats completed)"
+            if sweep
+            else f"- CV: cv2_splits {cv.get('cv2_splits')}, cv1_splits {cv.get('cv1_splits')}, n_repeats "
+            f"{cv.get('n_repeats')} ({latent.get('cv_repeats_completed')} completed), max_components "
+            f"{cv.get('max_components')}, rank floor {cv.get('min_components', 1)}, random_state {cv.get('random_state')}"
+        ),
         f"- blocks: {blocks_text}; features are z-scored by MOTCO (pooled per-feature scalers)",
     ]
     if adjustment:
@@ -2848,6 +2921,8 @@ def render_analysis_summary(
         lines += ["", "## Export variant", "", *_export_variant_lines(export_manifest)]
     if stage_arm:
         lines += ["", "## Arm", "", *_stage_arm_lines(export_manifest)]
+    if sweep:
+        lines += ["", "## Rank sweep", "", *_rank_sweep_lines(sweep)]
     cov = record.get("covariates")
     lines += ["", "## Covariates", ""]
     if cov is None:
@@ -2912,6 +2987,10 @@ def render_analysis_summary(
             "holds one `DX.bl` category in both runs, so its coefficient is estimated from contrasts within one "
             "diagnosis, and the run offset stays (stage-arm rule 4)"
             if stage_arm
+            else "- `phase` enters as a covariate of the stage means (above), as in the primary; the rank sweep changes "
+            "the latent rank only (sweep rule 2), and a component above the primary's rank that tracks `phase` is a "
+            "measurement-space finding (sweep rule 7)"
+            if sweep
             else "- `phase` enters as a covariate of the stage means (above); the `stage`-conditioned latent adjustment "
             f"is the predeclared sensitivity arm of `{ANALYSIS_PREDECLARED_LATENT_SENSITIVITY['change']}`"
         ),
@@ -2938,7 +3017,75 @@ def render_analysis_summary(
     if stage_arm:
         lines += ["", *_stage_arm_rules_heading(), ""]
         lines += [f"{i}. {rule}" for i, rule in enumerate(STAGE_SENSITIVITY_READING_RULES, 1)]
+    if sweep:
+        lines += ["", *_rank_sweep_rules_heading(), ""]
+        lines += [f"{i}. {rule}" for i, rule in enumerate(RANK_SENSITIVITY_READING_RULES, 1)]
     return "\n".join(lines) + "\n"
+
+
+def _rank_sweep_rules_heading() -> list[str]:
+    """The heading and lead line of ``RANK_SENSITIVITY_READING_RULES``, shared by every reader of the rank sweep."""
+    return [
+        "## Reading rules of the rank sweep",
+        "",
+        "Binding for every reader of the rank sweep (`RANK_SENSITIVITY_READING_RULES`, decided by "
+        f"`{RANK_SENSITIVITY_LADDER['change']}` before any run), after `READING_RULES`:",
+    ]
+
+
+def _anchor_text(anchor: dict) -> str:
+    """The anchor gate's result in one clause, from its record (``_check_anchor``): the rank, what was compared and found equal, and what was not compared."""
+    fields = ", ".join(f"`{name}`" for name in anchor["fields"])
+    files = ", ".join(f"`{name}`" for name in anchor["files"])
+    text = (
+        f"a forced run at the primary's rank {anchor['rank']} reproduced the primary before any rank ran: {fields} equal "
+        f"to the primary record's, and {files} hash to the values the primary manifest records"
+    )
+    if anchor["not_compared"]:
+        text += (
+            f" (at n_jobs = {anchor['n_jobs']} the permutation draws are not the primary's, so "
+            + ", ".join(f"`{name}`" for name in anchor["not_compared"]) + " were not compared)"
+        )
+    return text
+
+
+def _rank_sweep_lines(sweep: dict) -> list[str]:
+    """The "Rank sweep" lines of a forced rank's ``summary.md``, from the ``rank_sweep`` block its manifest records (design D6 of ``adni-rank-sensitivity``).
+
+    The ladder (``RANK_SENSITIVITY_LADDER``), this rank's place in it, the
+    nesting of its latent space relative to the primary's CV-selected rank
+    (the primary's first k components, the primary's itself, or the primary's
+    plus components the cross-validation did not select), the anchor gate's
+    result and the rank-specific loadings. No statistic is computed here.
+    """
+    ladder, k, r = sweep["ladder"], int(sweep["forced_rank"]), int(sweep["primary_rank"])
+    ranks = [int(x) for x in ladder["ranks"]]
+    if k < r:
+        nesting = (
+            f"at rank {k}, below the primary's rank {r} (selected by its cross-validation), the latent space is spanned "
+            f"by the primary's first {k} components"
+        )
+    elif k == r:
+        nesting = f"at rank {k}, the primary's rank (selected by its cross-validation), the latent space is the primary's"
+    else:
+        nesting = (
+            f"at rank {k}, above the primary's rank {r} (selected by its cross-validation), the latent space holds the "
+            f"primary's {r} components and {k - r} component(s) the cross-validation did not select"
+        )
+    anchor = sweep.get("anchor")
+    step = f"step {ranks.index(k) + 1} of {len(ranks)} of the ladder" if k in ranks else "the anchor, not a step of the ladder"
+    return [
+        f"- ladder: `{ladder['name']}` (`RANK_SENSITIVITY_LADDER`, change `{ladder['change']}`): ranks "
+        + ", ".join(str(x) for x in ranks) + f"; the one setting `{ladder['setting']}`; {ladder['draws']}",
+        f"- this rank: {k}, {step}; the primary's rank {r} is the anchor"
+        + ("" if r in ranks else ", not a step of the ladder"),
+        f"- nesting (sweep rule 3): PLS-DA components are nested; {nesting}; the comparison manifest records the check "
+        "of every rank's scores against the top rank's and the anchor's",
+        "- anchor (sweep rule 3): " + (_anchor_text(anchor) if anchor else "this run is the anchor itself, compared with "
+                                       "the primary and then removed"),
+        "- loadings: `pls_loadings.csv` (MOTCO's rotations) depends on the rank and is not nested; its columns are "
+        "this rank's own and are never read against another rank's",
+    ]
 
 
 def _stage_arm_rules_heading() -> list[str]:
@@ -3153,8 +3300,10 @@ def _run_trajectory_analysis(
     loaded: dict | None = None,
     staging: Path | None = None,
     log: str | None = None,
+    forced_components: int | None = None,
+    rank_sweep: dict | None = None,
 ) -> dict:
-    """One ``analyze_trajectories`` call written as an analysis directory, shared by ``analyze``, ``latent-sensitivity`` and ``export-sensitivity``.
+    """One ``analyze_trajectories`` call written as an analysis directory, shared by ``analyze`` and the four sensitivity steps.
 
     Parameters
     ----------
@@ -3164,9 +3313,10 @@ def _run_trajectory_analysis(
         The caller's flags (``n_jobs``: MOTCO's CV and RRPP workers; ``force``:
         replace an existing ``final``).
     step:
-        The calling step, ``analyze``, ``latent-sensitivity`` or
-        ``export-sensitivity``: the printed prefix, the manifest's ``step``
-        and the name in the loader's messages.
+        The calling step, ``analyze``, ``latent-sensitivity``,
+        ``export-sensitivity``, ``stage-sensitivity`` or ``rank-sensitivity``:
+        the printed prefix, the manifest's ``step`` and the name in the
+        loader's messages.
     latent_adjustment:
         ``TrajectoryAnalysisParams.covariate_latent_adjustment``:
         ``ANALYSIS_LATENT_ADJUSTMENT`` (``None``) for the primary,
@@ -3193,6 +3343,25 @@ def _run_trajectory_analysis(
     log:
         The printed prefix when it is not ``[<step>]`` (``export-sensitivity``
         names the variant).
+    forced_components:
+        ``TrajectoryAnalysisParams.forced_components``: ``None`` (the
+        default, MOTCO's double-CV rank selection) for every caller but
+        ``rank-sensitivity``, which passes one rank of
+        ``RANK_SENSITIVITY_LADDER`` (or the primary's rank, for the anchor;
+        change ``adni-rank-sensitivity``). A forced rank skips MOTCO's
+        cross-validation; the manifest then records
+        ``settings.forced_components``, ``cli_equivalent`` carries
+        ``--forced-components`` and the three findings that read the
+        cross-validation are not raised (see Notes). The default leaves every
+        byte as it was.
+    rank_sweep:
+        For a forced rank of ``rank-sensitivity``: the ladder
+        (``RANK_SENSITIVITY_LADDER`` with its constant name), the forced rank,
+        the primary's rank and the anchor gate's record, recorded in the
+        manifest under ``rank_sweep`` and passed to
+        ``render_analysis_summary``, which then renders the sweep's sections;
+        ``None`` (the default) for every other caller, whose bytes are
+        unchanged.
 
     Returns
     -------
@@ -3202,7 +3371,8 @@ def _run_trajectory_analysis(
 
     Notes
     -----
-    Everything but ``latent_adjustment`` is fixed here: the gates, the loader,
+    Everything but ``latent_adjustment`` and ``forced_components`` is fixed
+    here: the gates, the loader,
     the dataset (blocks in ``EXPORT_BLOCKS`` order, transform
     ``EXPORT_FEATURE_RULE``'s, the ``ANALYSIS_COVARIATES`` with
     ``ANALYSIS_CATEGORICAL_COVARIATES`` categorical, missing policy
@@ -3219,6 +3389,15 @@ def _run_trajectory_analysis(
     covariates, design columns, samples, residual df, smallest CV training df,
     feature scale, ``feature_r2``) and ``render_analysis_summary`` renders the
     arm's sections; otherwise every byte is the primary's.
+
+    On a forced record (``latent.component_selection`` ``forced``) MOTCO
+    skips the cross-validation, so ``cv_repeats_completed`` is 0 and
+    ``integration_params`` holds no CV key and no ``min_components``: the
+    fewer-CV-repeats finding and the CV-floor finding are not raised (the
+    floor is recorded in the counts and does not bind a forced run), and the
+    moved-default check of ``forced_components`` expects the rank passed
+    instead of ``None``, so a record whose ``forced_components`` differs
+    from it is still a finding. Every other finding is unchanged.
     """
     log = log or f"[{step}]"
     motco_version = check_motco_version()
@@ -3281,11 +3460,16 @@ def _run_trajectory_analysis(
         n_jobs=n_jobs,
         min_components=ANALYSIS_RANK_FLOOR,
         covariate_latent_adjustment=latent_adjustment,
+        forced_components=forced_components,
     )
     design = dataset.covariate_design
     print(f"{log} design columns: {len(design.column_names)} (" + ", ".join(design.column_names) + ")")
+    selection = (
+        f"CV rank selection (floor {params.resolved_min_components})" if forced_components is None
+        else f"forced rank {forced_components} (no cross-validation)"
+    )
     print(
-        f"{log} CV rank selection (floor {params.resolved_min_components}) + {params.permutations} RRPP "
+        f"{log} {selection} + {params.permutations} RRPP "
         f"permutations, seed {params.seed}, n_jobs {n_jobs}, latent adjustment {params.covariate_latent_adjustment}…"
     )
 
@@ -3356,8 +3540,10 @@ def _run_trajectory_analysis(
             "the floor is binding; angle and shape are measured in the two floor dimensions (the floor guarantees "
             "two dimensions, not a second axis with signal)"
         )
+    # A forced rank skips the cross-validation: its repeats and floor are not findings (design D5 of adni-rank-sensitivity).
+    forced = latent["component_selection"] == "forced"
     n_repeats = params.n_repeats
-    if latent.get("cv_repeats_completed") is not None and latent["cv_repeats_completed"] < n_repeats:
+    if not forced and latent.get("cv_repeats_completed") is not None and latent["cv_repeats_completed"] < n_repeats:
         findings.append(f"cross-validation completed {latent['cv_repeats_completed']} of {n_repeats} repeat(s)")
     for s in ANALYSIS_STATISTICS:
         value = record["statistics"].get(s)
@@ -3368,13 +3554,18 @@ def _run_trajectory_analysis(
             findings.append(f"{s}: no finite p-value in the record ({p})")
     for key, stated in _MOTCO_DEFAULTS_STATED.items():
         used = record["params"].get(key)
-        if used != stated:
+        if key == "forced_components" and forced_components is not None:
+            if used != forced_components:
+                findings.append(
+                    f"MOTCO default {key} is {used!r} in the record but the run passed {forced_components!r} (the forced rank)"
+                )
+        elif used != stated:
             findings.append(f"MOTCO default {key} is {used!r} in the record but the proposal states {stated!r}")
     cv_used = latent.get("integration_params", {})
     for key in _MOTCO_CV_KEYS:
         if key in cv_used and cv_used[key] != record["params"].get(key):
             findings.append(f"MOTCO clamped the CV setting {key} from {record['params'].get(key)!r} to {cv_used[key]!r}")
-    if (cv_used.get("min_components", 1)) != rank_floor:
+    if not forced and (cv_used.get("min_components", 1)) != rank_floor:
         findings.append(f"the CV ran with rank floor {cv_used.get('min_components', 1)}, not ANALYSIS_RANK_FLOOR = {rank_floor}")
     extra = dict(manifest_extra(record) if callable(manifest_extra) else (manifest_extra or {}))
     findings += list(extra.pop("findings", []))
@@ -3437,7 +3628,9 @@ def _run_trajectory_analysis(
             },
             "latent_adjustment": latent_adjustment,
             "predeclared_sensitivity": ANALYSIS_PREDECLARED_LATENT_SENSITIVITY,
-            "cli_equivalent": _analysis_cli_equivalent(input_dir, final / ANALYSIS_METADATA, params, n_jobs),
+            "cli_equivalent": _analysis_cli_equivalent(
+                input_dir, final / ANALYSIS_METADATA, params, n_jobs, forced_components=forced_components
+            ),
         },
         "counts": counts,
         "expected": expected,
@@ -3445,6 +3638,10 @@ def _run_trajectory_analysis(
         "findings": findings,
         **extra,
     }
+    if forced_components is not None:
+        manifest["settings"]["forced_components"] = forced_components
+    if rank_sweep is not None:
+        manifest["rank_sweep"] = rank_sweep
 
     # --- outputs ----------------------------------------------------------------------
     participant_level = {ANALYSIS_LATENT_SCORES, ANALYSIS_METADATA}
@@ -3452,7 +3649,9 @@ def _run_trajectory_analysis(
     def write(tmp: Path) -> list[str]:
         written = write_analysis_outputs(result, tmp)
         (tmp / ANALYSIS_METADATA).write_text(metadata_csv)
-        (tmp / ANALYSIS_SUMMARY).write_text(render_analysis_summary(record, export_manifest=export_manifest, n_jobs=n_jobs))
+        (tmp / ANALYSIS_SUMMARY).write_text(
+            render_analysis_summary(record, export_manifest=export_manifest, n_jobs=n_jobs, rank_sweep=rank_sweep)
+        )
         names = sorted({p.name for p in written.values()} | {ANALYSIS_METADATA, ANALYSIS_SUMMARY})
         manifest["outputs"] = {
             name: {
@@ -3946,16 +4145,19 @@ def _conditioning_design(
 
 
 #: The steps that write an analysis directory, by the ``step`` their manifest records.
-_ANALYSIS_STEPS: tuple[str, ...] = ("analyze", "latent-sensitivity", "export-sensitivity", "stage-sensitivity")
+_ANALYSIS_STEPS: tuple[str, ...] = (
+    "analyze", "latent-sensitivity", "export-sensitivity", "stage-sensitivity", "rank-sensitivity",
+)
 #: Every command that writes an analysis directory, for a hint whose analysis manifest cannot be read.
 _EVERY_ANALYSIS_COMMAND = (
     "`adni-sexdiff analyze` (the primary), `adni-sexdiff latent-sensitivity` (the latent arm), `adni-sexdiff "
-    "export-sensitivity` (an export variant) or `adni-sexdiff stage-sensitivity` (the CN / LMCI / AD arm)"
+    "export-sensitivity` (an export variant), `adni-sexdiff stage-sensitivity` (the CN / LMCI / AD arm) or "
+    "`adni-sexdiff rank-sensitivity` (a rank of the sweep)"
 )
 
 
 def _analysis_command(analysis_dir: Path, manifest: dict | None = None) -> str:
-    """The command that wrote ``analysis_dir``, for the diagnostic's hints: ``adni-sexdiff <step>`` from the manifest's ``step`` (with ``--variant`` for an export variant), or every such command when it cannot be read."""
+    """The command that wrote ``analysis_dir``, for the diagnostic's hints: ``adni-sexdiff <step>`` from the manifest's ``step`` (with ``--variant`` for an export variant, ``--force`` for a rank of the sweep), or every such command when it cannot be read."""
     both = _EVERY_ANALYSIS_COMMAND
     if manifest is None:
         try:
@@ -3966,6 +4168,8 @@ def _analysis_command(analysis_dir: Path, manifest: dict | None = None) -> str:
     if step == "export-sensitivity":
         variant = (manifest.get("variant") or {}).get("name")
         return f"`adni-sexdiff export-sensitivity --variant {variant} --force`" if variant else f"`adni-sexdiff {step}`"
+    if step == "rank-sensitivity":
+        return f"`adni-sexdiff {step} --force`"
     return f"`adni-sexdiff {step}`" if step in _ANALYSIS_STEPS else both
 
 
@@ -3997,8 +4201,9 @@ def _check_analysis_inputs(input_dir: Path, analysis_dir: Path, loaded: dict) ->
     both counts, never a participant: an absent directory or file (naming
     the commands that write an analysis directory, ``adni-sexdiff analyze``
     for the primary, ``adni-sexdiff latent-sensitivity`` for the latent arm,
-    ``adni-sexdiff export-sensitivity`` for an export variant and
-    ``adni-sexdiff stage-sensitivity`` for the CN / LMCI / AD arm, or the one
+    ``adni-sexdiff export-sensitivity`` for an export variant,
+    ``adni-sexdiff stage-sensitivity`` for the CN / LMCI / AD arm and
+    ``adni-sexdiff rank-sensitivity`` for a rank of the sweep, or the one
     the manifest's ``step`` names when the manifest is readable); an
     input hash the analysis manifest records that differs from the export
     file's sha256 now, or an export-manifest hash that differs (the export
@@ -4248,9 +4453,11 @@ def render_axis_diagnostics(
         ``latent_adjustment``, ``n_jobs``, ``is_primary``, ``participants``,
         ``export_variant`` (the variant's name when the analysis is an
         export variant of ``export-sensitivity``; absent or ``None``
-        otherwise) and ``stage_arm`` (the arm's name when the analysis is the
+        otherwise), ``stage_arm`` (the arm's name when the analysis is the
         CN / LMCI / AD arm of ``stage-sensitivity``; absent or ``None``
-        otherwise).
+        otherwise) and ``rank_sweep`` (``forced_rank`` and ``primary_rank``
+        when the analysis is a rank of the ``rank-sensitivity`` sweep; absent
+        or ``None`` otherwise).
     variables:
         ``DIAGNOSTIC_VARIABLES`` (name → ``file``, ``derivation``), in table
         order.
@@ -4294,8 +4501,16 @@ def render_axis_diagnostics(
     paragraph names the arm, a flagged row is a finding about the arm's
     measurement space (the primary stays primary), the analysis-read section
     names the arm and ``STAGE_SENSITIVITY_READING_RULES`` follows
-    ``READING_RULES`` under its own heading. On the primary, the latent arm and
-    the variants every byte is unchanged.
+    ``READING_RULES`` under its own heading. And on
+    ``analysis.get("rank_sweep")`` (change ``adni-rank-sensitivity``): for a
+    forced rank of the sweep the opening paragraph names the sweep, the
+    forced rank and its directory and states that its first components (up
+    to the primary's rank) are the primary's, a flagged row is a finding
+    about the measurement space at that rank (the primary stays primary),
+    the analysis-read section names the sweep and
+    ``RANK_SENSITIVITY_READING_RULES`` follows ``READING_RULES`` under its own
+    heading. On the primary, the latent arm, the variants and the
+    CN / LMCI / AD arm every byte is unchanged.
     """
     axis, pcs, geo, comps_table = tables["axis"], tables["block_pcs"], tables["geometry"], tables["components"]
     comps = _pls_columns(pd.DataFrame(columns=list(dict.fromkeys(axis["component"])))) if len(axis) else []
@@ -4304,6 +4519,8 @@ def render_axis_diagnostics(
     latent_adjustment = analysis.get("latent_adjustment")
     export_variant = analysis.get("export_variant")
     stage_arm = analysis.get("stage_arm")
+    rank_sweep = analysis.get("rank_sweep")
+    read = f"{analysis['selection']}-selected rank {analysis['rank']}"
     if latent_adjustment is not None:
         which = (
             f"the `{latent_adjustment}`-conditioned latent-adjustment sensitivity arm `{LATENT_SENSITIVITY_ARM['name']}` "
@@ -4325,6 +4542,16 @@ def render_axis_diagnostics(
             + f" or {STAGE_SENSITIVITY_ARM['keep'][-1]}; not the primary)"
         )
         whose = "this arm (the primary stays primary)"
+    elif rank_sweep is not None:
+        k, r = int(rank_sweep["forced_rank"]), int(rank_sweep["primary_rank"])
+        which = (
+            f"forced rank {k} of the rank sweep `{RANK_SENSITIVITY_LADDER['name']}` (`RANK_SENSITIVITY_LADDER`, change "
+            f"`{RANK_SENSITIVITY_LADDER['change']}`: the primary's analysis with `{RANK_SENSITIVITY_LADDER['setting']}` = "
+            f"{k}; PLS-DA components are nested, so its components `pls_0` to `pls_{min(k, r) - 1}` are the primary's, "
+            f"with the primary's correlations; not the primary)"
+        )
+        whose = f"the rank sweep at rank {k} (the primary stays primary)"
+        read = f"forced rank {k}"
     else:
         which = "the primary" if analysis["is_primary"] else "an arm (not the primary)"
         whose = "the primary analysis"
@@ -4332,7 +4559,7 @@ def render_axis_diagnostics(
         "# MOTCO axis diagnostics: ADNI serum metabolomics, sex × stage",
         "",
         f"Descriptive measurement-space diagnostics of {which} covariate-adjusted trajectory analysis "
-        f"(`{analysis['dir']}`, {analysis['selection']}-selected rank {analysis['rank']}, n = {analysis['participants']}): "
+        f"(`{analysis['dir']}`, {read}, n = {analysis['participants']}): "
         f"Spearman correlations of every latent component with the {len(var_order)} predeclared variables "
         "(`DIAGNOSTIC_VARIABLES`: the five analysis covariates as the model codes them, the design's stage and sex, "
         "and the enrollment category `dx_bl` the stage rule merged), the partial Spearman correlations given the "
@@ -4511,6 +4738,17 @@ def render_axis_diagnostics(
             "variable here is a measurement-space finding about the arm and never grounds to adopt it; in the arm "
             "`dx_bl` orders the participants as `stage` does, so their correlations coincide (stage-arm rule 7)"
         )
+    if rank_sweep is not None:
+        k, r = int(rank_sweep["forced_rank"]), int(rank_sweep["primary_rank"])
+        lines.append(
+            f"- rank sweep: forced rank {k} of `{RANK_SENSITIVITY_LADDER['name']}` (`RANK_SENSITIVITY_LADDER`); "
+            f"`pls_0` to `pls_{min(k, r) - 1}` are the primary's components (nesting) and keep its correlations; "
+            + (
+                f"a component above the primary's rank {r} that tracks a variable, `phase` in particular, is a "
+                "measurement-space finding about the higher ranks and never grounds to choose a rank (sweep rule 7)"
+                if k > r else "a flagged row here is the primary's own, at a lower rank (sweep rule 7)"
+            )
+        )
     lines += [
         "",
         "## Findings",
@@ -4541,6 +4779,9 @@ def render_axis_diagnostics(
     if stage_arm is not None:
         lines += ["", *_stage_arm_rules_heading(), ""]
         lines += [f"{i}. {rule}" for i, rule in enumerate(STAGE_SENSITIVITY_READING_RULES, 1)]
+    if rank_sweep is not None:
+        lines += ["", *_rank_sweep_rules_heading(), ""]
+        lines += [f"{i}. {rule}" for i, rule in enumerate(RANK_SENSITIVITY_READING_RULES, 1)]
     return "\n".join(lines) + "\n"
 
 
@@ -4661,12 +4902,23 @@ def run_axis_diagnostics(
     cells are ``STAGE_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]``, the
     manifest records ``stage_arm`` and ``diagnostics.md`` names the arm and
     carries ``STAGE_SENSITIVITY_READING_RULES``, change
-    ``adni-stage-sensitivity``); a variable that is constant
+    ``adni-stage-sensitivity``; so is a forced rank of the rank sweep, read
+    with ``--analysis-dir results/motco_rank_sensitivity/rank_<kk>`` and the
+    primary export: an analysis manifest with step ``rank-sensitivity``,
+    whose forced rank and primary rank the manifest records under
+    ``inputs.analysis.rank_sweep`` (``null`` on every other read); on the top
+    rank (``RANK_SENSITIVITY_LADDER["diagnosed_rank"]``) the expected counts
+    are ``RANK_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]`` (the
+    rank-independent keys, the read and the rows at that rank), on another
+    rank the rank-independent keys with a finding that the sweep's
+    predeclared diagnostic is the top rank's, and ``diagnostics.md`` names the
+    sweep and the forced rank and carries ``RANK_SENSITIVITY_READING_RULES``,
+    change ``adni-rank-sensitivity``); a variable that is constant
     or has fewer than three complete rows; per component, the flagged
     variables as counts and names. The diagnostic reads sex and stage, so
-    it is never a filter: no ``export`` or ``analyze`` run reads its
-    outputs, and arms and variants are predeclared in a proposal, never
-    derived from a diagnostic value.
+    it is never a filter: no ``export``, ``analyze`` or sensitivity run reads
+    its outputs, and arms, variants and the rank ladder are predeclared in a
+    proposal, never derived from a diagnostic value.
 
     The manifest's ``numerics`` block records the numeric environment the run
     actually had (``_numerics_record``: host, CPU, the ``NUMERIC_SETTINGS``
@@ -4701,15 +4953,25 @@ def run_axis_diagnostics(
     selection = record["latent"]["component_selection"]
     export_variant = (a_manifest.get("variant") or {}).get("name") if a_manifest.get("step") == "export-sensitivity" else None
     stage_arm = (a_manifest.get("stage_arm") or {}).get("name") if a_manifest.get("step") == "stage-sensitivity" else None
+    rank_sweep = None
+    if a_manifest.get("step") == "rank-sensitivity":
+        # a forced rank of the sweep (change adni-rank-sensitivity): its forced rank and the primary's rank
+        recorded_sweep = a_manifest.get("rank_sweep") or {}
+        rank_sweep = {
+            "forced_rank": recorded_sweep.get("forced_rank", a_settings.get("forced_components")),
+            "primary_rank": recorded_sweep.get("primary_rank"),
+        }
+    diagnosed = rank_sweep is not None and rank_sweep["forced_rank"] == RANK_SENSITIVITY_LADDER["diagnosed_rank"]
     is_primary = (
         analysis_path.resolve() == Path(MOTCO_ANALYSIS_DIR).resolve()
-        and latent_adjustment is None and export_variant is None and stage_arm is None
+        and latent_adjustment is None and export_variant is None and stage_arm is None and rank_sweep is None
     )
     print(
         f"[{log}] {analysis_path}: {len(analysis['files'])} files read; the recorded hashes of {len(analysis['chain'])} "
         f"export files and of {EXPORT_MANIFEST} equal the files now; rank {rank} ({selection}), latent adjustment "
         f"{latent_adjustment}" + (f", export variant {export_variant}" if export_variant else "")
         + (f", stage arm {stage_arm}" if stage_arm else "")
+        + (f", rank sweep forced rank {rank_sweep['forced_rank']}" if rank_sweep else "")
         + f", n_jobs {n_jobs}, primary {is_primary}"
     )
 
@@ -4867,6 +5129,9 @@ def run_axis_diagnostics(
     if stage_arm is not None:
         # the arm's participants and cells, with the rank-independent keys (change adni-stage-sensitivity)
         expected = json.loads(json.dumps(STAGE_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]))
+    elif diagnosed:
+        # the sweep's predeclared diagnostic: its top rank's read and rows (change adni-rank-sensitivity)
+        expected = json.loads(json.dumps(RANK_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]))
     else:
         expected = expected_full if is_primary else {k: expected_full[k] for k in DIAGNOSTICS_RANK_INDEPENDENT_KEYS}
     observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
@@ -4878,7 +5143,18 @@ def run_axis_diagnostics(
             f"(REPORTED_N_JOBS = {REPORTED_N_JOBS}); the latent scores, stage means and loadings read here do not "
             "depend on n_jobs"
         )
-    if not is_primary:
+    if rank_sweep is not None:
+        findings.append(
+            f"the analysis read is not the primary (directory {analysis_path}, forced rank {rank_sweep['forced_rank']} of "
+            "the rank sweep): the primary's rank and row counts are not expected; "
+            + (
+                "the top rank's read and rows are (RANK_SENSITIVITY_EXPECTED_COUNTS), with the rank-independent counts"
+                if diagnosed
+                else "the rank-independent counts are, and the sweep's predeclared diagnostic is its top rank's (rank "
+                f"{RANK_SENSITIVITY_LADDER['diagnosed_rank']}, RANK_SENSITIVITY_EXPECTED_COUNTS)"
+            )
+        )
+    elif not is_primary:
         findings.append(
             f"the analysis read is not the primary (directory {analysis_path}, latent adjustment {latent_adjustment!r}"
             + (f", export variant {export_variant!r}" if export_variant else "")
@@ -4917,6 +5193,7 @@ def run_axis_diagnostics(
                 "is_primary": is_primary,
                 **({"export_variant": export_variant} if export_variant else {}),
                 **({"stage_arm": stage_arm} if stage_arm else {}),
+                "rank_sweep": rank_sweep,
                 "analysis_git_revision": a_manifest.get("git_revision"),
                 "analysis_created_at": a_manifest.get("created_at"),
                 "analysis_findings": a_manifest.get("findings", []),
@@ -4966,7 +5243,7 @@ def run_axis_diagnostics(
     analysis_info = {
         "dir": str(analysis_path), "rank": rank, "selection": selection, "latent_adjustment": latent_adjustment,
         "n_jobs": n_jobs, "is_primary": is_primary, "participants": int(len(frame)), "export_variant": export_variant,
-        "stage_arm": stage_arm,
+        "stage_arm": stage_arm, "rank_sweep": rank_sweep,
     }
     with _finalize_output_dir(final, force=force) as tmp:
         for key, name in names.items():
@@ -4992,7 +5269,14 @@ def run_axis_diagnostics(
     if deviations:
         print(f"[{log}] {len(deviations)} count deviation(s) from the predeclared counts")
     else:
-        print(f"[{log}] counts reproduce the predeclared ones" + ("" if is_primary else " (rank-independent keys only: not the primary)"))
+        print(
+            f"[{log}] counts reproduce the predeclared ones"
+            + (
+                "" if is_primary
+                else " (the top rank of the sweep: RANK_SENSITIVITY_EXPECTED_COUNTS)" if diagnosed
+                else " (rank-independent keys only: not the primary)"
+            )
+        )
     for msg in findings:
         print(f"[{log}] FINDING: {msg}")
     return {"dir": final, "tables": tables, "manifest": manifest, "findings": findings}
@@ -5058,8 +5342,9 @@ def _check_primary_reference(analysis_dir: Path, loaded: dict, *, motco_version:
     step:
         The step that reads the reference, ``latent-sensitivity`` (the arm),
         ``export-sensitivity`` (an export variant, change
-        ``adni-nist-bridge``) or ``stage-sensitivity`` (the CN / LMCI / AD arm,
-        change ``adni-stage-sensitivity``), named in the messages.
+        ``adni-nist-bridge``), ``stage-sensitivity`` (the CN / LMCI / AD arm,
+        change ``adni-stage-sensitivity``) or ``rank-sensitivity`` (the rank
+        sweep, change ``adni-rank-sensitivity``), named in the messages.
 
     Returns
     -------
@@ -5086,7 +5371,7 @@ def _check_primary_reference(analysis_dir: Path, loaded: dict, *, motco_version:
     predates ``adni-portable-numerics``, and the primary's bytes are checked
     by that change's exact gate instead.
     """
-    what = "the variant" if step == "export-sensitivity" else "the arm"
+    what = {"export-sensitivity": "the variant", "rank-sensitivity": "the sweep"}.get(step, "the arm")
     rerun = f"rerun `adni-sexdiff analyze` (then {step}); nothing was written"
     if not analysis_dir.is_dir():
         raise FileNotFoundError(
@@ -7835,6 +8120,834 @@ def run_stage_sensitivity(
         "export": export,
         "analysis": analysis,
         "comparison": {"rows": rows, "statuses": statuses, "manifest": manifest},
+        "findings": findings,
+    }
+
+
+# --- rank-sensitivity ----------------------------------------------------------------
+
+#: The columns of ``rank_sensitivity.csv``, in order (design D7 of
+#: ``adni-rank-sensitivity``): the analysis, the latent space, then per
+#: statistic the observed value, p, rejection, null mean, SD and q95; every
+#: value read from a record.
+_RANK_SENSITIVITY_COLUMNS: tuple[str, ...] = (
+    "analysis", "directory",
+    "selected_rank", "component_selection", "cv_mean_auroc", "cv_repeats_completed", "eigengap",
+    *(f"{s}_{k}" for s in ANALYSIS_STATISTICS for k in ("observed", "p", "rejected", "null_mean", "null_sd", "null_q95")),
+)
+#: The status of a statistic whose rejection differs between the primary and a forced rank.
+_RANK_SENSITIVITY_STATUS_DIFFERS = "differs (rank dependence)"
+#: The analysis files the anchor gate compares, by sha256, with the primary manifest's record.
+_ANCHOR_FILES: tuple[str, ...] = (ANALYSIS_LATENT_SCORES, ANALYSIS_PLS_LOADINGS, ANALYSIS_STAGE_MEANS)
+#: The staging directory of the anchor run under the sweep's output root (removed when the gate passes).
+_ANCHOR_STAGING = "anchor.tmp"
+
+
+def _rank_dir_name(rank: int) -> str:
+    """The directory of one rank under ``RANK_SENSITIVITY_DIR`` (``rank_02`` … ``rank_12``)."""
+    return RANK_SENSITIVITY_RANK_DIR.format(rank=int(rank))
+
+
+def _rank_comparison_row(name: str, directory: Path, record: dict) -> dict:
+    """One row of ``rank_sensitivity.csv`` (``_RANK_SENSITIVITY_COLUMNS``), every value read from ``record`` (``_comparison_row``)."""
+    row = _comparison_row(name, directory, record)
+    return {column: row[column] for column in _RANK_SENSITIVITY_COLUMNS}
+
+
+def _check_anchor(anchor_dir: Path, reference: dict, *, n_jobs: int) -> tuple[dict, list[str]]:
+    """Compare the anchor run with the primary (design D3 of ``adni-rank-sensitivity``).
+
+    Parameters
+    ----------
+    anchor_dir:
+        The anchor's staged analysis directory (``anchor.tmp/``), as
+        ``_run_trajectory_analysis`` wrote it.
+    reference:
+        ``_check_primary_reference``: the primary's record, manifest and
+        ``n_jobs``.
+    n_jobs:
+        This run's ``n_jobs``.
+
+    Returns
+    -------
+    tuple
+        ``(anchor, differences)``: the anchor record (``rank``, ``n_jobs``,
+        ``primary_n_jobs``, ``fields``: compared field → equal, ``files``:
+        per file the anchor's and the primary manifest's sha256 and
+        ``equal``, ``not_compared``, ``equal``) and one message per
+        difference (empty when the gate passes).
+
+    Notes
+    -----
+    The record fields are read back from the anchor's ``result.json`` and
+    compared with the primary's ``result.json`` exactly (pinned numerics):
+    ``statistics``, ``p_values``, ``null_summary``, ``config_spectrum`` and
+    ``latent.selected_lv``. When this run's ``n_jobs`` is not
+    ``REPORTED_N_JOBS`` or not the primary's, the permutation draws differ
+    from the primary's, so only ``statistics``, ``config_spectrum.pooled``
+    and ``selected_lv`` are compared and ``p_values``, ``null_summary`` and
+    ``config_spectrum.permutation_pooled_eigengap`` are recorded as not
+    compared. The files are ``latent_scores.csv``, ``pls_loadings.csv`` and
+    ``stage_means.csv``, against the hashes the primary manifest's
+    ``outputs`` record, so no primary participant-level file is opened. A
+    message names the field and its differing entries with both values, or
+    the file with both hashes; never a participant.
+    """
+    primary, p_manifest = reference["record"], reference["manifest"]
+    record = json.loads((anchor_dir / ANALYSIS_RESULT).read_text())
+    full = n_jobs == REPORTED_N_JOBS and reference["n_jobs"] == n_jobs
+    getters: dict[str, Callable[[dict], object]] = {"statistics": lambda r: r.get("statistics")}
+    if full:
+        getters.update({
+            "p_values": lambda r: r.get("p_values"),
+            "null_summary": lambda r: r.get("null_summary"),
+            "config_spectrum": lambda r: r.get("config_spectrum"),
+        })
+        not_compared: list[str] = []
+    else:
+        getters["config_spectrum.pooled"] = lambda r: (r.get("config_spectrum") or {}).get("pooled")
+        not_compared = ["p_values", "null_summary", "config_spectrum.permutation_pooled_eigengap"]
+    getters["selected_lv"] = lambda r: r["latent"]["selected_lv"]
+    differences: list[str] = []
+    fields: dict[str, bool] = {}
+    for name, get in getters.items():
+        seen, recorded = get(record), get(primary)
+        equal = json.dumps(seen, sort_keys=True, default=_json_default) == json.dumps(recorded, sort_keys=True, default=_json_default)
+        fields[name] = equal
+        if not equal:
+            a = _flatten(seen) if isinstance(seen, dict) else {name: seen}
+            b = _flatten(recorded) if isinstance(recorded, dict) else {name: recorded}
+            keys = [k for k in dict.fromkeys([*a, *b]) if repr(a.get(k)) != repr(b.get(k))]
+            differences.append(
+                f"`{name}` differs from the primary record's at " + "; ".join(
+                    f"{k}: anchor {a.get(k)!r}, primary {b.get(k)!r}" for k in keys[:6]
+                ) + (f" (and {len(keys) - 6} more)" if len(keys) > 6 else "")
+            )
+    files: dict[str, dict] = {}
+    recorded_outputs = p_manifest.get("outputs") or {}
+    for name in _ANCHOR_FILES:
+        sha = _sha256_file(anchor_dir / name)
+        rec = (recorded_outputs.get(name) or {}).get("sha256")
+        files[name] = {"sha256": sha, "primary_sha256": rec, "equal": sha == rec}
+        if sha != rec:
+            differences.append(f"{name}: sha256 {sha} (anchor) differs from the hash the primary's {ANALYSIS_MANIFEST} records ({rec})")
+    anchor = {
+        "rank": int(primary["latent"]["selected_lv"]),
+        "n_jobs": n_jobs,
+        "primary_n_jobs": reference["n_jobs"],
+        "fields": fields,
+        "files": files,
+        "not_compared": not_compared,
+        "equal": not differences,
+    }
+    return anchor, differences
+
+
+def _rank_findings(primary: dict, record: dict, rank: int) -> list[str]:
+    """The findings that read a rank's record: a statistic whose rejection status differs from the primary's (rank dependence)."""
+    findings: list[str] = []
+    for s in ANALYSIS_STATISTICS:
+        rp, rk = _rejected(primary["p_values"].get(s)), _rejected(record["p_values"].get(s))
+        if rp != rk:
+            findings.append(
+                f"{s}: forced rank {rank}'s status ({_rejection_text(rk)}) differs from the primary's "
+                f"({_rejection_text(rp)}) at α = {ANALYSIS_ALPHA}: rank dependence, not a result at that rank; the "
+                "primary's status stays the result (sweep rules 1 and 2)"
+            )
+    return findings
+
+
+def _ranks_text(ranks: Sequence[int]) -> str:
+    """``rank 2``, ``ranks 2 and 9`` or ``ranks 2, 3 and 9``."""
+    ranks = [str(k) for k in ranks]
+    if len(ranks) == 1:
+        return f"rank {ranks[0]}"
+    return "ranks " + ", ".join(ranks[:-1]) + f" and {ranks[-1]}"
+
+
+def _rank_status_line(statistic: str, primary_rejected: bool | None, statuses: dict[int, tuple[str, bool | None]]) -> str:
+    """The status sentence of one statistic across the sweep, shared by ``rank_sensitivity.md`` and, later, the report.
+
+    Parameters
+    ----------
+    statistic:
+        ``delta``, ``angle`` or ``shape``.
+    primary_rejected:
+        The primary's status under ``ANALYSIS_REJECTION_RULE``; ``None`` when
+        its record holds no p-value.
+    statuses:
+        Per forced rank, in ladder order: its status against the primary
+        (``same`` or ``differs (rank dependence)``) and its own rejection.
+
+    Returns
+    -------
+    str
+        One sentence, without its list marker: the ranks whose status
+        differs (or ``same at every rank``) with the rejection texts, then
+        the reading the pattern implies, the primary's status the result in
+        every case and no rule combining the ranks (sweep rules 1, 2, 5 and
+        6); for ``angle`` the rank-specific null (sweep rule 4). Shaped like
+        ``_stage_arm_status_line`` and string-equal wherever it is printed.
+    """
+    rp = primary_rejected
+    if rp is None or any(rejected is None for _, rejected in statuses.values()):
+        return (
+            f"`{statistic}`: primary {_rejection_text(rp)}; "
+            + ", ".join(f"rank {k} {_rejection_text(rejected)}" for k, (_, rejected) in statuses.items())
+            + ". A missing p-value is recorded as a finding."
+        )
+    differ = [k for k, (status, _) in statuses.items() if status != _LATENT_SENSITIVITY_STATUS_SAME]
+    same = [k for k in statuses if k not in differ]
+    angle = " Each `angle` is read against its own null, never against another rank's (sweep rule 4)." if statistic == "angle" else ""
+    if not differ:
+        text = f"`{statistic}`: same at every rank (primary {_rejection_text(rp)}; {_ranks_text(same)} {_rejection_text(rp)}). "
+        if not rp:
+            return text + (
+                "No forced rank rejects where the primary does not; each non-rejection is no more informative than the "
+                "primary's (sweep rule 5), and none is evidence that the sexes' trajectories agree"
+                + (" in this respect (reading rule 3: no power statement exists at this design)." if statistic != "delta" else
+                   " (no power statement exists at this design).")
+            )
+        return text + (
+            "Every forced rank rejects as the primary does; the primary's rejection stays the result, and the sweep adds "
+            "no claim of its own, since no rule counts the ranks that reject (sweep rules 1 and 6)." + angle
+        )
+    text = (
+        f"`{statistic}`: {_RANK_SENSITIVITY_STATUS_DIFFERS} at {_ranks_text(differ)}"
+        + (f", same at {_ranks_text(same)}" if same else "")
+        + f" (primary {_rejection_text(rp)}; {_ranks_text(differ)} {_rejection_text(not rp)}). "
+    )
+    if not rp:
+        return text + (
+            "A rejection at a forced rank only is rank dependence, not a result at that rank, read beside that rank's "
+            "null summary; the primary's non-rejection stays the result, and no rule counts the ranks that reject "
+            "(sweep rules 2, 5 and 6)." + angle
+        )
+    return text + (
+        "The primary's rejection stays the result (reading rule 1); a forced rank that does not reject is rank "
+        "dependence, and no rule combines the ranks (sweep rules 2 and 6)." + angle
+    )
+
+
+def render_rank_sensitivity(
+    rows: list[dict],
+    *,
+    statuses: dict[int, dict[str, str]],
+    primary: dict,
+    records: dict[int, dict],
+    reference: dict,
+    anchor: dict,
+    nesting: dict[str, dict],
+    findings: list[str],
+    n_jobs: int,
+    alpha: float = ANALYSIS_ALPHA,
+    rank_floor: int = ANALYSIS_RANK_FLOOR,
+) -> str:
+    """Render ``rank_sensitivity.md`` from the primary's and the ranks' records (design D7 of ``adni-rank-sensitivity``).
+
+    Parameters
+    ----------
+    rows:
+        The rows of ``rank_sensitivity.csv``: the primary, then one per rank
+        in ladder order.
+    statuses:
+        Per rank, per statistic: ``same`` or ``differs (rank dependence)``.
+    primary, records:
+        The primary's ``result.json`` and each rank's, by rank.
+    reference:
+        The primary: ``dir`` and ``files`` (``result.json`` with its sha256).
+        The ranks' ``result.json`` carry MOTCO's runtime, so their hashes are
+        in the manifest only.
+    anchor:
+        The anchor gate's record (``_check_anchor``) with its predeclared
+        rank (``expected_rank``).
+    nesting:
+        Per rank directory: the nesting check (``first_columns_of_top``,
+        ``anchor_columns``, ``first_columns_of_anchor``).
+    findings:
+        The comparison's findings.
+    n_jobs:
+        This run's ``n_jobs``.
+    alpha, rank_floor:
+        ``ANALYSIS_ALPHA`` and ``ANALYSIS_RANK_FLOOR``.
+
+    Returns
+    -------
+    str
+        Markdown, in this order: the header (the primary's directory and
+        ``result.json`` sha256, the ladder by constant name, MOTCO and
+        ``n_jobs``); the statistics table (per statistic the primary row,
+        whose status is the result, then the ranks, each with its status);
+        the status sentences (``_rank_status_line``) and each rank's reading
+        lines (``_statistic_reading_line``, string-equal to its
+        ``summary.md``); the latent spaces (rank, mode, floor, eigengap with
+        its permutation quantiles, the ``angle`` null summary); the anchor
+        check and the nesting; the findings; ``READING_RULES`` then
+        ``RANK_SENSITIVITY_READING_RULES``, verbatim. Numbers carry six
+        significant digits; no runtime is printed, so a rerun is
+        byte-identical. No statistic is computed here.
+    """
+    ladder = RANK_SENSITIVITY_LADDER
+    ranks = [int(k) for k in records]
+    p_row, by_rank = rows[0], dict(zip(ranks, rows[1:]))
+    design = primary["design"]
+    stages = [str(st) for st in design["stage_levels"]]
+    r = int(primary["latent"]["selected_lv"])
+    top = max(ranks)
+    first = records[ranks[0]]
+    lines = [
+        f"# MOTCO rank sensitivity: ADNI serum metabolomics, sex × stage — forced-rank ladder `{ladder['name']}`",
+        "",
+        f"The primary analysis (`{reference['dir']}`, `result.json` sha256 `{reference['files'][ANALYSIS_RESULT]['sha256']}`, "
+        f"rank {r} selected by its cross-validation) beside the rank sweep `{ladder['name']}` (`RANK_SENSITIVITY_LADDER`, "
+        f"change `{ladder['change']}`: the primary's analysis at each forced rank " + ", ".join(str(k) for k in ranks)
+        + f", `{ladder['setting']}` set to the rank and MOTCO's cross-validation skipped; every other export and analysis "
+        "setting the primary's; the ranks' `result.json` carry MOTCO's runtime, so their hashes are in "
+        f"`{RANK_SENSITIVITY_MANIFEST}`). MOTCO {first['software']['motco']}; n = {design['n_samples']}; "
+        f"{first['measurement']['permutations']} RRPP permutations, seed {first['measurement']['seed']} at every rank; "
+        f"α = {alpha}, rejected when {ANALYSIS_REJECTION_RULE} (`ANALYSIS_REJECTION_RULE`); n_jobs {n_jobs}"
+        + ("" if n_jobs == REPORTED_N_JOBS else f" (not a reported run: reported runs use n_jobs = {REPORTED_N_JOBS})")
+        + ". The primary row comes first and its status is the result; the sweep is read beside it and never replaces "
+        "it, and no rank is chosen, adopted or ranked (sweep rule 1). A status that differs is rank dependence, not a "
+        "result at that rank (sweep rule 2). Every value below is read from the `result.json` records.",
+        "",
+        "## Statistics",
+        "",
+        "| statistic | analysis | rank | observed | p (RRPP) | rejected | null mean | null sd | null q95 | status |",
+        "|---|---|---:|---:|---:|:---:|---:|---:|---:|---|",
+    ]
+    for s in ANALYSIS_STATISTICS:
+        for label, row, status in (
+            ("primary", p_row, "the result"),
+            *((_rank_dir_name(k), by_rank[k], statuses[k][s]) for k in ranks),
+        ):
+            rejected = row[f"{s}_rejected"]
+            lines.append(
+                f"| {s} | {label} | {row['selected_rank']} | {_fmt(row[f'{s}_observed'])} | {_fmt(row[f'{s}_p'])} | "
+                f"{'n/a' if rejected is None else ('yes' if rejected else 'no')} | {_fmt(row[f'{s}_null_mean'])} | "
+                f"{_fmt(row[f'{s}_null_sd'])} | {_fmt(row[f'{s}_null_q95'])} | {status} |"
+            )
+    lines += [
+        "",
+        f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' rank, floor "
+        f"({rank_floor}), eigengap and its own null summary (reading rule 2, sweep rule 4; the latent spaces below), "
+        "never against the `angle` of another rank.",
+        "",
+        "Status per statistic:",
+        "",
+    ]
+    lines += [
+        "- " + _rank_status_line(
+            s, p_row[f"{s}_rejected"], {k: (statuses[k][s], by_rank[k][f"{s}_rejected"]) for k in ranks}
+        )
+        for s in ANALYSIS_STATISTICS
+    ]
+    lines += ["", f"Reading of each rank's statistics, as its `{ANALYSIS_SUMMARY}` prints it:", ""]
+    for s in ANALYSIS_STATISTICS:
+        groups: dict[bool | None, list[int]] = {}
+        for k in ranks:
+            groups.setdefault(by_rank[k][f"{s}_rejected"], []).append(k)
+        for rejected, ks in groups.items():
+            lines.append(
+                f"- {_ranks_text(ks)}: " + _statistic_reading_line(s, rejected, stages=stages, rank_sweep=True)
+            )
+    lines += [
+        "",
+        "## Latent spaces",
+        "",
+        "| analysis | rank (selection) | rank floor | cv_mean_auroc | CV repeats completed | pooled relative eigengap | "
+        "eigengap null q05 / q50 / q95 | `angle` null mean / sd / q95 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for label, row, rec in (("primary", p_row, primary), *((_rank_dir_name(k), by_rank[k], records[k]) for k in ranks)):
+        perm = (rec.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {})
+        lines.append(
+            f"| {label} | {row['selected_rank']} (`{row['component_selection']}`) | {rank_floor} | "
+            f"{_fmt(row['cv_mean_auroc'])} | {row['cv_repeats_completed']} | {_fmt(row['eigengap'])} | "
+            f"{_fmt(perm.get('q05'))} / {_fmt(perm.get('q50'))} / {_fmt(perm.get('q95'))} | "
+            f"{_fmt(row['angle_null_mean'])} / {_fmt(row['angle_null_sd'])} / {_fmt(row['angle_null_q95'])} |"
+        )
+    lines += [
+        "",
+        "The ranks share the primary export, the covariates and their design, the cells, the seed and the permutations; "
+        f"at n_jobs = {REPORTED_N_JOBS} every rank permutes the same residual indices (sweep rule 2). They differ only in "
+        "the latent rank: MOTCO skips the cross-validation at a forced rank, so `cv_mean_auroc` is not available and no "
+        "CV repeat runs. Each rank's `pls_loadings.csv` (MOTCO's rotations) is its own and is not nested.",
+        "",
+        "## Anchor and nesting",
+        "",
+        f"- anchor (sweep rule 3): {_anchor_text(anchor)}; its directory was removed. Predeclared anchor rank "
+        f"{anchor.get('expected_rank')} (`RANK_SENSITIVITY_EXPECTED_COUNTS`); the primary record's {anchor['rank']}.",
+        f"- nesting (sweep rule 3): PLS-DA components are nested, so each rank's latent scores are the first columns of "
+        f"rank {top}'s, and the ranks at or below the primary's {r} are the primary's first components (through the "
+        "anchor, equal to the primary by the gate). The check compares the scores in memory; no score is printed or "
+        "written by it.",
+        "",
+        f"| rank | first columns of rank {top}'s | columns compared with the anchor's | equal to the anchor's |",
+        "|---|:---:|---:|:---:|",
+    ]
+    for k in ranks:
+        n = nesting[_rank_dir_name(k)]
+        lines.append(
+            f"| {_rank_dir_name(k)} | {_yes_no(n['first_columns_of_top'])} | {n['anchor_columns']} | "
+            f"{_yes_no(n['first_columns_of_anchor'])} |"
+        )
+    lines += ["", "## Findings", ""]
+    lines += [f"- {msg}" for msg in findings] or ["None."]
+    lines += [
+        "",
+        "## Reading rules",
+        "",
+        "Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):",
+        "",
+    ]
+    lines += [f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)]
+    lines += ["", *_rank_sweep_rules_heading(), ""]
+    lines += [f"{i}. {rule}" for i, rule in enumerate(RANK_SENSITIVITY_READING_RULES, 1)]
+    return "\n".join(lines) + "\n"
+
+
+def run_rank_sensitivity(
+    *,
+    input_dir: str | Path | None = None,
+    analysis_dir: str | Path | None = None,
+    out_dir: str | Path | None = None,
+    n_jobs: int = REPORTED_N_JOBS,
+    force: bool = False,
+) -> dict:
+    """Run the predeclared rank sweep beside the primary: the anchor gate, one analysis per forced rank and the comparison.
+
+    Parameters
+    ----------
+    input_dir:
+        The primary export (default ``constants.MOTCO_INPUT_DIR``), read as
+        ``analyze`` reads it (``p180.csv``, ``nmr.csv``, ``metadata.csv``,
+        ``covariates.csv``, each against the sha256 ``manifest.json``
+        records, and ``manifest.json``); never written.
+    analysis_dir:
+        The primary analysis (default ``constants.MOTCO_ANALYSIS_DIR``):
+        ``result.json`` and ``analysis_manifest.json``, read as the
+        reference, never written. No primary CSV is opened.
+    out_dir:
+        The output root (default ``constants.RANK_SENSITIVITY_DIR``): one
+        directory per rank (``RANK_SENSITIVITY_RANK_DIR``) and
+        ``comparison/`` are written here; ``diagnostics/`` never is.
+    n_jobs:
+        MOTCO's RRPP workers, as for ``analyze``; reported runs use
+        ``constants.REPORTED_N_JOBS`` (1) and another value is a finding.
+    force:
+        Replace the existing sweep (after the new one is complete).
+
+    Returns
+    -------
+    dict
+        ``{"dir": Path, "anchor": dict, "ranks": {rank: {...}}, "comparison": {"rows": [...], "statuses": {...}, "nesting": {...}, "manifest": dict}, "findings": [...]}``.
+
+    Notes
+    -----
+    The sweep (``RANK_SENSITIVITY_LADDER``, decided by
+    ``adni-rank-sensitivity``): the primary's analysis rerun at each forced
+    rank of the ladder (2, 3, 4, 6, 9, 12), one ``analyze_trajectories``
+    call per rank through ``_run_trajectory_analysis`` with
+    ``forced_components`` set to the rank and every other setting the
+    primary's (``ANALYSIS_LATENT_ADJUSTMENT``, ``ANALYSIS_SEED`` and
+    ``ANALYSIS_PERMUTATIONS`` at every rank), never assembled from MOTCO's
+    primitives. The primary is read beside the sweep and never written or
+    rerun; nothing under a diagnostics directory, no cohort table and no
+    data-root file is read. The ladder is a constant, never a flag, and the
+    sweep is not crossed with the latent adjustment, an export variant or
+    the CN / LMCI / AD arm.
+
+    Checks, in this order, before anything is written: the gates of
+    ``analyze`` (``check_motco_version``, ``check_motco_rank_floor``); a rank
+    directory or ``comparison/`` existing without ``force``; the primary
+    export (``_load_analysis_inputs``: each file against its manifest) and
+    that it is the primary (no ``stage_arm`` or ``variant`` recorded); the
+    primary analysis as a chained reference (``_check_primary_reference``:
+    its recorded export hashes, no latent adjustment, the installed MOTCO,
+    ``ANALYSIS_SEED`` and ``ANALYSIS_PERMUTATIONS``), written by ``analyze``
+    with a CV-selected rank, its ``result.json`` hashing to the value its
+    manifest records. A failure stops the step naming the file or setting,
+    both values and the command to rerun, never a participant, and nothing
+    is written.
+
+    The anchor gate (design D3), before any rank runs: one forced run at
+    the primary record's rank, staged in ``<out_dir>/anchor.tmp/`` through
+    the path every rank takes, and compared with the primary
+    (``_check_anchor``: its statistics, p-values, null summaries,
+    ``config_spectrum`` and rank against the primary's ``result.json``, its
+    ``latent_scores.csv``, ``pls_loadings.csv`` and ``stage_means.csv``
+    against the hashes the primary manifest records; at ``n_jobs`` other
+    than 1, only what the draws do not change). A difference stops the step
+    naming the field or file, both values and the numerics state when it is
+    not pinned, with ``anchor.tmp/`` kept for inspection (it is ignored);
+    on equality ``anchor.tmp/`` is removed and every rank manifest and the
+    comparison manifest record the anchor.
+
+    Output contract (``results/motco_rank_sensitivity/``, each directory
+    staged as ``<dir>.tmp/`` and all renamed together when complete): one
+    analysis directory per rank (``rank_02`` … ``rank_12``), the seven files
+    ``analyze`` writes laid out as the primary's (the manifest records step
+    ``rank-sensitivity``, ``settings.forced_components``, ``rank_sweep``: the
+    ladder by constant name, the forced rank, the primary's rank and the
+    anchor; the primary as ``reference`` with its two hashes; the counts
+    beside ``RANK_SENSITIVITY_EXPECTED_COUNTS["analysis"][rank]``;
+    ``summary.md`` with the "Rank sweep" section and both sets of reading
+    rules); ``comparison/`` (``rank_sensitivity.csv``: the primary row then
+    one row per rank, ``_RANK_SENSITIVITY_COLUMNS``, every value read from
+    the records; ``rank_sensitivity.md``: ``render_rank_sensitivity``;
+    ``rank_sensitivity_manifest.json``: the seven inputs with sha256 and the
+    chain results, the ladder, the reference, the anchor, the ranks with
+    their two hashes, statuses, the nesting, the counts beside
+    ``RANK_SENSITIVITY_EXPECTED_COUNTS["comparison"]``, output hashes,
+    findings). Before the renames each rank's latent scores are compared in
+    memory with the first columns of the top rank's and of the anchor's (the
+    nesting; a false value is a finding, never a stop). ``diagnostics/`` is
+    ``axis-diagnostics --analysis-dir <root>/rank_12 --out-dir
+    <root>/diagnostics`` and never touched here: replacing the sweep while
+    it exists is a finding. Each rank's ``latent_scores.csv`` and
+    ``analysis_metadata.csv`` are participant-level (matched by the existing
+    ``results/**`` ignore patterns); every other file is aggregate.
+
+    Findings, recorded and printed, never a stop: every finding of
+    ``analyze`` that applies to a forced run (count deviations, ``n_jobs``
+    not 1, a non-finite statistic or p-value, a moved MOTCO default, a run
+    that is not pinned; not the conditions of the cross-validation); a
+    primary rank other than the predeclared anchor rank; a statistic whose
+    status at a rank differs from the primary's (rank dependence); a
+    nesting check that fails; a primary read with ``n_jobs`` not 1; stale
+    diagnostics. No finding names a participant. No sweep value changes a
+    constant, selects a rank or setting, reruns the primary or defines an
+    arm.
+    """
+    step = "rank-sensitivity"
+    log = f"[{step}]"
+    ladder = RANK_SENSITIVITY_LADDER
+    ranks = tuple(int(k) for k in ladder["ranks"])
+    top = max(ranks)
+    motco_version = check_motco_version()
+    rank_floor = check_motco_rank_floor()
+    input_dir = Path(input_dir) if input_dir is not None else Path(MOTCO_INPUT_DIR)
+    primary_dir = Path(analysis_dir) if analysis_dir is not None else Path(MOTCO_ANALYSIS_DIR)
+    root = Path(out_dir) if out_dir is not None else Path(RANK_SENSITIVITY_DIR)
+    rank_dirs = {k: root / _rank_dir_name(k) for k in ranks}
+    comparison_final = root / RANK_SENSITIVITY_SUBDIRS["comparison"]
+    diagnostics_final = root / RANK_SENSITIVITY_SUBDIRS["diagnostics"]
+    anchor_tmp = root / _ANCHOR_STAGING
+    existing = [str(d) for d in (*rank_dirs.values(), comparison_final) if d.exists()]
+    if existing and not force:
+        raise FileExistsError(
+            ", ".join(existing) + (" exist" if len(existing) > 1 else " exists")
+            + f"; pass --force to replace the sweep ({diagnostics_final} is never touched)"
+        )
+    print(
+        f"{log} MOTCO {motco_version}; rank floor {rank_floor} equals MOTCO's default; ladder {ladder['name']} "
+        f"(RANK_SENSITIVITY_LADDER: {ladder['setting']} at ranks " + ", ".join(str(k) for k in ranks)
+        + "; the primary's export, seed, permutations and settings), read beside the primary"
+    )
+
+    # --- the primary export and the primary analysis as a reference ----------------------
+    loaded = _load_analysis_inputs(input_dir, step=step)
+    p_export = loaded["export_manifest"]
+    for key in ("stage_arm", "variant"):
+        if p_export.get(key):
+            raise RuntimeError(
+                f"{input_dir / EXPORT_MANIFEST} records {key} {p_export[key].get('name')!r}: the sweep runs on the "
+                "primary export only (sweep rule 8); point --input-dir at the primary export (`adni-sexdiff export`); "
+                "nothing was written"
+            )
+    reference = _check_primary_reference(primary_dir, loaded, motco_version=motco_version, step=step)
+    primary, p_manifest = reference["record"], reference["manifest"]
+    selection = primary["latent"]["component_selection"]
+    if p_manifest.get("step") != "analyze" or selection != "cv":
+        raise RuntimeError(
+            f"{primary_dir} is not the primary: {ANALYSIS_MANIFEST} records step {p_manifest.get('step')!r} and "
+            f"{ANALYSIS_RESULT} rank selection {selection!r} (the primary is `analyze`'s, its rank selected by "
+            "cross-validation); point --analysis-dir at the primary (`adni-sexdiff analyze`); nothing was written"
+        )
+    recorded_result = ((p_manifest.get("outputs") or {}).get(ANALYSIS_RESULT) or {}).get("sha256")
+    now_result = reference["files"][ANALYSIS_RESULT]["sha256"]
+    if recorded_result != now_result:
+        raise RuntimeError(
+            f"{ANALYSIS_RESULT}: sha256 {now_result} differs from the hash the primary's {ANALYSIS_MANIFEST} records "
+            f"({recorded_result}); the primary changed after analyze, rerun `adni-sexdiff analyze` (then {step}); "
+            "nothing was written"
+        )
+    r = reference["rank"]
+    print(
+        f"{log} {input_dir}: the primary export ({len(loaded['inputs']) - 1} files equal its manifest); {primary_dir}: "
+        f"the primary (rank {r}, cv, latent adjustment none, n_jobs {reference['n_jobs']}, MOTCO {reference['motco']}; "
+        f"{ANALYSIS_RESULT} equals its manifest); both are read, never written"
+    )
+
+    # --- the findings that do not depend on a rank's record -----------------------------------
+    expected_anchor = RANK_SENSITIVITY_EXPECTED_COUNTS["anchor"]
+    anchor_deviations = _count_deviations(expected_anchor, {"rank": r}, "anchor")
+    static_findings: list[str] = list(anchor_deviations)
+    if reference["n_jobs"] != REPORTED_N_JOBS:
+        static_findings.append(
+            f"the primary read ran with n_jobs = {reference['n_jobs']}: its permutation draws are not the reported ones "
+            f"(REPORTED_N_JOBS = {REPORTED_N_JOBS}), so the reference is not a reported run"
+        )
+    if diagnostics_final.exists() and any(d.exists() for d in rank_dirs.values()):
+        static_findings.append(
+            f"{diagnostics_final} exists and was computed from the sweep this run replaces; rerun `adni-sexdiff "
+            f"axis-diagnostics --analysis-dir {rank_dirs[top]} --out-dir {diagnostics_final} --force` (the directory "
+            "is neither read nor written here)"
+        )
+    ladder_block = {"constant": "RANK_SENSITIVITY_LADDER", **ladder}
+    reference_block = {
+        "dir": str(primary_dir),
+        "files": reference["files"],
+        "selected_rank": r,
+        "component_selection": selection,
+        "latent_adjustment": None,
+        "n_jobs": reference["n_jobs"],
+        "motco": reference["motco"],
+        "git_revision": p_manifest.get("git_revision"),
+        "created_at": p_manifest.get("created_at"),
+        "export": {"dir": str(input_dir), "manifest": {"name": EXPORT_MANIFEST, "sha256": loaded["inputs"][EXPORT_MANIFEST]["sha256"]}},
+    }
+
+    root_existed = root.exists()
+    try:
+        # --- the anchor gate: a forced run at the primary's rank, through the path every rank takes ---
+        if anchor_tmp.exists():
+            shutil.rmtree(anchor_tmp)
+        anchor_tmp.mkdir(parents=True)
+        _run_trajectory_analysis(
+            input_dir=input_dir, final=root / "anchor", n_jobs=n_jobs, force=force, step=step,
+            latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT,
+            expected={**ANALYSIS_EXPECTED_COUNTS, "component_selection": "forced", "selected_rank": r, "cv_repeats_completed": 0},
+            loaded=loaded, staging=anchor_tmp, log=f"{log} anchor (rank {r}):", forced_components=r,
+            rank_sweep={"ladder": ladder_block, "forced_rank": r, "primary_rank": r, "anchor": None},
+        )
+        anchor, differences = _check_anchor(anchor_tmp, reference, n_jobs=n_jobs)
+        if differences:
+            numerics = _numerics_finding(_numerics_record())
+            raise RuntimeError(
+                f"{step} stops before any rank runs: the anchor (a forced run at the primary's rank {r}) differs from the "
+                "primary: " + "; ".join(differences) + (f"; {numerics}" if numerics else "; the numerics are pinned")
+                + f"; the sweep must reproduce the primary at its own rank: rerun `adni-sexdiff analyze` pinned on this "
+                f"machine (then {step}); {anchor_tmp} is kept for inspection (it is ignored) and no rank directory or "
+                "comparison was written"
+            )
+        anchor_scores = pd.read_csv(anchor_tmp / ANALYSIS_LATENT_SCORES)  # in memory only, for the nesting check
+        shutil.rmtree(anchor_tmp)
+        anchor_block = {**anchor, "expected_rank": expected_anchor["rank"]}
+        print(
+            f"{log} anchor: the forced run at rank {r} equals the primary ("
+            + ", ".join(anchor["fields"]) + "; " + ", ".join(anchor["files"]) + ")"
+            + (f"; not compared at n_jobs {n_jobs}: " + ", ".join(anchor["not_compared"]) if anchor["not_compared"] else "")
+            + f"; {anchor_tmp} removed"
+        )
+
+        # --- the ranks and the comparison, staged together -------------------------------------
+        with contextlib.ExitStack() as stack:
+            tmps = {k: stack.enter_context(_finalize_output_dir(rank_dirs[k], force=force)) for k in ranks}
+            c_tmp = stack.enter_context(_finalize_output_dir(comparison_final, force=force))
+            results: dict[int, dict] = {}
+            for k in ranks:
+
+                def rank_extra(record: dict, k: int = k) -> dict:
+                    return {"reference": reference_block, "findings": [*static_findings, *_rank_findings(primary, record, k)]}
+
+                results[k] = _run_trajectory_analysis(
+                    input_dir=input_dir, final=rank_dirs[k], n_jobs=n_jobs, force=force, step=step,
+                    latent_adjustment=ANALYSIS_LATENT_ADJUSTMENT, expected=RANK_SENSITIVITY_EXPECTED_COUNTS["analysis"][k],
+                    manifest_extra=rank_extra, loaded=loaded, staging=tmps[k], log=f"{log} rank {k}:",
+                    forced_components=k,
+                    rank_sweep={"ladder": ladder_block, "forced_rank": k, "primary_rank": r, "anchor": anchor_block},
+                )
+
+            # --- the nesting, in memory: no score is printed or written --------------------------
+            scores = {k: pd.read_csv(tmps[k] / ANALYSIS_LATENT_SCORES) for k in ranks}
+            nesting: dict[str, dict] = {}
+            for k in ranks:
+                columns = [f"pls_{j}" for j in range(k)]
+                m = min(k, r)
+                shared = [f"pls_{j}" for j in range(m)]
+                same_rows_top = scores[k][SAMPLE_COLUMN].astype(str).equals(scores[top][SAMPLE_COLUMN].astype(str))
+                same_rows_anchor = scores[k][SAMPLE_COLUMN].astype(str).equals(anchor_scores[SAMPLE_COLUMN].astype(str))
+                nesting[_rank_dir_name(k)] = {
+                    "rank": k,
+                    "first_columns_of_top": bool(
+                        same_rows_top and np.array_equal(scores[k][columns].to_numpy(), scores[top][columns].to_numpy())
+                    ),
+                    "anchor_columns": m,
+                    "first_columns_of_anchor": bool(
+                        same_rows_anchor and np.array_equal(scores[k][shared].to_numpy(), anchor_scores[shared].to_numpy())
+                    ),
+                }
+            del scores, anchor_scores
+            nesting_findings = [
+                f"{name}: its latent scores are not the first {n['rank']} column(s) of rank {top}'s"
+                + ("" if n["first_columns_of_anchor"] else f" nor match the anchor's first {n['anchor_columns']}")
+                + " (nesting, sweep rule 3); this contradicts the spike of adni-rank-sensitivity and is reported, never a stop"
+                if not n["first_columns_of_top"]
+                else f"{name}: its first {n['anchor_columns']} latent score column(s) differ from the anchor's (nesting, "
+                "sweep rule 3); this contradicts the spike of adni-rank-sensitivity and is reported, never a stop"
+                for name, n in nesting.items()
+                if not (n["first_columns_of_top"] and n["first_columns_of_anchor"])
+            ]
+            print(
+                f"{log} nesting: " + ", ".join(
+                    f"{name} {'yes' if n['first_columns_of_top'] and n['first_columns_of_anchor'] else 'NO'}"
+                    for name, n in nesting.items()
+                ) + f" (the first columns of rank {top}'s and of the anchor's)"
+            )
+
+            # --- the comparison ---------------------------------------------------------------------
+            rows = [_rank_comparison_row("primary", primary_dir, primary)] + [
+                _rank_comparison_row(_rank_dir_name(k), Path(_rank_dir_name(k)), results[k]["record"]) for k in ranks
+            ]
+            statuses = {
+                k: _comparison_statuses(rows[0], row, differs=_RANK_SENSITIVITY_STATUS_DIFFERS)
+                for k, row in zip(ranks, rows[1:])
+            }
+            table = pd.DataFrame(rows, columns=list(_RANK_SENSITIVITY_COLUMNS), dtype=object)
+            for s in ANALYSIS_STATISTICS:
+                print(
+                    f"{log} {s}: primary {_fmt(rows[0][f'{s}_observed'])} (p {_fmt(rows[0][f'{s}_p'])}, "
+                    f"{_rejection_text(rows[0][f'{s}_rejected'])}); " + "; ".join(
+                        f"rank {k} {_fmt(row[f'{s}_observed'])} (p {_fmt(row[f'{s}_p'])}, {statuses[k][s]})"
+                        for k, row in zip(ranks, rows[1:])
+                    )
+                )
+            counts = {
+                "rows": len(rows),
+                "statuses": {_rank_dir_name(k): statuses[k] for k in ranks},
+                "ranks": {"primary": r, **{_rank_dir_name(k): int(results[k]["record"]["latent"]["selected_lv"]) for k in ranks}},
+                "component_selection": {
+                    "primary": selection,
+                    **{_rank_dir_name(k): results[k]["record"]["latent"]["component_selection"] for k in ranks},
+                },
+                "eigengap": {row["analysis"]: row["eigengap"] for row in rows},
+                "rejected": {row["analysis"]: {s: row[f"{s}_rejected"] for s in ANALYSIS_STATISTICS} for row in rows},
+                "nesting": nesting,
+                "nesting_holds": all(n["first_columns_of_top"] and n["first_columns_of_anchor"] for n in nesting.values()),
+            }
+            expected = {"anchor": expected_anchor, "comparison": RANK_SENSITIVITY_EXPECTED_COUNTS["comparison"]}
+            comparison_deviations = _count_deviations(expected["comparison"], {"rows": counts["rows"]}, "comparison")
+            rank_deviations = _dedupe(msg for k in ranks for msg in results[k]["manifest"]["deviations"])
+            numerics, numerics_findings = _numerics(log)
+            findings = _dedupe([
+                *static_findings,
+                *(msg for k in ranks for msg in results[k]["findings"]),
+                *nesting_findings,
+                *comparison_deviations,
+                *(
+                    [
+                        f"n_jobs = {n_jobs}: MOTCO seeds one RRPP stream per worker, so the ranks' permutation draws, "
+                        f"p-values and null summaries differ from an n_jobs = {REPORTED_N_JOBS} run; the sweep is not "
+                        f"reported (REPORTED_N_JOBS = {REPORTED_N_JOBS})"
+                    ]
+                    if n_jobs != REPORTED_N_JOBS else []
+                ),
+                *numerics_findings,
+            ])
+            ranks_block = {
+                _rank_dir_name(k): {
+                    "dir": str(rank_dirs[k]),
+                    "rank": k,
+                    "files": {
+                        n: {"sha256": _sha256_file(tmps[k] / n), "bytes": (tmps[k] / n).stat().st_size}
+                        for n in (ANALYSIS_RESULT, ANALYSIS_MANIFEST)
+                    },
+                    "deviations": results[k]["manifest"]["deviations"],
+                    "findings": results[k]["findings"],
+                }
+                for k in ranks
+            }
+            manifest = {
+                "step": step,
+                "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "versions": _software_versions((*_MANIFEST_PACKAGES, "motco", "scikit-learn")),
+                "numerics": numerics,
+                "git_revision": _git_revision(),
+                "inputs": {
+                    "export": {
+                        "dir": str(input_dir),
+                        "files": loaded["inputs"],
+                        "export_manifest": {"name": EXPORT_MANIFEST, "sha256": loaded["inputs"][EXPORT_MANIFEST]["sha256"]},
+                        "export_git_revision": p_export.get("git_revision"),
+                        "export_created_at": p_export.get("created_at"),
+                    },
+                    "primary": {
+                        "dir": str(primary_dir),
+                        "files": reference["files"],
+                        "chain": reference["chain"],
+                        "export_manifest_equals": reference["export_manifest_equals"],
+                        "primary_records_export": True,
+                        "result_equals_primary_manifest": True,
+                        "step": p_manifest.get("step"),
+                        "component_selection": selection,
+                        "latent_adjustment": None,
+                        "n_jobs": reference["n_jobs"],
+                        "selected_rank": r,
+                        "motco": reference["motco"],
+                        "seed_and_permutations_equal_constants": True,
+                        "git_revision": p_manifest.get("git_revision"),
+                        "created_at": p_manifest.get("created_at"),
+                    },
+                },
+                "settings": {
+                    "RANK_SENSITIVITY_LADDER": ladder,
+                    "ANALYSIS_ALPHA": ANALYSIS_ALPHA,
+                    "ANALYSIS_REJECTION_RULE": ANALYSIS_REJECTION_RULE,
+                    "ANALYSIS_RANK_FLOOR": ANALYSIS_RANK_FLOOR,
+                    "n_jobs": n_jobs,
+                    "REPORTED_N_JOBS": REPORTED_N_JOBS,
+                    "status_rule": (
+                        f"{_LATENT_SENSITIVITY_STATUS_SAME!r} when both rejections under ANALYSIS_REJECTION_RULE are "
+                        f"equal, else {_RANK_SENSITIVITY_STATUS_DIFFERS!r}; the primary's status is the result either way"
+                    ),
+                    "columns": list(_RANK_SENSITIVITY_COLUMNS),
+                },
+                "reference": reference_block,
+                "anchor": anchor_block,
+                "ranks": ranks_block,
+                "counts": counts,
+                "expected": expected,
+                "deviations": [*anchor_deviations, *comparison_deviations, *rank_deviations],
+                "findings": findings,
+            }
+            table.to_csv(c_tmp / RANK_SENSITIVITY_TABLE, index=False)
+            (c_tmp / RANK_SENSITIVITY_SUMMARY).write_text(
+                render_rank_sensitivity(
+                    rows, statuses=statuses, primary=primary, records={k: results[k]["record"] for k in ranks},
+                    reference={"dir": str(primary_dir), "files": reference["files"]}, anchor=anchor_block,
+                    nesting=nesting, findings=findings, n_jobs=n_jobs,
+                )
+            )
+            comparison_names = [RANK_SENSITIVITY_TABLE, RANK_SENSITIVITY_SUMMARY]
+            manifest["outputs"] = {
+                n: {"sha256": _sha256_file(c_tmp / n), "bytes": (c_tmp / n).stat().st_size, "participant_level": False}
+                for n in comparison_names
+            }
+            _write_manifest(c_tmp / RANK_SENSITIVITY_MANIFEST, manifest)
+    except BaseException:
+        # a run that fails before writing leaves no empty output root behind (a failed anchor keeps anchor.tmp/)
+        if not root_existed and root.is_dir() and not any(root.iterdir()):
+            root.rmdir()
+        raise
+
+    for k in ranks:
+        print(f"{log} wrote {rank_dirs[k]}/ ({', '.join([*results[k]['names'], ANALYSIS_MANIFEST])})")
+    print(f"{log} wrote {comparison_final}/ ({', '.join([*comparison_names, RANK_SENSITIVITY_MANIFEST])})")
+    n_dev = len(manifest["deviations"])
+    print(f"{log} " + (f"{n_dev} count deviation(s) from the predeclared counts" if n_dev else "counts reproduce the predeclared ones"))
+    for msg in findings:
+        print(f"{log} FINDING: {msg}")
+    print(
+        f"{log} the primary stays primary; next: `adni-sexdiff axis-diagnostics --analysis-dir {rank_dirs[top]} "
+        f"--out-dir {diagnostics_final}`"
+    )
+    return {
+        "dir": root,
+        "anchor": anchor_block,
+        "ranks": results,
+        "comparison": {"rows": rows, "statuses": statuses, "nesting": nesting, "manifest": manifest},
         "findings": findings,
     }
 

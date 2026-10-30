@@ -3,7 +3,7 @@
 A thin argparse layer over ``data.py``: one subcommand per pipeline step
 (``clean``, ``cohort``, ``export``, ``analyze``, ``axis-diagnostics``,
 ``report``) and one per sensitivity step (``latent-sensitivity``,
-``export-sensitivity``, ``stage-sensitivity``), each
+``export-sensitivity``, ``stage-sensitivity``, ``rank-sensitivity``), each
 printing ``[command]``-prefixed progress messages that name files and
 counts, never a participant. ``report --check`` exits 1 on any mismatch.
 """
@@ -27,6 +27,10 @@ from .constants import (
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
     PLATFORMS,
+    RANK_SENSITIVITY_DIR,
+    RANK_SENSITIVITY_LADDER,
+    RANK_SENSITIVITY_RANK_DIR,
+    RANK_SENSITIVITY_SUBDIRS,
     REPORT_NAME,
     REPORTED_N_JOBS,
     REPORTS_DIR,
@@ -41,6 +45,7 @@ from .data import (
     run_export,
     run_export_sensitivity,
     run_latent_sensitivity,
+    run_rank_sensitivity,
     run_report,
     run_stage_sensitivity,
 )
@@ -225,6 +230,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_force(p)
 
+    ranks = ", ".join(str(k) for k in RANK_SENSITIVITY_LADDER["ranks"])
+    rank_dirs = RANK_SENSITIVITY_RANK_DIR.replace("{rank:02d}", "<kk>")
+    p = sub.add_parser(
+        "rank-sensitivity",
+        help=f"The predeclared rank sweep (RANK_SENSITIVITY_LADDER: the primary's analysis at the forced ranks {ranks}, "
+        "after an anchor run at the primary's rank reproduces the primary) and its comparison with the primary, read "
+        f"beside it and never replacing it -> {RANK_SENSITIVITY_DIR}/{{{rank_dirs},{RANK_SENSITIVITY_SUBDIRS['comparison']}}}/",
+    )
+    p.add_argument(
+        "--input-dir", type=Path, default=None,
+        help=f"The primary export, read as analyze reads it, never written (default: {MOTCO_INPUT_DIR})",
+    )
+    p.add_argument(
+        "--analysis-dir", type=Path, default=None,
+        help=f"The primary's analysis directory, read as the reference, never written (default: {MOTCO_ANALYSIS_DIR})",
+    )
+    p.add_argument(
+        "--out-dir", type=Path, default=None,
+        help=f"Output root; one {rank_dirs}/ per rank and {RANK_SENSITIVITY_SUBDIRS['comparison']}/ are written under it, "
+        f"{RANK_SENSITIVITY_SUBDIRS['diagnostics']}/ never (default: {RANK_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
+        "--n-jobs",
+        type=int,
+        default=REPORTED_N_JOBS,
+        help=f"Parallel jobs for MOTCO's RRPP (default: {REPORTED_N_JOBS}; reported runs use {REPORTED_N_JOBS})",
+    )
+    _add_force(p)
+
     p = sub.add_parser(
         "report",
         help="Write the case-study report from the kept aggregate outputs (no participant-level file is read), or check "
@@ -320,6 +354,14 @@ def main(argv: list[str] | None = None) -> int:
             input_dir=args.input_dir,
             analysis_dir=args.analysis_dir,
             cohort_dir=args.cohort_dir,
+            out_dir=args.out_dir,
+            n_jobs=args.n_jobs,
+            force=args.force,
+        )
+    elif args.command == "rank-sensitivity":
+        run_rank_sensitivity(
+            input_dir=args.input_dir,
+            analysis_dir=args.analysis_dir,
             out_dir=args.out_dir,
             n_jobs=args.n_jobs,
             force=args.force,

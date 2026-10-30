@@ -63,9 +63,19 @@ Scientific constants
     ``adni-stage-sensitivity``, with the predeclared
     ``STAGE_SENSITIVITY_EXPECTED_COUNTS`` and the conventions
     ``STAGE_SENSITIVITY_DIR``, ``STAGE_SENSITIVITY_SUBDIRS`` and the output
-    names. Every scientific constant the six steps and the three sensitivity
-    steps need is decided; a later variant or arm introduces its own by
-    proposal. The changes
+    names; ``RANK_SENSITIVITY_LADDER`` (the single forced-rank ladder
+    ``forced_rank_ladder``: ranks 2, 3, 4, 6, 9 and 12, the one setting
+    ``forced_components``, the same seed and permutations at every rank, the
+    anchor at the primary record's rank, the top rank diagnosed, every other
+    setting the primary's; ordered and tied to ``ANALYSIS_RANK_FLOOR`` by three
+    import-time assertions) and ``RANK_SENSITIVITY_READING_RULES`` (the eight
+    statements every reader of the sweep carries after ``READING_RULES``), by
+    the change ``adni-rank-sensitivity``, with the predeclared
+    ``RANK_SENSITIVITY_EXPECTED_COUNTS`` and the conventions
+    ``RANK_SENSITIVITY_DIR``, ``RANK_SENSITIVITY_RANK_DIR``,
+    ``RANK_SENSITIVITY_SUBDIRS`` and the output names. Every scientific
+    constant the six steps and the four sensitivity steps need is decided; a
+    later variant or arm introduces its own by proposal. The changes
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
     report extended to every export variant) and ``adni-report-stage-arm``
     (the report extended to the CN / LMCI / AD arm) introduce no scientific
@@ -117,6 +127,11 @@ EXPORT_SENSITIVITY_DIR = "results/motco_export_sensitivity"
 #: The output root of ``stage-sensitivity`` (change ``adni-stage-sensitivity``),
 #: laid out as ``STAGE_SENSITIVITY_SUBDIRS``.
 STAGE_SENSITIVITY_DIR = "results/motco_stage_sensitivity"
+#: The output root of ``rank-sensitivity`` (change ``adni-rank-sensitivity``):
+#: one analysis directory per rank of ``RANK_SENSITIVITY_LADDER``
+#: (``RANK_SENSITIVITY_RANK_DIR``), laid out as ``MOTCO_ANALYSIS_DIR``, and
+#: ``RANK_SENSITIVITY_SUBDIRS``.
+RANK_SENSITIVITY_DIR = "results/motco_rank_sensitivity"
 REPORTS_DIR = "reports"
 
 # --- Output file names -----------------------------------------------------
@@ -1407,6 +1422,136 @@ STAGE_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict] = {
         **{key: DIAGNOSTICS_EXPECTED_COUNTS[key] for key in DIAGNOSTICS_RANK_INDEPENDENT_KEYS},
         "participants": 1130,
         "sex_stage": _STAGE_SENSITIVITY_CELLS,
+    },
+}
+
+
+# --- rank-sensitivity: conventions --------------------------------------------
+
+#: The analysis directory of one rank under ``RANK_SENSITIVITY_DIR``, the rank
+#: in two digits so that directory order is rank order (``rank_02`` …
+#: ``rank_12``). Each is laid out as ``MOTCO_ANALYSIS_DIR``; there is no
+#: ``motco_input/``, since every rank reads the primary export.
+RANK_SENSITIVITY_RANK_DIR = "rank_{rank:02d}"
+#: The other subdirectories of ``RANK_SENSITIVITY_DIR``: ``comparison`` (the
+#: primary and every rank side by side, written by ``rank-sensitivity``) and
+#: ``diagnostics`` (``axis-diagnostics --analysis-dir <root>/rank_12 --out-dir
+#: <diagnostics>``, never touched by ``rank-sensitivity``).
+RANK_SENSITIVITY_SUBDIRS: dict[str, str] = {
+    "comparison": "comparison",
+    "diagnostics": "diagnostics",
+}
+#: ``comparison/``: the primary and the ranks side by side.
+RANK_SENSITIVITY_TABLE = "rank_sensitivity.csv"
+RANK_SENSITIVITY_SUMMARY = "rank_sensitivity.md"
+RANK_SENSITIVITY_MANIFEST = "rank_sensitivity_manifest.json"
+
+# --- rank-sensitivity: scientific constants -----------------------------------
+
+#: Decided by the change ``adni-rank-sensitivity`` (2026-10-30, before any
+#: forced rank ran on ADNI data) and never changed by a flag, a result or a
+#: count. The single rank sweep: the primary analysis rerun once per rank of
+#: ``ranks`` with MOTCO's ``forced_components`` set to the rank (the rank is
+#: fixed and MOTCO's cross-validation skipped) and every other setting the
+#: primary's (the primary export, ``ANALYSIS_*`` and MOTCO's defaults, no
+#: latent adjustment, ``n_jobs = 1`` for the reported run), the same seed and
+#: permutations at every rank. 2 is ``ANALYSIS_RANK_FLOOR`` and
+#: ``n_stages − 1``; 3 the next rank; 4, 6, 9 and 12 the steps of MOTCO's rank
+#: ladder and of the template's sweep. The primary's rank is not on the
+#: ladder: one forced run at the primary record's rank (the anchor) must
+#: reproduce the primary before any rank runs, and is not kept. The top rank
+#: is the one the axis diagnostic reads (PLS-DA components are nested, so its
+#: components hold every rank's). Not crossed with the latent adjustment, an
+#: export variant or the CN / LMCI / AD arm. It is read beside the primary and
+#: never replaces it. The assertions below keep the ladder ordered, tie its
+#: bottom to the floor and its diagnosed rank to its top.
+RANK_SENSITIVITY_LADDER: dict = {
+    "name": "forced_rank_ladder",
+    "setting": "forced_components",
+    "ranks": (2, 3, 4, 6, 9, 12),
+    "draws": "ANALYSIS_SEED and ANALYSIS_PERMUTATIONS at every rank (the same permutation indices at n_jobs = 1)",
+    "anchor": "one forced run at the primary record's rank, compared with the primary before any rank runs; not kept",
+    "diagnosed_rank": 12,
+    "analysis": "the primary's (the primary export; ANALYSIS_* constants and MOTCO's defaults; no latent adjustment)",
+    "change": "adni-rank-sensitivity",
+}
+assert RANK_SENSITIVITY_LADDER["ranks"] == tuple(sorted(set(RANK_SENSITIVITY_LADDER["ranks"]))), (
+    "RANK_SENSITIVITY_LADDER's ranks must be distinct and in increasing order"
+)
+assert RANK_SENSITIVITY_LADDER["ranks"][0] == ANALYSIS_RANK_FLOOR, (
+    "RANK_SENSITIVITY_LADDER's lowest rank must be ANALYSIS_RANK_FLOOR"
+)
+assert RANK_SENSITIVITY_LADDER["diagnosed_rank"] == max(RANK_SENSITIVITY_LADDER["ranks"]), (
+    "RANK_SENSITIVITY_LADDER's diagnosed rank must be its top rank"
+)
+
+#: Decided by the change ``adni-rank-sensitivity``, written before any run:
+#: the binding reading rules of the rank sweep, printed verbatim after
+#: ``READING_RULES`` in each rank's ``summary.md``, in ``rank_sensitivity.md``,
+#: in the top rank's ``diagnostics.md`` and in every report that quotes the
+#: sweep. The forced-rank evidence quoted is MOTCO's rank ladder
+#: (``latent-rank-ladder-2026-09-08``), none from a forced run on ADNI data.
+RANK_SENSITIVITY_READING_RULES: tuple[str, ...] = (
+    "The sweep is read beside the primary and never replaces it. The primary's rank is its CV-selected rank (8). No "
+    "rank of the sweep is chosen, adopted or ranked, and no sweep result changes a constant (`ANALYSIS_RANK_FLOOR` "
+    "and the ladder included), reruns the primary or defines another arm.",
+    "Every rank is the primary's analysis with one setting changed: `forced_components`, which fixes the rank and "
+    "skips MOTCO's cross-validation. The export, the covariates and their coding, the seed, the permutations and "
+    "every other setting are the primary's, and at `n_jobs = 1` every rank permutes the same residual indices. A "
+    "difference between ranks is a difference of measurement, not of permutation draws. A rejection status that "
+    "differs from the primary's is rank dependence, not a result at that rank.",
+    "PLS-DA components are nested. At a forced rank at or below the primary's 8, the latent space is spanned by the "
+    "primary's first components; a rank above 8 adds components the cross-validation did not select. The anchor run "
+    "at rank 8 reproduces the primary's record and files exactly, so the primary row is also the sweep's row at its "
+    "rank.",
+    "Each rank's floor, eigengap and `angle` null summary are reported beside its `angle`. The `angle` null depends "
+    "on the rank, so each `angle` is read against its own null, never against the `angle` of another rank. At rank "
+    "2, the floor, `angle` and `shape` are measured in two dimensions (reading rule 2).",
+    "MOTCO's forced-rank evidence is its Phase 5 rank ladder (2026-09-08; MOTCO 0.6.0, n = 1200, four stages, no "
+    "covariates): size held at every forced rank, and the ranks above `n_stages − 1` lost `shape` power and gained "
+    "no `angle` power. No Type I or power check exists at a forced rank at this design or with covariates. A "
+    "non-rejection at any rank is no more informative than the primary's (reading rule 3), and a rejection at a "
+    "forced rank only is rank dependence, read beside that rank's null summary.",
+    "The sweep is not a test. No rule combines the ranks, picks the rank with the smallest p-value or counts the "
+    "ranks that reject, and the p-values are not adjusted for multiplicity because no decision is taken from them.",
+    "The axis diagnostic of the top rank (12) is reported beside the sweep. Its components up to the primary's rank "
+    "are the primary's, with the primary's correlations. A component above it that tracks a variable, `phase` in "
+    "particular, is a measurement-space finding about the higher ranks and never grounds to choose a rank.",
+    "The sweep is not crossed with the latent adjustment, an export variant or the CN / LMCI / AD arm, and is read "
+    "against the primary only. The CV-selected ranks of those analyses are their own selections, and no sentence "
+    "reads them against the sweep.",
+)
+
+# --- rank-sensitivity: predeclared counts -------------------------------------
+
+#: Predeclared by the change ``adni-rank-sensitivity`` from the committed
+#: primary manifests and the ladder (none from a forced run on ADNI data).
+#: ``anchor``: the primary record's rank, at which the anchor runs.
+#: ``analysis``, per rank: every key of ``ANALYSIS_EXPECTED_COUNTS`` with
+#: selection ``forced``, the forced rank and no CV repeat. ``comparison``: the
+#: primary row and one row per rank. ``diagnostics``: the rank-independent keys
+#: of ``DIAGNOSTICS_EXPECTED_COUNTS``, the read (the top rank, forced, no latent
+#: adjustment, ``n_jobs`` 1) and the rows the four tables hold at that rank
+#: (12 × 8, 2 × 3 × 8, 4 × 12, 12). No rank's statistic or status is
+#: predeclared. ``rank-sensitivity`` and ``axis-diagnostics`` compare the sweep
+#: with these and record every difference as a finding; a difference never
+#: stops a step and never changes a setting.
+RANK_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict] = {
+    "anchor": {"rank": DIAGNOSTICS_EXPECTED_COUNTS["primary"]["selected_rank"]},
+    "analysis": {
+        rank: {**ANALYSIS_EXPECTED_COUNTS, "component_selection": "forced", "selected_rank": rank, "cv_repeats_completed": 0}
+        for rank in RANK_SENSITIVITY_LADDER["ranks"]
+    },
+    "comparison": {"rows": 1 + len(RANK_SENSITIVITY_LADDER["ranks"])},
+    "diagnostics": {
+        **{key: DIAGNOSTICS_EXPECTED_COUNTS[key] for key in DIAGNOSTICS_RANK_INDEPENDENT_KEYS},
+        "primary": {
+            "selected_rank": 12,
+            "component_selection": "forced",
+            "latent_adjustment": ANALYSIS_LATENT_ADJUSTMENT,
+            "n_jobs": REPORTED_N_JOBS,
+        },
+        "rows": {"axis_correlations": 96, "block_pcs": 48, "geometry_shares": 48, "components": 12},
     },
 }
 
