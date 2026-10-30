@@ -166,8 +166,9 @@ def build_parser() -> argparse.ArgumentParser:
     written = ", ".join(EXPORT_SENSITIVITY_SUBDIRS[k] for k in ("bridge", "export", "analysis", "comparison"))
     p = sub.add_parser(
         "export-sensitivity",
-        help="Predeclared export variants of the p180 run handling (EXPORT_VARIANTS: " + ", ".join(EXPORT_VARIANTS)
-        + "): each reruns the export with its one p180 setting, analyses it at the primary's settings and compares it "
+        help="Predeclared export variants, of the p180 run handling or the NMR membership (EXPORT_VARIANTS: "
+        + ", ".join(EXPORT_VARIANTS)
+        + "): each reruns the export with its one setting, analyses it at the primary's settings and compares it "
         f"with the primary, read beside it and never replacing it -> {EXPORT_SENSITIVITY_DIR}/<variant>/{{{written}}}/",
     )
     p.add_argument(

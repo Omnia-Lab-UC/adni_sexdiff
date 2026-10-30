@@ -11,7 +11,9 @@ so are the sensitivity steps ``latent-sensitivity`` (change
 ``adni-latent-sensitivity``: the predeclared ``stage``-conditioned
 latent-adjustment arm), ``export-sensitivity`` (change
 ``adni-nist-bridge``: the predeclared export variants of the p180 run
-handling, a NIST SRM 1950 bridge and per-run standardization),
+handling, a NIST SRM 1950 bridge and per-run standardization; change
+``adni-nmr-all-columns``: the NMR membership variant, every cleaned NMR
+column in the block),
 ``stage-sensitivity`` (change ``adni-stage-sensitivity``: the predeclared
 CN / LMCI / AD arm) and ``rank-sensitivity`` (change
 ``adni-rank-sensitivity``: the predeclared forced-rank ladder after an
@@ -24,14 +26,15 @@ The raw-input helpers (``require_raw_files``, ``hash_raw_file``,
 ``check_known_repairs``), the version gates (``check_metabo_adni_version``,
 ``check_motco_version``, ``check_motco_rank_floor``), the shared export
 function (``_run_export``, the body of ``export`` that a variant calls with
-its one p180 hook), the shared analysis function
+its one hook), the shared analysis function
 (``_run_trajectory_analysis``, the body of ``analyze`` that the arms, the
 variants and the ranks of the sweep call with their one differing input or
 setting), the shared reading sentences
 (``_statistic_reading_line``, ``_arm_status_line``,
 ``_export_variant_status_line``, ``_stage_arm_status_line``,
 ``_rank_status_line``: the code of
-``summary.md``, the comparison documents and the report) and the manifest
+``summary.md``, the comparison documents and the report; a variant's words
+come from ``_variant_words``) and the manifest
 and output-directory helpers (``_git_revision``, ``_software_versions``,
 ``_write_manifest``, ``_finalize_output_dir``) are shared by every step.
 
@@ -63,6 +66,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import constants
 from .constants import (
     ANALYSIS_ALPHA,
     ANALYSIS_CATEGORICAL_COVARIATES,
@@ -137,6 +141,7 @@ from .constants import (
     EXPORT_SENSITIVITY_TABLE,
     EXPORT_VARIANT_EXPECTED_COUNTS,
     EXPORT_VARIANT_READING_RULES,
+    EXPORT_VARIANT_RULE_SETS,
     EXPORT_VARIANTS,
     GROUP_COLUMN,
     GROUP_VALUES,
@@ -169,6 +174,7 @@ from .constants import (
     RANK_SENSITIVITY_TABLE,
     RAW_INPUT_SHA256,
     READING_RULES,
+    REPORT_EXPORT_VARIANTS,
     REPORT_INPUT_FILES,
     REPORT_NAME,
     REPORT_SECTIONS,
@@ -1841,9 +1847,10 @@ def run_export(
     stop, and its outputs are not committed.
 
     The body is ``_run_export`` with no variant; the ``export-sensitivity``
-    step (change ``adni-nist-bridge``) calls the same function with one p180
-    hook of ``EXPORT_VARIANTS`` set, and the primary's outputs are its byte
-    gate.
+    step (change ``adni-nist-bridge``) calls the same function with one hook
+    of ``EXPORT_VARIANTS`` set (a p180 hook, or ``membership`` on the NMR
+    block, change ``adni-nmr-all-columns``), and the primary's outputs are
+    its byte gate.
     """
     cleaned = Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR)
     cohort_path = Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR)
@@ -1903,7 +1910,17 @@ def _run_export(
         ``factors`` multiplies the cleaned concentrations of the
         ``NIST_BRIDGE_RULE["bridged_run"]`` rows by 2^factor before the
         floors; ``standardize_by_run`` centres and scales each metabolite on
-        the rule's scale within each run, after the floors and the log.
+        the rule's scale within each run, after the floors and the log;
+        ``membership`` (change ``adni-nmr-all-columns``) keeps every cleaned
+        column of the block in cleaned order, the derived ones among them,
+        each on the rule's scale with its own floor (the counts record
+        ``derived`` 0 per family and ``derived_kept``; every row of the
+        feature table is ``kept`` with its family), and compares the
+        columns the rule keeps with the primary's ``<block>.csv`` (read
+        from ``reference["dir"]`` with ``float_precision="round_trip"``):
+        names, order and every cell, recorded as
+        ``counts.rule_columns_equal_primary``, a difference a finding naming
+        the block and the count of columns.
     factors:
         The log2 factor per metabolite of the block (hook ``factors``; from
         ``nist_bridge``); a metabolite without one keeps factor 1.
@@ -1933,7 +1950,8 @@ def _run_export(
     rule's, over the exported participants; ``phase`` is read to count the
     participants whose run differs from it (a finding) and, as in the
     primary, to describe the run offset. Its expected counts are
-    ``EXPORT_VARIANT_EXPECTED_COUNTS[variant]`` without ``analysis``.
+    ``EXPORT_VARIANT_EXPECTED_COUNTS[variant]`` without ``analysis`` and
+    ``diagnostics``.
     """
     spec = EXPORT_VARIANTS[variant] if variant is not None else None
     step = "export" if spec is None else "export-sensitivity"
@@ -2075,13 +2093,21 @@ def _run_export(
         name = CLEAN_TABLES[platform]
         derived_marks = rule["membership"][platform]["derived"]
         families = {c: _feature_family(str(c), derived_marks) for c in table.columns}
-        kept = [c for c in table.columns if families[c] is None]
+        # hook ``membership`` (``nmr_all_columns``): every cleaned column of the block, the derived ones among them
+        membership = spec is not None and spec["hook"] == "membership" and platform == spec["block"]
+        kept = list(table.columns) if membership else [c for c in table.columns if families[c] is None]
         kept_pos = {c: j for j, c in enumerate(kept)}
         counts["features"][platform] = {
             "cleaned": int(table.shape[1]),
             "kept": len(kept),
-            "derived": {fam: sum(1 for f in families.values() if f == fam) for fam in _DERIVED_FAMILIES},
+            "derived": {
+                fam: sum(1 for c, f in families.items() if f == fam and c not in kept_pos) for fam in _DERIVED_FAMILIES
+            },
         }
+        if membership:
+            counts["features"][platform]["derived_kept"] = {
+                fam: sum(1 for c, f in families.items() if f == fam and c in kept_pos) for fam in _DERIVED_FAMILIES
+            }
         X = table.to_numpy(dtype=float)
         n_missing = int(np.isnan(X).sum())
         if n_missing:
@@ -2120,12 +2146,12 @@ def _run_export(
             row = {
                 "feature": c,
                 "family": fam or _KEPT_FAMILY,
-                "status": "derived" if fam else "kept",
+                "status": "kept" if c in kept_pos else "derived",
                 "zero_cells": int(zeros[i]),
                 "median": median[i],
                 "skew_raw": skew_raw[i],
             }
-            if fam is None:
+            if c in kept_pos:
                 j = kept_pos[c]
                 row.update(
                     floor=floor[j],
@@ -2142,10 +2168,42 @@ def _run_export(
         counts["shape"][platform] = _shape_counts(T)
         counts["spectrum"][platform] = _spectrum(T)
         counts["phase_offset"][platform] = offset
+        if membership:
+            # The columns the rule keeps must be the primary's: names, order and every cell (design D2).
+            rule_columns = [c for c in kept if families[c] is None]
+            primary_path = Path((reference or {}).get("dir", MOTCO_INPUT_DIR)) / f"{platform}.csv"
+            primary_block = pd.read_csv(primary_path, float_precision="round_trip")
+            same_rows = SAMPLE_COLUMN in primary_block.columns and np.array_equal(
+                primary_block[SAMPLE_COLUMN].astype(str).to_numpy(), np.asarray(rids).astype(str)
+            )
+            primary_columns = [str(c) for c in primary_block.columns if c != SAMPLE_COLUMN]
+            n_differ = len(set(primary_columns) ^ {str(c) for c in rule_columns})
+            for c in rule_columns:
+                if str(c) not in primary_block.columns:
+                    continue
+                ours = np.ascontiguousarray(T[:, kept_pos[c]], dtype=float)
+                theirs = np.ascontiguousarray(primary_block[str(c)].to_numpy(dtype=float))
+                n_differ += int(not (same_rows and ours.tobytes() == theirs.tobytes()))
+            in_order = primary_columns == [str(c) for c in rule_columns]
+            counts["rule_columns_equal_primary"] = equal = n_differ == 0 and in_order
+            if not equal:
+                findings.append(
+                    f"{platform}: {n_differ} of the {len(rule_columns)} column(s) EXPORT_FEATURE_RULE keeps differ from the "
+                    f"primary {platform}.csv ({primary_path.parent}) in name or cells"
+                    + ("" if in_order else ", and their order differs")
+                    + f"; the variant changes {_variant_words(variant)['changes']} only"
+                )
+            print(
+                f"{log} {platform}: the {len(rule_columns)} column(s) EXPORT_FEATURE_RULE keeps "
+                + ("equal" if equal else "differ from")
+                + f" the primary {platform}.csv, column for column and cell for cell ({n_differ} differ)"
+            )
         derived_text = ", ".join(f"{fam} {n}" for fam, n in counts["features"][platform]["derived"].items() if n)
+        kept_text = ", ".join(f"{fam} {n}" for fam, n in counts["features"][platform].get("derived_kept", {}).items() if n)
         print(
             f"{log} {platform}: {len(kept)} of {table.shape[1]} cleaned column(s) kept"
             + (f" ({derived_text} derived)" if derived_text else "")
+            + (f" (every column, derived ones among them: {kept_text}; hook membership)" if kept_text else "")
             + f"; zero cells {counts['zero_cells'][platform]} in {counts['metabolites_with_zeros'][platform]} metabolite(s); "
             f"{scale['transform']} with floor at the {scale['floor_quantile']:.0%} quantile"
             + ("; standardized within run" if standardized else "")
@@ -2161,7 +2219,9 @@ def _run_export(
     if spec is None:
         expected = json.loads(json.dumps(EXPORT_EXPECTED_COUNTS))
     else:
-        expected = json.loads(json.dumps({k: v for k, v in EXPORT_VARIANT_EXPECTED_COUNTS[variant].items() if k != "analysis"}))
+        expected = json.loads(json.dumps(
+            {k: v for k, v in EXPORT_VARIANT_EXPECTED_COUNTS[variant].items() if k not in ("analysis", "diagnostics")}
+        ))
     observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
     deviations = [
         msg for key in expected if key != "unchanged_equal_primary"
@@ -2235,7 +2295,7 @@ def _run_export(
             if differ:
                 findings.append(
                     f"{', '.join(differ)}: sha256 differs from the hash the primary export manifest records "
-                    f"({(reference or {}).get('dir')}); a variant changes the {spec['block']} values only"
+                    f"({(reference or {}).get('dir')}); a variant changes {_variant_words(variant)['changes']} only"
                 )
         _write_manifest(tmp / EXPORT_MANIFEST, manifest)
 
@@ -2594,9 +2654,11 @@ def _statistic_reading_line(
     variant:
         The name of an export variant (``EXPORT_VARIANTS``, change
         ``adni-nist-bridge``): the sentence carries the variant's note (a
-        rejection the primary does not make is dependence on the run
-        handling, a non-rejection is no more informative than the
-        primary's); ``None`` otherwise.
+        rejection the primary does not make is dependence on what the variant
+        changes, a non-rejection is no more informative than the primary's),
+        in the words and rule citations of the variant's rule set
+        (``EXPORT_VARIANT_RULE_SETS``, change ``adni-nmr-all-columns``);
+        ``None`` otherwise.
     stage_arm:
         ``True`` for the CN / LMCI / AD arm (``STAGE_SENSITIVITY_ARM``, change
         ``adni-stage-sensitivity``): the sentence carries the arm's note (a
@@ -2650,13 +2712,13 @@ def _statistic_reading_line(
     elif arm:
         line += " In the arm this non-rejection is weaker than the primary's (arm rule 5)."
     elif variant is not None and rejected:
+        words = _variant_words(variant)
         line += (
-            " In the variant, a rejection the primary does not make is dependence on the handling of the p180 run, "
-            "not a result of the variant, and is read beside the variant's rank and null summary (variant rules 2 "
-            "and 6)."
+            f" In the variant, a rejection the primary does not make is dependence on {words['source']}, not a result "
+            f"of the variant, and is read beside the variant's rank and null summary ({words['cite']}s 2 and 6)."
         )
     elif variant is not None:
-        line += " In the variant this non-rejection is no more informative than the primary's (variant rule 6)."
+        line += f" In the variant this non-rejection is no more informative than the primary's ({_variant_words(variant)['cite']} 6)."
     elif stage_arm and rejected:
         line += (
             " In the CN / LMCI / AD arm, a rejection the primary does not make is dependence on the stage definition "
@@ -2735,12 +2797,18 @@ def render_analysis_summary(
     It also keys on ``export_manifest.get("variant")`` (change
     ``adni-nist-bridge``). With the block (an export variant of
     ``export-sensitivity``) the title and header name the variant, an "Export
-    variant" section follows "Latent space" (the p180 setting, the runs, for
-    ``nist_bridge`` the bridge summary and table, the run offset per block of
-    the primary export beside the variant's), each reading line carries the
-    variant's note, the export context names the variant's run offset and
-    ``EXPORT_VARIANT_READING_RULES`` follows ``READING_RULES`` under its own
-    heading; otherwise every byte is unchanged.
+    variant" section follows "Latent space" (``_export_variant_lines``: the
+    variant's setting, the blocks it keeps, the runs, for ``nist_bridge`` the
+    bridge summary and table, for ``nmr_all_columns`` the NMR membership, the
+    rule's columns equal, the block shares and the NMR shape counts, the run
+    offset per block of the primary export beside the variant's), each
+    reading line carries the variant's note, the export context names the
+    variant's run offset and what it changes (``_export_variant_phase_line``),
+    and the variant's rule set (``EXPORT_VARIANT_RULE_SETS``:
+    ``EXPORT_VARIANT_READING_RULES`` for the p180 variants,
+    ``NMR_MEMBERSHIP_READING_RULES`` for ``nmr_all_columns``, change
+    ``adni-nmr-all-columns``) follows ``READING_RULES`` under its own heading;
+    otherwise every byte is unchanged.
 
     And it keys on ``export_manifest.get("stage_arm")`` (change
     ``adni-stage-sensitivity``). With the block (the CN / LMCI / AD arm of
@@ -2961,8 +3029,8 @@ def render_analysis_summary(
         + f"; joint features {counts.get('joint_features')}",
         "- block shares (unweighted in MOTCO): " + ", ".join(f"{p} {_fmt(shares.get(p), '.3f')}" for p in EXPORT_BLOCKS),
         (
-            f"- run offset of this export (`phase`, ADNI1 against ADNI2GO; the variant `{variant_name}` handles the "
-            "p180 run and the primary's offset is beside it above): "
+            f"- run offset of this export (`phase`, ADNI1 against ADNI2GO; the variant `{variant_name}` "
+            f"{_variant_words(variant_name)['does']} and the primary's offset is beside it above): "
             if variant_name
             else "- run offset on the arm's rows (`phase`, ADNI1 against ADNI2GO, measured by stage-sensitivity and not "
             "corrected; the primary's is beside it above): "
@@ -2980,8 +3048,7 @@ def render_analysis_summary(
             "regressed out of the features within stage before the basis is fitted; the primary's latent space is "
             "built without it"
             if adjustment
-            else "- `phase` enters as a covariate of the stage means (above), as in the primary; the variant changes the "
-            "p180 values only (variant rule 2) and `phase` carries what remains of the run difference"
+            else _export_variant_phase_line(variant_name)
             if variant_name
             else "- `phase` enters as a covariate of the stage means (above), as in the primary; in the arm each stage "
             "holds one `DX.bl` category in both runs, so its coefficient is estimated from contrasts within one "
@@ -3012,8 +3079,7 @@ def render_analysis_summary(
         ]
         lines += [f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)]
     if variant_name:
-        lines += ["", *_export_variant_rules_heading(), ""]
-        lines += [f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)]
+        lines += ["", *_export_variant_rules_lines(variant_name)]
     if stage_arm:
         lines += ["", *_stage_arm_rules_heading(), ""]
         lines += [f"{i}. {rule}" for i, rule in enumerate(STAGE_SENSITIVITY_READING_RULES, 1)]
@@ -3229,14 +3295,71 @@ def _stage_arm_lines(export_manifest: dict) -> list[str]:
     return lines
 
 
-def _export_variant_rules_heading() -> list[str]:
-    """The heading and lead line of ``EXPORT_VARIANT_READING_RULES``, shared by every reader of a variant."""
+#: The name of each block in the sentences of a variant's readers (design D4
+#: of ``adni-nmr-all-columns``).
+_BLOCK_TEXT: dict[str, str] = {"p180": "p180", "nmr": "NMR"}
+
+
+def _variant_words(variant: str) -> dict:
+    """The words every reader of a variant prints (designs D3 and D4 of ``adni-nmr-all-columns``).
+
+    The variant's entry of ``EXPORT_VARIANT_RULE_SETS`` (``rules``, ``change``,
+    ``cite``, ``dependence``, ``source``, ``heading``, ``reader``), with
+    ``rule_tuple`` (the rules themselves), ``differs`` (the status of a
+    statistic whose rejection differs from the primary's) and, from the
+    variant's block and hook in ``EXPORT_VARIANTS``: ``kept`` (the blocks it
+    keeps), ``changes`` (what it changes, as its rule 2 says it), ``does`` and
+    ``whose``. A variant of the p180 run keeps the words its committed
+    outputs print.
+    """
+    spec, entry = EXPORT_VARIANTS[variant], EXPORT_VARIANT_RULE_SETS[variant]
+    block = _BLOCK_TEXT[spec["block"]]
+    if spec["hook"] == "membership":
+        changes, does, whose = f"the {block} block's membership", f"changes the {block} block's membership", f"{block} block membership"
+    else:
+        changes, does, whose = f"the {block} values", f"handles the {block} run", f"{block} run handling"
+    return {
+        **entry,
+        "rule_tuple": getattr(constants, entry["rules"]),
+        "differs": f"differs ({entry['dependence']})",
+        "kept": ", ".join(f"the {_BLOCK_TEXT[p]} block" for p in EXPORT_BLOCKS if p != spec["block"]),
+        "changes": changes,
+        "does": does,
+        "whose": whose,
+    }
+
+
+def _export_variant_status_differs(variant: str) -> str:
+    """The status of a statistic whose rejection differs between the primary and the variant: ``differs (<dependence>)``."""
+    return _variant_words(variant)["differs"]
+
+
+def _export_variant_rules_heading(variant: str) -> list[str]:
+    """The heading and lead line of a variant's reading rules (``EXPORT_VARIANT_RULE_SETS``), shared by every reader of the variant."""
+    words = _variant_words(variant)
     return [
-        "## Reading rules of the export variants",
+        f"## {words['heading']}",
         "",
-        "Binding for every reader of an export variant (`EXPORT_VARIANT_READING_RULES`, decided by "
-        f"`{EXPORT_VARIANTS[next(iter(EXPORT_VARIANTS))]['change']}` before any run), after `READING_RULES`:",
+        f"Binding for every reader of {words['reader']} (`{words['rules']}`, decided by `{words['change']}` before any "
+        "run), after `READING_RULES`:",
     ]
+
+
+def _export_variant_rules_lines(variant: str) -> list[str]:
+    """The heading, lead line and numbered rules of a variant's rule set, printed after ``READING_RULES``."""
+    return [*_export_variant_rules_heading(variant), "", *(f"{i}. {rule}" for i, rule in enumerate(_variant_words(variant)["rule_tuple"], 1))]
+
+
+def _export_variant_phase_line(variant: str) -> str:
+    """The ``phase`` line of a variant's export context in ``summary.md`` (design D4 of ``adni-nmr-all-columns``)."""
+    spec, words = EXPORT_VARIANTS[variant], _variant_words(variant)
+    lead = "- `phase` enters as a covariate of the stage means (above), as in the primary; "
+    if spec["hook"] == "membership":
+        return (
+            lead + f"the variant changes the {_BLOCK_TEXT[spec['block']]} membership only ({words['cite']} 2) and `phase` "
+            "carries the run difference, as in the primary"
+        )
+    return lead + f"the variant changes {words['changes']} only ({words['cite']} 2) and `phase` carries what remains of the run difference"
 
 
 def _offset_text(offset: dict) -> str:
@@ -3252,10 +3375,17 @@ def _export_variant_lines(export_manifest: dict) -> list[str]:
     """The "Export variant" lines of a variant's ``summary.md``, every value read from the variant export manifest.
 
     The variant (``variant``), the primary export it is read beside
-    (``reference``), the assay runs of the exported participants
-    (``counts.runs``), for ``nist_bridge`` the bridge summary and table
-    (``bridge``), and the run offset per block, the primary's (copied into
-    ``reference.phase_offset``) then the variant's (``counts.phase_offset``).
+    (``reference``) with the blocks the variant keeps, the assay runs of the
+    exported participants (``counts.runs``), for ``nist_bridge`` the bridge
+    summary and table (``bridge``), for a variant with hook ``membership``
+    (``nmr_all_columns``, design D4 of ``adni-nmr-all-columns``) the block's
+    membership with the derived columns kept, the rule's columns equal to
+    the primary's (``counts.rule_columns_equal_primary``), the joint
+    features, the block shares and the block's shape counts, and the run
+    offset per block, the primary's (copied into ``reference.phase_offset``)
+    then the variant's (``counts.phase_offset``). Keys are taken in the
+    constants' orders, never in the manifest's, which is written with sorted
+    keys.
     """
     variant, reference = export_manifest["variant"], export_manifest.get("reference", {})
     counts = export_manifest.get("counts", {})
@@ -3263,11 +3393,30 @@ def _export_variant_lines(export_manifest: dict) -> list[str]:
     lines = [
         f"- variant: `{variant['name']}` (`EXPORT_VARIANTS`, change `{variant['change']}`): {variant['setting']}",
         f"- read beside the primary export `{reference.get('dir')}` (`{EXPORT_MANIFEST}` sha256 "
-        f"`{(reference.get('manifest') or {}).get('sha256')}`); the participants, the NMR block, the metadata and the "
-        "covariates are the primary's",
+        f"`{(reference.get('manifest') or {}).get('sha256')}`); the participants, {_variant_words(variant['name'])['kept']}, "
+        "the metadata and the covariates are the primary's",
         f"- assay run of the exported participants (`{CLEAN_RUNS_TABLE}`): " + ", ".join(f"{r} {n}" for r, n in runs.items())
         + f"; {counts.get('runs_differing_from_phase')} differ from `phase`",
     ]
+    if variant["hook"] == "membership":
+        block = variant["block"]
+        features = counts.get("features", {}).get(block, {})
+        derived_kept = features.get("derived_kept", {})
+        n_rule = features.get("kept", 0) - sum(derived_kept.get(fam, 0) for fam in _DERIVED_FAMILIES)
+        shape = counts.get("shape", {}).get(block, {})
+        shares = counts.get("block_shares", {})
+        equal = counts.get("rule_columns_equal_primary")
+        lines += [
+            f"- {block} membership (hook `membership`): {features.get('kept')} of {features.get('cleaned')} cleaned "
+            f"column(s), the {n_rule} `EXPORT_FEATURE_RULE` keeps and the derived ones it excludes ("
+            + ", ".join(f"{fam} {derived_kept.get(fam, 0)}" for fam in _DERIVED_FAMILIES)
+            + "), each on the rule's scale with its own floor; the rule's columns equal the primary "
+            f"`{block}.csv`'s, column for column and cell for cell: {'n/a' if equal is None else ('yes' if equal else 'no')}",
+            f"- joint features {counts.get('joint_features')}; block shares (unweighted in MOTCO): "
+            + ", ".join(f"{p} {_fmt(shares.get(p), '.3f')}" for p in EXPORT_BLOCKS),
+            f"- {block} block shape on the rule's scale: |skew| > 1 for {shape.get('abs_skew_gt_1')} column(s), largest "
+            f"|z| > 8 for {shape.get('max_abs_z_gt_8')}",
+        ]
     bridge = export_manifest.get("bridge")
     if bridge:
         summary, table = bridge["summary"], bridge["table"]
@@ -4499,11 +4648,14 @@ def render_axis_diagnostics(
     constant and ``LATENT_SENSITIVITY_READING_RULES`` follows
     ``READING_RULES`` under its own heading. It also keys on
     ``analysis.get("export_variant")`` (change ``adni-nist-bridge``): for an
-    export variant the opening paragraph names the variant, a flagged row is
-    a finding about the variant's measurement space (the primary stays
-    primary), the analysis-read section names the variant and
-    ``EXPORT_VARIANT_READING_RULES`` follows ``READING_RULES`` under its own
-    heading. And on ``analysis.get("stage_arm")`` (change
+    export variant the opening paragraph names the variant and the block it
+    changes, a flagged row is a finding about the variant's measurement space
+    (the primary stays primary), the analysis-read section names the variant
+    under its rule 7 and the variant's rule set (``EXPORT_VARIANT_RULE_SETS``,
+    change ``adni-nmr-all-columns``: ``EXPORT_VARIANT_READING_RULES`` for the
+    p180 variants, ``NMR_MEMBERSHIP_READING_RULES`` for ``nmr_all_columns``)
+    follows ``READING_RULES`` under its own heading. And on
+    ``analysis.get("stage_arm")`` (change
     ``adni-stage-sensitivity``): for the CN / LMCI / AD arm the opening
     paragraph names the arm, a flagged row is a finding about the arm's
     measurement space (the primary stays primary), the analysis-read section
@@ -4537,8 +4689,8 @@ def render_axis_diagnostics(
     elif export_variant is not None:
         which = (
             f"the export variant `{export_variant}` (`EXPORT_VARIANTS`, change "
-            f"`{EXPORT_VARIANTS.get(export_variant, {}).get('change')}`: the primary's settings on an export whose p180 "
-            "run handling differs; not the primary)"
+            f"`{EXPORT_VARIANTS[export_variant]['change']}`: the primary's settings on an export whose "
+            f"{_variant_words(export_variant)['whose']} differs; not the primary)"
         )
         whose = "this export variant (the primary stays primary)"
     elif stage_arm is not None:
@@ -4737,7 +4889,7 @@ def render_axis_diagnostics(
         lines.append(
             f"- export variant: `{export_variant}` (`EXPORT_VARIANTS`): a component of the variant that tracks a variable "
             "here is a measurement-space finding about the variant; it never reinterprets either analysis' statistics "
-            "and is never grounds to adopt the variant (variant rule 7)"
+            f"and is never grounds to adopt the variant ({_variant_words(export_variant)['cite']} 7)"
         )
     if stage_arm is not None:
         lines.append(
@@ -4781,8 +4933,7 @@ def render_axis_diagnostics(
         ]
         lines += [f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)]
     if export_variant is not None:
-        lines += ["", *_export_variant_rules_heading(), ""]
-        lines += [f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)]
+        lines += ["", *_export_variant_rules_lines(export_variant)]
     if stage_arm is not None:
         lines += ["", *_stage_arm_rules_heading(), ""]
         lines += [f"{i}. {rule}" for i, rule in enumerate(STAGE_SENSITIVITY_READING_RULES, 1)]
@@ -4900,8 +5051,13 @@ def run_axis_diagnostics(
     arm path of ``adni-latent-sensitivity``; an export variant of
     ``export-sensitivity``, read with ``--input-dir <variant>/motco_input
     --analysis-dir <variant>/analysis``, is not the primary either and its
-    ``diagnostics.md`` names it and carries ``EXPORT_VARIANT_READING_RULES``,
-    change ``adni-nist-bridge``; so is the CN / LMCI / AD arm of
+    ``diagnostics.md`` names it and the block it changes and carries the
+    variant's rule set (``EXPORT_VARIANT_RULE_SETS``), change
+    ``adni-nist-bridge``; its expected counts are the variant's own
+    ``EXPORT_VARIANT_EXPECTED_COUNTS[<variant>]["diagnostics"]`` when the
+    entry holds them (``nmr_all_columns``: the rank-independent keys with 245
+    NMR features, change ``adni-nmr-all-columns``) and the rank-independent
+    keys otherwise; so is the CN / LMCI / AD arm of
     ``stage-sensitivity``, read with ``--input-dir
     results/motco_stage_sensitivity/motco_input --analysis-dir
     results/motco_stage_sensitivity/analysis``: its cohort check compares the
@@ -5133,12 +5289,16 @@ def run_axis_diagnostics(
         "variables_missing": n_missing,
     }
     expected_full = json.loads(json.dumps(DIAGNOSTICS_EXPECTED_COUNTS))
+    variant_expected = (EXPORT_VARIANT_EXPECTED_COUNTS.get(export_variant) or {}).get("diagnostics") if export_variant else None
     if stage_arm is not None:
         # the arm's participants and cells, with the rank-independent keys (change adni-stage-sensitivity)
         expected = json.loads(json.dumps(STAGE_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]))
     elif diagnosed:
         # the sweep's predeclared diagnostic: its top rank's read and rows (change adni-rank-sensitivity)
         expected = json.loads(json.dumps(RANK_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]))
+    elif variant_expected is not None:
+        # a variant's own block features, with the rank-independent keys (change adni-nmr-all-columns)
+        expected = json.loads(json.dumps(variant_expected))
     else:
         expected = expected_full if is_primary else {k: expected_full[k] for k in DIAGNOSTICS_RANK_INDEPENDENT_KEYS}
     observed = _project(json.loads(json.dumps(counts, default=_json_default)), expected)
@@ -5168,6 +5328,7 @@ def run_axis_diagnostics(
             + (f", stage arm {stage_arm!r}" if stage_arm else "")
             + "): the primary's rank and the row counts are not expected; the rank-independent counts are"
             + (" (with the arm's participants and cells, STAGE_SENSITIVITY_EXPECTED_COUNTS)" if stage_arm else "")
+            + (" (with the variant's block features, EXPORT_VARIANT_EXPECTED_COUNTS)" if variant_expected is not None else "")
         )
 
     numerics, numerics_findings = _numerics(f"[{log}]")
@@ -6526,10 +6687,6 @@ _EXPORT_SENSITIVITY_COLUMNS: tuple[str, ...] = (
     "selected_rank", "component_selection", "cv_mean_auroc", "cv_repeats_completed", "eigengap",
     *(f"{s}_{k}" for s in ANALYSIS_STATISTICS for k in ("observed", "p", "rejected", "null_mean", "null_sd", "null_q95")),
 )
-#: The status of a statistic whose rejection differs between the primary and a variant.
-_EXPORT_SENSITIVITY_STATUS_DIFFERS = "differs (run-handling dependence)"
-
-
 def _export_comparison_row(name: str, directory: Path, record: dict, variant: str | None) -> dict:
     """One row of ``export_sensitivity.csv`` (``_EXPORT_SENSITIVITY_COLUMNS``), every value read from ``record`` (``_comparison_row``)."""
     row = {**_comparison_row(name, directory, record), "export_variant": variant}
@@ -6537,21 +6694,27 @@ def _export_comparison_row(name: str, directory: Path, record: dict, variant: st
 
 
 def _export_variant_findings(primary: dict, record: dict, variant: str) -> list[str]:
-    """The findings that read a variant's record: a rank that differs from the primary's, a status that differs."""
+    """The findings that read a variant's record, under the variant's rule set: a rank that differs from the primary's, a status that differs.
+
+    A status that differs cites the variant's rule 2, and rule 6 too when
+    the variant rejects where the primary does not.
+    """
+    words = _variant_words(variant)
     findings: list[str] = []
     rank_p, rank_v = int(primary["latent"]["selected_lv"]), int(record["latent"]["selected_lv"])
     if rank_v != rank_p:
         findings.append(
             f"the variant {variant}'s CV-selected rank {rank_v} differs from the primary's {rank_p}: reported beside "
-            "angle, not ranked (variant rule 3)"
+            f"angle, not ranked ({words['cite']} 3)"
         )
     for s in ANALYSIS_STATISTICS:
         rp, rv = _rejected(primary["p_values"].get(s)), _rejected(record["p_values"].get(s))
         if rp != rv:
             findings.append(
                 f"{s}: the variant {variant}'s status ({_rejection_text(rv)}) differs from the primary's "
-                f"({_rejection_text(rp)}) at α = {ANALYSIS_ALPHA}: dependence on the handling of the p180 run, not a "
-                "result of the variant; the primary's status stays the result (variant rule 2)"
+                f"({_rejection_text(rp)}) at α = {ANALYSIS_ALPHA}: dependence on {words['source']}, not a result of "
+                f"the variant; the primary's status stays the result ("
+                + (f"{words['cite']}s 2 and 6)" if rv and not rp else f"{words['cite']} 2)")
             )
     return findings
 
@@ -6559,19 +6722,21 @@ def _export_variant_findings(primary: dict, record: dict, variant: str) -> list[
 def _export_variant_status_line(
     statistic: str, status: str, rejected_primary: bool | None, rejected_variant: bool | None, variant: str
 ) -> str:
-    """The status sentence of one statistic in ``export_sensitivity.md``: the wording of ``_arm_status_line`` under the variant rules.
+    """The status sentence of one statistic in ``export_sensitivity.md``: the wording of ``_arm_status_line`` under the variant's rule set.
 
     Parameters
     ----------
     statistic:
         ``delta``, ``angle`` or ``shape``.
     status:
-        ``same`` or ``differs (run-handling dependence)``.
+        ``same`` or ``differs (<dependence>)``, the variant's dependence label
+        (``EXPORT_VARIANT_RULE_SETS``).
     rejected_primary, rejected_variant:
         The two statuses under ``ANALYSIS_REJECTION_RULE``; ``None`` when a
         record holds no p-value.
     variant:
-        The variant's name.
+        The variant's name; its rule set gives the citation word and what a
+        differing status depends on.
 
     Returns
     -------
@@ -6580,12 +6745,14 @@ def _export_variant_status_line(
         implies, the primary's status the result in every case.
     """
     rp, rv = rejected_primary, rejected_variant
+    words = _variant_words(variant)
+    cite, source = words["cite"], words["source"]
     text = f"`{statistic}`: {status} (primary {_rejection_text(rp)}, {variant} {_rejection_text(rv)}). "
     if rp is None or rv is None:
         text += "A missing p-value is recorded as a finding."
     elif status == _LATENT_SENSITIVITY_STATUS_SAME and not rp:
         text += (
-            "Both are non-rejections; the variant's is no more informative than the primary's (variant rule 6), and "
+            f"Both are non-rejections; the variant's is no more informative than the primary's ({cite} 6), and "
             "neither is evidence that the sexes' trajectories agree"
             + (" in this respect (reading rule 3: no power statement exists at this design)." if statistic != "delta" else
                " (no power statement exists at this design).")
@@ -6593,18 +6760,18 @@ def _export_variant_status_line(
     elif status == _LATENT_SENSITIVITY_STATUS_SAME:
         text += (
             "Both are rejections: evidence that the trajectories differ in this respect, with Type I controlled at "
-            "the validated designs (reading rules 3 and 4); the variant adds no claim of its own (variant rule 1)."
+            f"the validated designs (reading rules 3 and 4); the variant adds no claim of its own ({cite} 1)."
         )
     elif rv and not rp:
         text += (
-            "The variant rejects where the primary does not: dependence on the handling of the p180 run, not a result "
-            "of the variant, read beside the variant's rank and null summary; the primary's non-rejection stays the "
-            "result (variant rules 2 and 6)."
+            f"The variant rejects where the primary does not: dependence on {source}, not a result of the variant, "
+            "read beside the variant's rank and null summary; the primary's non-rejection stays the result "
+            f"({cite}s 2 and 6)."
         )
     else:
         text += (
             "The primary rejects where the variant does not: the primary's rejection stays the result (reading rule 1); "
-            "the difference is dependence on the handling of the p180 run (variant rule 2)."
+            f"the difference is dependence on {source} ({cite} 2)."
         )
     return text
 
@@ -6631,9 +6798,11 @@ def render_export_sensitivity(
     rows:
         The two rows of ``export_sensitivity.csv``, the primary first.
     statuses:
-        Per statistic, ``same`` or ``differs (run-handling dependence)``.
+        Per statistic, ``same`` or ``differs (<dependence>)`` with the
+        variant's dependence label (``EXPORT_VARIANT_RULE_SETS``).
     variant:
-        The variant's name (``EXPORT_VARIANTS``).
+        The variant's name (``EXPORT_VARIANTS``); its rule set gives every
+        variant-specific word (change ``adni-nmr-all-columns``).
     primary, record:
         The primary's and the variant's ``result.json``.
     reference, variant_info:
@@ -6658,16 +6827,19 @@ def render_export_sensitivity(
         row, variant row, status) with both ranks, floors, eigengaps beside
         ``angle``; the status lines (``_export_variant_status_line``) and the
         variant's reading lines (``_statistic_reading_line``, string-equal to
-        its ``summary.md``); the latent-space table; the export variant (the
-        p180 setting, the runs, the bridge for ``nist_bridge``, the run offset
-        per block of both exports: ``_export_variant_lines``); the findings;
-        ``READING_RULES`` then ``EXPORT_VARIANT_READING_RULES``, verbatim. No
-        statistic is computed here.
+        its ``summary.md``); the latent-space table; the export variant (its
+        setting, the runs, the bridge for ``nist_bridge``, the membership,
+        block shares and NMR shape counts for ``nmr_all_columns``, the run
+        offset per block of both exports: ``_export_variant_lines``); the
+        findings; ``READING_RULES`` then the variant's rule set
+        (``EXPORT_VARIANT_RULE_SETS``), verbatim. No statistic is computed
+        here.
     """
     p_row, v_row = rows[0], rows[1]
     design = record["design"]
     stages = [str(st) for st in design["stage_levels"]]
-    spec = EXPORT_VARIANTS[variant]
+    spec, words = EXPORT_VARIANTS[variant], _variant_words(variant)
+    cite = words["cite"]
     lines = [
         f"# MOTCO export sensitivity: ADNI serum metabolomics, sex × stage — `{variant}`",
         "",
@@ -6680,9 +6852,9 @@ def render_export_sensitivity(
         f"n_jobs {n_jobs}"
         + ("" if n_jobs == REPORTED_N_JOBS else f" (not a reported run: reported runs use n_jobs = {REPORTED_N_JOBS})")
         + ". The primary row comes first and its status is the result; the variant is read beside it and never "
-        "replaces it (variant rule 1). A status that differs is dependence on the handling of the p180 run, not a "
-        "result of the variant (variant rule 2). Every value below is read from the two `result.json` records and "
-        "the variant's export manifest.",
+        f"replaces it ({cite} 1). A status that differs is dependence on {words['source']}, not a result of the "
+        f"variant ({cite} 2). Every value below is read from the two `result.json` records and the variant's export "
+        "manifest.",
         "",
         "## Statistics",
         "",
@@ -6700,11 +6872,11 @@ def render_export_sensitivity(
     lines += [
         "",
         f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected "
-        f"rank, floor, eigengap and null summary (reading rule 2, variant rule 3): primary rank {p_row['selected_rank']} "
+        f"rank, floor, eigengap and null summary (reading rule 2, {cite} 3): primary rank {p_row['selected_rank']} "
         f"(floor {rank_floor}, pooled relative eigengap {_fmt(p_row['eigengap'])}); {variant} rank "
         f"{v_row['selected_rank']} (floor {rank_floor}, eigengap {_fmt(v_row['eigengap'])})"
         + (
-            "; the ranks differ, which is reported, not ranked (variant rule 3)."
+            f"; the ranks differ, which is reported, not ranked ({cite} 3)."
             if p_row["selected_rank"] != v_row["selected_rank"] else "; the ranks are equal."
         ),
         "",
@@ -6735,9 +6907,9 @@ def render_export_sensitivity(
         f"| eigengap permutation null q05 / q50 / q95 | {_fmt(p_perm.get('q05'))} / {_fmt(p_perm.get('q50'))} / {_fmt(p_perm.get('q95'))} "
         f"| {_fmt(v_perm.get('q05'))} / {_fmt(v_perm.get('q50'))} / {_fmt(v_perm.get('q95'))} |",
         "",
-        "The two analyses share the cleaned tables, the participants, the NMR block, the covariates and their design, "
-        "the cells, the settings, the CV folds, the seed and the permutations; they differ only in the p180 values "
-        "(variant rule 2).",
+        f"The two analyses share the cleaned tables, the participants, {words['kept']}, the covariates and their design, "
+        f"the cells, the settings, the CV folds, the seed and the permutations; they differ only in {words['changes']} "
+        f"({cite} 2).",
         "",
         "## Export variant",
         "",
@@ -6755,8 +6927,7 @@ def render_export_sensitivity(
         "",
     ]
     lines += [f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)]
-    lines += ["", *_export_variant_rules_heading(), ""]
-    lines += [f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)]
+    lines += ["", *_export_variant_rules_lines(variant)]
     return "\n".join(lines) + "\n"
 
 
@@ -6819,9 +6990,11 @@ def run_export_sensitivity(
     ----------
     variant:
         A name of ``EXPORT_VARIANTS`` (``nist_bridge``,
-        ``per_run_standardized``) or ``all`` (every variant, in registry
-        order, each into its own directory). Another name stops the step
-        naming the registered variants, before anything is read.
+        ``per_run_standardized``, ``nmr_all_columns``) or ``all`` (every
+        variant, in registry order, each into its own directory; with the
+        outputs of a variant present it stops at the existing-variant gate
+        unless ``force``). Another name stops the step naming the registered
+        variants, before anything is read.
     data_root:
         The data root (``--data-root`` → ``ADNI_DATA_ROOT`` → ``data/``); read
         by ``nist_bridge`` only: the two QC archives of ``NIST_BRIDGE_RULE``
@@ -6859,9 +7032,12 @@ def run_export_sensitivity(
     The variants, the bridge rule and every analysis setting are constants
     (``EXPORT_VARIANTS``, ``NIST_BRIDGE_RULE``, the ``ANALYSIS_*``), never
     flags. A variant reruns the export through ``_run_export`` with its one
-    p180 hook (``nist_bridge``: the ADNI-GO/2 concentrations multiplied by
-    2^b before the floors; ``per_run_standardized``: each p180 metabolite
-    standardized within its run on the rule's scale) and analyses it through
+    hook (``nist_bridge``: the ADNI-GO/2 concentrations multiplied by 2^b
+    before the floors; ``per_run_standardized``: each p180 metabolite
+    standardized within its run on the rule's scale; ``nmr_all_columns``,
+    change ``adni-nmr-all-columns``: every cleaned NMR column kept, each on
+    the rule's scale with its own floor, no bridge and no data root) and
+    analyses it through
     ``_run_trajectory_analysis`` at the primary's settings
     (``ANALYSIS_LATENT_ADJUSTMENT``, one ``analyze_trajectories`` call). The
     primary export and analysis are read beside it and never written or
@@ -6913,9 +7089,13 @@ def run_export_sensitivity(
     QC archive or workbook hash that differs from its predeclared value; an
     exported metabolite without a NIST column; a participant whose run
     differs from its ``phase``; an unchanged file whose hash differs from the
-    primary's; a variant rank that differs from the primary's; a statistic
-    whose status differs (run-handling dependence); a primary read with
-    ``n_jobs`` not 1; stale diagnostics. No finding names a participant. No
+    primary's; for ``nmr_all_columns`` the rule's NMR columns differing from
+    the primary's; a variant rank that differs from the primary's; a
+    statistic whose status differs (the variant's dependence label of
+    ``EXPORT_VARIANT_RULE_SETS``: run-handling dependence for the p180
+    variants, feature-membership dependence for ``nmr_all_columns``); a
+    primary read with ``n_jobs`` not 1; stale diagnostics. Each finding that
+    reads a rule cites the variant's rule set. No finding names a participant. No
     variant value changes a constant, selects a metabolite or covariate,
     reruns the primary or defines a new variant.
     """
@@ -7115,7 +7295,7 @@ def _run_export_variant(
                 _export_comparison_row("primary", primary_dir, primary, None),
                 _export_comparison_row(name, Path(EXPORT_SENSITIVITY_SUBDIRS["analysis"]), record, name),
             ]
-            statuses = _comparison_statuses(rows[0], rows[1], differs=_EXPORT_SENSITIVITY_STATUS_DIFFERS)
+            statuses = _comparison_statuses(rows[0], rows[1], differs=_export_variant_status_differs(name))
             table = pd.DataFrame(rows, columns=list(_EXPORT_SENSITIVITY_COLUMNS), dtype=object)
             for s in ANALYSIS_STATISTICS:
                 print(
@@ -7189,7 +7369,7 @@ def _run_export_variant(
                     "REPORTED_N_JOBS": REPORTED_N_JOBS,
                     "status_rule": (
                         f"{_LATENT_SENSITIVITY_STATUS_SAME!r} when both rejections under ANALYSIS_REJECTION_RULE are "
-                        f"equal, else {_EXPORT_SENSITIVITY_STATUS_DIFFERS!r}; the primary's status is the result either way"
+                        f"equal, else {_export_variant_status_differs(name)!r}; the primary's status is the result either way"
                     ),
                     "columns": list(_EXPORT_SENSITIVITY_COLUMNS),
                 },
@@ -9053,8 +9233,8 @@ _RANK_SWEEP_LABELS: dict[int | str, str] = {
 
 #: The 29 manifests the report reads, in pipeline order: (label, role in
 #: ``REPORT_INPUT_FILES``, file name in that role); the primary's and the
-#: arm's nine, then four per variant of ``EXPORT_VARIANTS`` in registry
-#: order, then the CN / LMCI / AD arm's four, then the rank sweep's eight
+#: arm's nine, then four per variant of ``REPORT_EXPORT_VARIANTS`` in
+#: registry order, then the CN / LMCI / AD arm's four, then the rank sweep's eight
 #: (one per rank in ladder order, the comparison, the top rank's
 #: diagnostics). The label names the step in every provenance table and
 #: under "Findings".
@@ -9069,7 +9249,7 @@ _REPORT_MANIFESTS: tuple[tuple[str, str, str], ...] = (
     ("axis-diagnostics (arm)", f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}", DIAGNOSTICS_MANIFEST),
     *(
         (_variant_labels(variant)[key], _variant_role(variant, key), name)
-        for variant in EXPORT_VARIANTS
+        for variant in REPORT_EXPORT_VARIANTS
         for key, name in (("export", EXPORT_MANIFEST), ("analysis", ANALYSIS_MANIFEST),
                           ("comparison", EXPORT_SENSITIVITY_MANIFEST), ("diagnostics", DIAGNOSTICS_MANIFEST))
     ),
@@ -9122,7 +9302,7 @@ def _report_dirs(
     }
     for sub in LATENT_SENSITIVITY_SUBDIRS.values():
         dirs[f"sensitivity/{sub}"] = sensitivity / sub
-    for variant in EXPORT_VARIANTS:
+    for variant in REPORT_EXPORT_VARIANTS:
         for key, sub in EXPORT_SENSITIVITY_SUBDIRS.items():
             dirs[_variant_role(variant, key)] = variants / variant / sub
     for key, sub in STAGE_SENSITIVITY_SUBDIRS.items():
@@ -9244,7 +9424,7 @@ def _load_report_inputs(
     primary (no latent adjustment recorded or in the record, ``is_primary``
     in its diagnostics), the arm is ``LATENT_SENSITIVITY_ARM`` (its
     conditioning and name, ``is_primary`` false in its diagnostics) and each
-    directory of ``EXPORT_VARIANTS`` holds that variant (its export, analysis
+    directory of ``REPORT_EXPORT_VARIANTS`` holds that variant (its export, analysis
     and comparison manifests name it, its export manifest's ``variant``
     block equals the registry entry, its analysis records no latent
     adjustment, its diagnostics record ``is_primary`` false and its name);
@@ -9390,7 +9570,8 @@ def _load_report_inputs(
         f"{dirs[s_role]} ({arm_name}, `{conditioning}`-conditioned, rank {arm['latent']['selected_lv']})"
     )
     variant_records: dict[str, dict] = {}
-    for variant, spec in EXPORT_VARIANTS.items():
+    for variant in REPORT_EXPORT_VARIANTS:
+        spec = EXPORT_VARIANTS[variant]
         labels = _variant_labels(variant)
         e_role, va_role, b_role = (_variant_role(variant, k) for k in ("export", "analysis", "bridge"))
         rerun = _report_rerun(e_role, "", dirs)
@@ -9439,7 +9620,7 @@ def _load_report_inputs(
                 )
         variant_records[variant] = record
     print(
-        f"{log} variants ({', '.join(f'`{v}`' for v in EXPORT_VARIANTS)}, `EXPORT_VARIANTS`): "
+        f"{log} variants ({', '.join(f'`{v}`' for v in REPORT_EXPORT_VARIANTS)}, `REPORT_EXPORT_VARIANTS`): "
         + "; ".join(
             f"{variant}: {dirs[_variant_role(variant, 'analysis')].parent} (rank {record['latent']['selected_lv']}, latent "
             "adjustment none" + (", bridge table as recorded" if _variant_role(variant, "bridge") in files else "") + ")"
@@ -9723,7 +9904,7 @@ def _load_report_inputs(
     link("latent-sensitivity (comparison)", ["inputs", "cohort", "files", COHORT_MANIFEST, "sha256"], f"sha256({files['cohort'][COHORT_MANIFEST]['path']})", cohort_sha, arm_rerun)
     diagnostics_links("axis-diagnostics (arm)", "latent-sensitivity (analysis)", arm_sha, _report_rerun(ad_role, "", dirs))
     export_path = files["export"][EXPORT_MANIFEST]["path"]
-    for variant in EXPORT_VARIANTS:
+    for variant in REPORT_EXPORT_VARIANTS:
         labels = _variant_labels(variant)
         ve_role, va_role, vb_role = (_variant_role(variant, k) for k in ("export", "analysis", "bridge"))
         rerun = _report_rerun(ve_role, "", dirs)
@@ -9841,7 +10022,7 @@ def _load_report_inputs(
                     ),
                     "diagnostics": diagnostics_tables(_variant_role(variant, "diagnostics")),
                 }
-                for variant in EXPORT_VARIANTS
+                for variant in REPORT_EXPORT_VARIANTS
             },
             "stage_arm": {
                 "comparison": read_csv(st_c_role, STAGE_SENSITIVITY_TABLE),
@@ -10169,7 +10350,7 @@ def _first_component_rows(analyses: list[tuple[str, dict]]) -> list[dict]:
 
 
 def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[str], p_status: dict) -> None:
-    """The "Export sensitivity" section: the primary beside every variant of ``EXPORT_VARIANTS`` (design D4 of ``adni-report-variants``).
+    """The "Export sensitivity" section: the primary beside every variant of ``REPORT_EXPORT_VARIANTS`` (design D4 of ``adni-report-variants``).
 
     Every value is read from a variant's ``export_sensitivity.csv``, its
     comparison and export manifests, its ``result.json``, ``nist_bridge.csv``
@@ -10181,7 +10362,7 @@ def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list
     """
     dirs, manifests = inputs["dirs"], inputs["manifests"]
     primary, records = inputs["records"]["primary"], inputs["records"]["variants"]
-    variants = list(EXPORT_VARIANTS)
+    variants = list(REPORT_EXPORT_VARIANTS)
     labels = {v: _variant_labels(v) for v in variants}
     rows = {v: {r["analysis"]: r for r in inputs["tables"]["variants"][v]["comparison"].to_dict("records")} for v in variants}
     p_row = rows[variants[0]]["primary"]
@@ -10707,7 +10888,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "result either way), read under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`:"
     )
     b.bullets([_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
-    variants = list(EXPORT_VARIANTS)
+    variants = list(REPORT_EXPORT_VARIANTS)
     v_labels = {v: _variant_labels(v) for v in variants}
     v_records = inputs["records"]["variants"]
     v_status = {v: {s: _rejected(v_records[v]["p_values"].get(s)) for s in ANALYSIS_STATISTICS} for v in variants}
@@ -11268,7 +11449,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     )
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)))
     b.heading("EXPORT_VARIANT_READING_RULES")
-    b.para(_export_variant_rules_heading()[-1])
+    b.para(_export_variant_rules_heading(REPORT_EXPORT_VARIANTS[0])[-1])
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)))
     b.heading("STAGE_SENSITIVITY_READING_RULES")
     b.para(_stage_arm_rules_heading()[-1])
@@ -11647,10 +11828,12 @@ def run_report(
     export_sensitivity_dir:
         The root of ``export-sensitivity`` (default
         ``constants.EXPORT_SENSITIVITY_DIR``), read per variant of
-        ``EXPORT_VARIANTS`` through ``EXPORT_SENSITIVITY_SUBDIRS``: the bridge
-        table (hook ``factors``), the variant export's manifest, the variant
-        analysis' three aggregate files, the comparison's three files and the
-        variant diagnostics' six. Every registered variant is required.
+        ``REPORT_EXPORT_VARIANTS`` through ``EXPORT_SENSITIVITY_SUBDIRS``: the
+        bridge table (hook ``factors``), the variant export's manifest, the
+        variant analysis' three aggregate files, the comparison's three files
+        and the variant diagnostics' six. Every variant of the pin is
+        required; a registered variant outside it (change
+        ``adni-nmr-all-columns``) is not read, and a progress line names it.
     stage_sensitivity_dir:
         The root of ``stage-sensitivity`` (default
         ``constants.STAGE_SENSITIVITY_DIR``), read through
@@ -11702,7 +11885,7 @@ def run_report(
     hashes to the value its own manifest records (the bridge table to its
     variant export manifest's ``bridge.table.sha256``); the primary is the
     primary, the arm is ``LATENT_SENSITIVITY_ARM``, each variant directory
-    holds its ``EXPORT_VARIANTS`` entry, the CN / LMCI / AD arm is
+    of ``REPORT_EXPORT_VARIANTS`` holds its ``EXPORT_VARIANTS`` entry, the CN / LMCI / AD arm is
     ``STAGE_SENSITIVITY_ARM`` (not crossed with an export variant or the
     latent adjustment) and the rank sweep is ``RANK_SENSITIVITY_LADDER``
     (each rank directory holds its rank, every rank records the ladder and
@@ -11769,6 +11952,13 @@ def run_report(
         date = _report_date(out_path)
         if out_path.exists() and not force:
             raise FileExistsError(f"{out_path} exists; pass --force to replace it; nothing was written")
+    for variant in EXPORT_VARIANTS:
+        if variant not in REPORT_EXPORT_VARIANTS:
+            # the report's pin (design D6 of adni-nmr-all-columns): named here, never in the body
+            print(
+                f"{log} export variant {variant} (change {EXPORT_VARIANTS[variant]['change']}) is registered and not "
+                "covered by this report (REPORT_EXPORT_VARIANTS): it is not read, and a report change adds it"
+            )
     inputs = _load_report_inputs(
         cleaned_dir=cleaned_dir, cohort_dir=cohort_dir, input_dir=input_dir, analysis_dir=analysis_dir,
         diagnostics_dir=diagnostics_dir, sensitivity_dir=sensitivity_dir, export_sensitivity_dir=export_sensitivity_dir,
