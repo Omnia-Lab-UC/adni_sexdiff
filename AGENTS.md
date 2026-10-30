@@ -14,7 +14,7 @@ by its own change proposal. The repository is modelled on `../sead_sexdiff`
 (the SEA-AD astrocyte case study); its conventions apply here unless this
 file says otherwise.
 
-Status (2026-10-29): `clean` (change `adni-metabolomics-clean`), `cohort`
+Status (2026-10-30): `clean` (change `adni-metabolomics-clean`), `cohort`
 (change `adni-cohort`), `export` (change `adni-export`), `analyze`
 (change `adni-analyze`), `axis-diagnostics` (change
 `adni-axis-diagnostics`) and `report` (change `adni-report`) are
@@ -29,7 +29,12 @@ primary and never replacing it; the report covers them since change
 (change `adni-stage-sensitivity`: the predeclared CN / LMCI / AD arm, the
 primary export's rows of the participants whose `DX.bl` is CN, LMCI or
 AD, read beside the primary and never replacing it; the report covers it
-since change `adni-report-stage-arm`).
+since change `adni-report-stage-arm`) and the sensitivity step
+`rank-sensitivity` (change `adni-rank-sensitivity`: the predeclared
+forced-rank ladder, the primary's analysis at the forced ranks 2, 3, 4, 6,
+9 and 12 after an anchor run at the primary's rank reproduces the primary,
+read beside the primary and never replacing it; a later change adds it to
+the report).
 Every step but `report` runs on a data machine; `report` reads committed aggregate
 files only and runs on any clone; the reports are committed under
 `reports/`, the newest covering the primary, the latent arm, both export
@@ -54,8 +59,9 @@ diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 (`LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
 `LATENT_SENSITIVITY_READING_RULES`; `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`,
 `EXPORT_VARIANT_READING_RULES`; `STAGE_SENSITIVITY_ARM`,
-`STAGE_SENSITIVITY_READING_RULES`); every constant the six steps and the
-three sensitivity steps need is decided (see "Flag and ask"). Each step is
+`STAGE_SENSITIVITY_READING_RULES`; `RANK_SENSITIVITY_LADDER`,
+`RANK_SENSITIVITY_READING_RULES`); every constant the six steps and the
+four sensitivity steps need is decided (see "Flag and ask"). Each step is
 implemented by its own OpenSpec change, in order.
 
 1. `clean` – metabo_adni per platform (`--platform {p180,nmr,all}`): the
@@ -205,9 +211,26 @@ implemented by its own OpenSpec change, in order.
    the primary (`--analysis-dir` or a recorded latent adjustment: the
    `primary` and `rows` expectations are skipped, the arm path of
    `adni-latent-sensitivity`), a constant variable, the flagged variables
-   per component. It reads sex and stage, so it is never a filter: its
-   outputs feed no `export` or `analyze` run, and no arm or variant is
-   derived from a diagnostic value.
+   per component. The sweep read (change `adni-rank-sensitivity`): with
+   `--analysis-dir results/motco_rank_sensitivity/rank_<kk>` and the
+   primary export, an analysis manifest with step `rank-sensitivity` is a
+   forced rank of the rank sweep; the manifest records `is_primary` false
+   and `inputs.analysis.rank_sweep` (the forced rank and the primary's
+   rank; `null` on every other read); on the top rank (`rank_12`, the
+   sweep's predeclared diagnostic) the expected counts are
+   `RANK_SENSITIVITY_EXPECTED_COUNTS["diagnostics"]` (the rank-independent
+   keys, the read rank 12 `forced` with no latent adjustment and `n_jobs`
+   1, rows 96 / 48 / 48 / 12), on another rank the rank-independent keys
+   with a finding that the sweep's predeclared diagnostic is the top
+   rank's; `diagnostics.md` names the rank sweep and the forced rank,
+   states that `pls_0` up to the primary's rank are the primary's
+   components (nesting), calls a flagged row a finding about the
+   measurement space at that rank and prints
+   `RANK_SENSITIVITY_READING_RULES` after `READING_RULES` (sweep rule 7: an
+   added component that tracks `phase` is a measurement-space finding,
+   never grounds to choose a rank). It reads sex and stage, so it is never
+   a filter: its outputs feed no `export`, `analyze` or sensitivity run,
+   and no arm, variant or rank is derived from a diagnostic value.
    - Sensitivity step, after `axis-diagnostics` and before `report`:
      `latent-sensitivity` (change `adni-latent-sensitivity`) – from
      `results/motco_input/` (the five files, checked as `analyze` checks
@@ -359,6 +382,61 @@ implemented by its own OpenSpec change, in order.
      primary stays primary and no arm value changes a constant,
      `STAGE_RULE` or `COHORT_RULE`, selects a participant, reruns the
      primary or adopts the arm.
+   - Sensitivity step, after `axis-diagnostics` and before `report`:
+     `rank-sensitivity` (change `adni-rank-sensitivity`) – from the primary
+     export `results/motco_input/` (the five files, checked as `analyze`
+     checks them) and the primary's `result.json` and
+     `analysis_manifest.json` (read, never written); no data root, no
+     cohort table, no feature table, no diagnostics output. Gates before
+     anything is written, each naming the file or setting, both values and
+     the command to rerun: the gates of `analyze`, an existing rank
+     directory or `comparison/` without `--force`, the primary export (and
+     that it records no arm or variant), the primary analysis as a chained
+     reference (`_check_primary_reference`) written by `analyze` with a
+     CV-selected rank and its `result.json` equal to its manifest's record,
+     then the anchor gate (`_check_anchor`): one forced run at the primary
+     record's rank, staged in `anchor.tmp/` through
+     `_run_trajectory_analysis`, whose statistics, p-values, null
+     summaries, `config_spectrum` and rank must equal the primary's
+     `result.json` and whose `latent_scores.csv`, `pls_loadings.csv` and
+     `stage_means.csv` must hash to the primary manifest's record (at
+     `n_jobs ≠ 1` only what the draws do not change); a difference stops
+     it naming the field or file, both values and the numerics state, with
+     `anchor.tmp/` kept (ignored); on equality it is removed. The ladder
+     `RANK_SENSITIVITY_LADDER` (`forced_rank_ladder`): one
+     `analyze_trajectories` call per rank 2, 3, 4, 6, 9 and 12 through
+     `_run_trajectory_analysis` at the primary's settings plus
+     `forced_components` (the rank fixed, MOTCO's cross-validation
+     skipped), then the comparison; before the renames each rank's latent
+     scores are compared in memory with the first columns of the top
+     rank's and the anchor's (the nesting). Writes
+     `results/motco_rank_sensitivity/`: `rank_02/` … `rank_12/` (the seven
+     files `analyze` writes, laid out as the primary's; the manifest
+     records step `rank-sensitivity`, `settings.forced_components`,
+     `rank_sweep` with the ladder by constant name, the forced rank, the
+     primary's rank and the anchor, the primary as `reference`, the counts
+     beside `RANK_SENSITIVITY_EXPECTED_COUNTS["analysis"][k]`; `summary.md`
+     names the forced rank, has a "Rank sweep" section and prints
+     `RANK_SENSITIVITY_READING_RULES` after `READING_RULES`;
+     `latent_scores.csv` and `analysis_metadata.csv` participant-level,
+     already matched by the `results/**` patterns) and `comparison/`
+     (`rank_sensitivity.csv`, the primary row then one row per rank read
+     from the records; `rank_sensitivity.md`, statuses `same` / `differs
+     (rank dependence)`, the status sentences `_rank_status_line`, each
+     rank's reading lines, the latent spaces, the anchor and the nesting,
+     and both sets of rules; `rank_sensitivity_manifest.json` with the
+     seven inputs), staged as `.tmp/` and renamed together; never
+     `diagnostics/`, which `axis-diagnostics --analysis-dir
+     results/motco_rank_sensitivity/rank_12 --out-dir
+     results/motco_rank_sensitivity/diagnostics` writes. Findings, never
+     stops: those of `analyze` that apply to a forced run (not the
+     conditions of the cross-validation), a primary rank other than the
+     predeclared anchor rank, a rank's status that differs from the
+     primary's (rank dependence), a nesting check that fails, a primary
+     read with `n_jobs ≠ 1`, stale diagnostics. The primary stays primary
+     and no sweep value changes a constant (`ANALYSIS_RANK_FLOOR` and the
+     ladder included), selects a rank, reruns the primary or defines an
+     arm.
 6. `report` – from the kept aggregate outputs only (`REPORT_INPUT_FILES`,
    66 committed files with 21 manifests: the two `clean_manifest.json`;
    `stage_counts.csv` and `cohort_manifest.json`; the export
@@ -471,9 +549,11 @@ behavior or defaults change.
   `latent_sensitivity.md`, its manifest), the export-sensitivity bridge
   table (`nist_bridge.csv`) and comparison (`export_sensitivity.csv`,
   `export_sensitivity.md`, its manifest), the stage-sensitivity comparison
-  (`stage_sensitivity.csv`, `stage_sensitivity.md`, its manifest) and the
-  reports under `reports/`.
-  An arm's or a variant's analysis directory follows the primary's rule:
+  (`stage_sensitivity.csv`, `stage_sensitivity.md`, its manifest), the
+  rank-sensitivity comparison (`rank_sensitivity.csv`,
+  `rank_sensitivity.md`, its manifest) and the reports under `reports/`.
+  An arm's, a variant's or a forced rank's analysis directory follows the
+  primary's rule:
   its `latent_scores.csv` and `analysis_metadata.csv` are
   participant-level, its other five files aggregate; a variant's and the
   CN / LMCI / AD arm's `motco_input/` follow the primary export's (their
@@ -566,7 +646,8 @@ behavior or defaults change.
   `DIAGNOSTIC_CORRELATION_THRESHOLD`, `LATENT_SENSITIVITY_ARM`,
   `LATENT_SENSITIVITY_COVARIATE_ROLES`, `LATENT_SENSITIVITY_READING_RULES`,
   `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`, `EXPORT_VARIANT_READING_RULES`,
-  `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`;
+  `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`,
+  `RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`;
   `constants.py` reserves the others' names in its docstring and defines
   none of them.
 - Never set, change or default one of them in code, a flag or a script
@@ -609,7 +690,9 @@ behavior or defaults change.
   `all`; the variants and the rule are never flags) and the directories,
   `--n-jobs` and `--force`; `stage-sensitivity` takes `--input-dir`,
   `--analysis-dir`, `--cohort-dir`, `--out-dir`, `--n-jobs` and `--force`
-  (the arm, its categories and its floors are never flags).
+  (the arm, its categories and its floors are never flags);
+  `rank-sensitivity` takes `--input-dir`, `--analysis-dir`, `--out-dir`,
+  `--n-jobs` and `--force` (the ladder and its ranks are never flags).
 - `src/adni_sexdiff/constants.py` – named constants (it imports no numpy):
   conventions (paths, environment variables, platforms, columns, output
   names, pins, the pinned numeric environment `NUMERIC_SETTINGS`, the
@@ -653,7 +736,16 @@ behavior or defaults change.
   `diagnostics`) and the conventions `STAGE_SENSITIVITY_DIR`,
   `STAGE_SENSITIVITY_SUBDIRS`, `STAGE_SENSITIVITY_TABLE`,
   `STAGE_SENSITIVITY_SUMMARY` and `STAGE_SENSITIVITY_MANIFEST`, change
-  `adni-stage-sensitivity`); the report's conventions (`DIAGNOSTICS_FILES`,
+  `adni-stage-sensitivity`; `RANK_SENSITIVITY_LADDER` and
+  `RANK_SENSITIVITY_READING_RULES` defined, with three import-time
+  assertions keeping the ladder ordered, its lowest rank
+  `ANALYSIS_RANK_FLOOR` and its diagnosed rank its top, the predeclared
+  `RANK_SENSITIVITY_EXPECTED_COUNTS` (`anchor`, `analysis` per rank,
+  `comparison`, `diagnostics`) and the conventions `RANK_SENSITIVITY_DIR`,
+  `RANK_SENSITIVITY_RANK_DIR`, `RANK_SENSITIVITY_SUBDIRS`,
+  `RANK_SENSITIVITY_TABLE`, `RANK_SENSITIVITY_SUMMARY` and
+  `RANK_SENSITIVITY_MANIFEST`, change `adni-rank-sensitivity`); the
+  report's conventions (`DIAGNOSTICS_FILES`,
   `REPORT_VARIANT_FILES`, `REPORT_STAGE_ARM_FILES` keyed by the
   subdirectories of the CN / LMCI / AD arm, `REPORT_INPUT_FILES` keyed by
   directory role with one role per variant subdirectory and per arm
@@ -685,27 +777,33 @@ behavior or defaults change.
   arm lines `_stage_arm_lines` shared by the arm's `summary.md` and
   `stage_sensitivity.md` and the arm's four definition tables
   `_stage_arm_tables` they print, all three printed by the report too, and
-  `render_stage_sensitivity`),
+  `render_stage_sensitivity`) and the sensitivity step `rank-sensitivity`
+  (`run_rank_sensitivity`, with the anchor gate `_check_anchor`, the rank
+  findings `_rank_findings`, the status sentence `_rank_status_line`, the
+  summary's "Rank sweep" lines `_rank_sweep_lines` with `_anchor_text`,
+  and `render_rank_sensitivity`),
   `resolve_data_root`, the version gates
   (`check_metabo_adni_version`, `check_motco_version`,
   `check_motco_rank_floor`), the raw-input helpers, the analysis input
-  loader (shared by `analyze`, `axis-diagnostics` and the three
+  loader (shared by `analyze`, `axis-diagnostics` and the four
   sensitivity steps), the shared export function (`_run_export`:
   the body of `export`, which a variant calls with its one p180 hook; the
   primary's bytes are its gate), the shared analysis function
   (`_run_trajectory_analysis`: the body of `analyze`, which the arm calls
   with `latent_adjustment` as its one differing setting, a variant
-  with its export and the CN / LMCI / AD arm with its row subset; the
+  with its export, the CN / LMCI / AD arm with its row subset and a rank
+  of the sweep with `forced_components`, which skips the CV findings; the
   primary's bytes are its gate) and the summary renderer (arm-aware when
   the record carries `latent_adjustment`, variant-aware when the export
   manifest carries `variant`, stage-arm-aware when it carries
-  `stage_arm`), the diagnostic statistics (`spearman`,
+  `stage_arm`, sweep-aware when given `rank_sweep`), the diagnostic
+  statistics (`spearman`,
   `partial_spearman`, `block_principal_components`, `geometry_shares`,
   `block_loading_shares`), the chain checks (`_check_analysis_inputs`,
   whose hints name the command that wrote the analysis read,
   `_check_cohort_chain`, which compares the rows the CN / LMCI / AD arm
-  keeps on its export) and `render_axis_diagnostics` (arm-, variant- and
-  stage-arm-aware), the
+  keeps on its export) and `render_axis_diagnostics` (arm-, variant-,
+  stage-arm- and sweep-aware), the
   numeric-state record (`_numerics_record`, `_numerics_finding`,
   `_numerics`), and the manifest / `.tmp` helpers every step reuses.
 - `scripts/` – `sync_results.sh` (aggregate outputs between a machine
@@ -729,7 +827,10 @@ behavior or defaults change.
   `results/motco_export_sensitivity/<variant>/` holds `bridge/`
   (`nist_bridge` only), `motco_input/`, `analysis/`, `comparison/` and
   `diagnostics/`; `results/motco_stage_sensitivity/` holds `motco_input/`,
-  `analysis/`, `comparison/` and `diagnostics/`.
+  `analysis/`, `comparison/` and `diagnostics/`;
+  `results/motco_rank_sensitivity/` holds `rank_02/` … `rank_12/` (each
+  laid out as `results/motco_analysis/`), `comparison/` and
+  `diagnostics/`.
 - `reports/` – committed case-study reports (`motco-adni-<date>.md`),
   generated in full by `report` from the aggregate outputs (every number
   copied, every sentence a constant or a renderer's) and checked by
@@ -745,7 +846,7 @@ behavior or defaults change.
   Outside the Nix shell numpy cannot load its native libraries; run
   commands through `nix develop -c ...` there.
 - Run the CLI:
-  `uv run adni-sexdiff <clean|cohort|export|analyze|axis-diagnostics|latent-sensitivity|export-sensitivity|stage-sensitivity|report> [options]`.
+  `uv run adni-sexdiff <clean|cohort|export|analyze|axis-diagnostics|latent-sensitivity|export-sensitivity|stage-sensitivity|rank-sensitivity|report> [options]`.
   `report` and `report --check` read committed aggregate files only, so
   they run on any clone (no data root, no data machine, no MOTCO call);
   every real-input check of the report change runs on the committed tree.
@@ -904,8 +1005,10 @@ behavior or defaults change.
   `EXPORT_VARIANT_READING_RULES` (with the predeclared
   `EXPORT_VARIANT_EXPECTED_COUNTS`), `STAGE_SENSITIVITY_ARM`,
   `STAGE_SENSITIVITY_READING_RULES` (with the predeclared
-  `STAGE_SENSITIVITY_EXPECTED_COUNTS`); every constant the six steps and
-  the three sensitivity steps need is decided:
+  `STAGE_SENSITIVITY_EXPECTED_COUNTS`), `RANK_SENSITIVITY_LADDER`,
+  `RANK_SENSITIVITY_READING_RULES` (with the predeclared
+  `RANK_SENSITIVITY_EXPECTED_COUNTS`); every constant the six steps and
+  the four sensitivity steps need is decided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
     for p180 also `cv` 0.2 and `icc` 0.65 (p180-only in metabo_adni),
@@ -1131,6 +1234,54 @@ behavior or defaults change.
     rank-independent keys with the arm's participants and cells. The rank
     is not predeclared. No arm value selects a participant, changes a
     constant or defines another arm.
+  - `RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`,
+    `RANK_SENSITIVITY_EXPECTED_COUNTS` – decided by
+    `adni-rank-sensitivity` (2026-10-30, before any forced rank ran on
+    ADNI data; the spike was synthetic). The single ladder
+    `forced_rank_ladder`: ranks 2, 3, 4, 6, 9 and 12 (2 the rank floor and
+    `n_stages − 1`, 3 the next rank, 4, 6, 9 and 12 the steps of MOTCO's
+    rank ladder and the template's sweep; both sides of the primary's 8,
+    inside the CV's candidate range and far below the feasibility bound
+    298), the one setting `forced_components` (the rank fixed, MOTCO's
+    cross-validation skipped), `ANALYSIS_SEED` and `ANALYSIS_PERMUTATIONS`
+    at every rank, every other setting the primary's (the primary export,
+    `ANALYSIS_*`, MOTCO's defaults, no latent adjustment, `n_jobs = 1` for
+    the reported run); the primary's rank is not on the ladder but the
+    anchor: one forced run at the primary record's rank, compared with the
+    primary before any rank runs and not kept; the top rank (12) is the
+    one the axis diagnostic reads; not crossed with the latent adjustment,
+    an export variant or the CN / LMCI / AD arm; three import-time
+    assertions keep the ranks ordered, the lowest `ANALYSIS_RANK_FLOOR` and
+    the diagnosed rank the top. The eight reading rules, printed verbatim
+    after `READING_RULES` in each rank's `summary.md`,
+    `rank_sensitivity.md`, the top rank's `diagnostics.md` and every report
+    that quotes the sweep: the sweep never replaces the primary (whose
+    rank is its CV-selected 8), no rank is chosen, adopted or ranked and no
+    sweep result changes a constant (`ANALYSIS_RANK_FLOOR` and the ladder
+    included), reruns the primary or defines another arm; every rank is the
+    primary with `forced_components` changed and the same draws at
+    `n_jobs = 1`, so a differing status is rank dependence; PLS-DA
+    components are nested (a rank at or below 8 is the primary's first
+    components, a rank above adds components the CV did not select) and
+    the anchor reproduces the primary exactly; each rank's floor, eigengap
+    and `angle` null beside its `angle`, each `angle` against its own null,
+    rank 2 two-dimensional; MOTCO's forced-rank evidence is its Phase 5
+    rank ladder (2026-09-08; MOTCO 0.6.0, n = 1200, four stages, no
+    covariates), no Type I or power check exists at a forced rank at this
+    design or with covariates, a non-rejection is no more informative than
+    the primary's and a forced-rank-only rejection is rank dependence; the
+    sweep is not a test (nothing combines ranks, picks the smallest p or
+    counts rejections; no multiplicity adjustment); the top rank's axis
+    diagnostic beside the sweep, its components up to 8 the primary's and
+    an added component that tracks a variable a measurement-space finding;
+    the sweep is read against the primary only. Predeclared counts, from
+    the committed primary manifests and the ladder: `anchor` rank 8;
+    `analysis` per rank every key of `ANALYSIS_EXPECTED_COUNTS` with
+    selection `forced`, the rank and 0 CV repeats; `comparison` 7 rows;
+    `diagnostics` the rank-independent keys, the read (rank 12, `forced`,
+    no latent adjustment, `n_jobs` 1) and rows 96 / 48 / 48 / 12. No
+    rank's statistic or status is predeclared. No sweep value selects a
+    rank, changes a constant or defines another arm.
 - Deviations from predeclared counts go to a manifest's `findings`, never
   silently.
 - Statistical choices are scientific decisions. Don't change them silently;
@@ -1152,7 +1303,8 @@ behavior or defaults change.
   `scripts/analyze.sbatch` (the same locked environment, no `--n-jobs`, so
   a reported run; compare the pulled `analysis_manifest.json` with the
   data machine's: statistics, p-values, rank). `latent-sensitivity`,
-  `export-sensitivity` and `stage-sensitivity` run there the same way once
+  `export-sensitivity`, `stage-sensitivity` and `rank-sensitivity` run
+  there the same way once
   the clone exists (pinned,
   so they must reproduce the committed hashes; `nist_bridge` needs the two
   archive symlinks in the cluster's data root). Both scripts export

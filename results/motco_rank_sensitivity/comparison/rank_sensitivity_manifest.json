@@ -1,0 +1,510 @@
+{
+  "anchor": {
+    "equal": true,
+    "expected_rank": 8,
+    "fields": {
+      "config_spectrum": true,
+      "null_summary": true,
+      "p_values": true,
+      "selected_lv": true,
+      "statistics": true
+    },
+    "files": {
+      "latent_scores.csv": {
+        "equal": true,
+        "primary_sha256": "fdded3c1e50bad4a96e8548e312d4bd6fd7f7781469ee064a8b3df250191d5cd",
+        "sha256": "fdded3c1e50bad4a96e8548e312d4bd6fd7f7781469ee064a8b3df250191d5cd"
+      },
+      "pls_loadings.csv": {
+        "equal": true,
+        "primary_sha256": "1da22d5082eb9a022081e9d3ad8e8ce152353953b02177e39c063e9581969cc8",
+        "sha256": "1da22d5082eb9a022081e9d3ad8e8ce152353953b02177e39c063e9581969cc8"
+      },
+      "stage_means.csv": {
+        "equal": true,
+        "primary_sha256": "fc32d4359a7f80dcf0479856ccaf7e58fbe65c81c108e842af92c07deb9a6a08",
+        "sha256": "fc32d4359a7f80dcf0479856ccaf7e58fbe65c81c108e842af92c07deb9a6a08"
+      }
+    },
+    "n_jobs": 1,
+    "not_compared": [],
+    "primary_n_jobs": 1,
+    "rank": 8
+  },
+  "counts": {
+    "component_selection": {
+      "primary": "cv",
+      "rank_02": "forced",
+      "rank_03": "forced",
+      "rank_04": "forced",
+      "rank_06": "forced",
+      "rank_09": "forced",
+      "rank_12": "forced"
+    },
+    "eigengap": {
+      "primary": 0.7439897653827622,
+      "rank_02": 0.9506505122007524,
+      "rank_03": 0.7940096307785196,
+      "rank_04": 0.8550649530495436,
+      "rank_06": 0.8175584879724862,
+      "rank_09": 0.7361349312932965,
+      "rank_12": 0.703784376614569
+    },
+    "nesting": {
+      "rank_02": {
+        "anchor_columns": 2,
+        "first_columns_of_anchor": true,
+        "first_columns_of_top": true,
+        "rank": 2
+      },
+      "rank_03": {
+        "anchor_columns": 3,
+        "first_columns_of_anchor": true,
+        "first_columns_of_top": true,
+        "rank": 3
+      },
+      "rank_04": {
+        "anchor_columns": 4,
+        "first_columns_of_anchor": true,
+        "first_columns_of_top": true,
+        "rank": 4
+      },
+      "rank_06": {
+        "anchor_columns": 6,
+        "first_columns_of_anchor": true,
+        "first_columns_of_top": true,
+        "rank": 6
+      },
+      "rank_09": {
+        "anchor_columns": 8,
+        "first_columns_of_anchor": true,
+        "first_columns_of_top": true,
+        "rank": 9
+      },
+      "rank_12": {
+        "anchor_columns": 8,
+        "first_columns_of_anchor": true,
+        "first_columns_of_top": true,
+        "rank": 12
+      }
+    },
+    "nesting_holds": true,
+    "ranks": {
+      "primary": 8,
+      "rank_02": 2,
+      "rank_03": 3,
+      "rank_04": 4,
+      "rank_06": 6,
+      "rank_09": 9,
+      "rank_12": 12
+    },
+    "rejected": {
+      "primary": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "rank_02": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "rank_03": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "rank_04": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "rank_06": {
+        "angle": false,
+        "delta": true,
+        "shape": false
+      },
+      "rank_09": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "rank_12": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      }
+    },
+    "rows": 7,
+    "statuses": {
+      "rank_02": {
+        "angle": "same",
+        "delta": "same",
+        "shape": "same"
+      },
+      "rank_03": {
+        "angle": "same",
+        "delta": "same",
+        "shape": "same"
+      },
+      "rank_04": {
+        "angle": "same",
+        "delta": "same",
+        "shape": "same"
+      },
+      "rank_06": {
+        "angle": "same",
+        "delta": "differs (rank dependence)",
+        "shape": "same"
+      },
+      "rank_09": {
+        "angle": "same",
+        "delta": "same",
+        "shape": "same"
+      },
+      "rank_12": {
+        "angle": "same",
+        "delta": "same",
+        "shape": "same"
+      }
+    }
+  },
+  "created_at": "2026-10-30T12:03:21+00:00",
+  "deviations": [],
+  "expected": {
+    "anchor": {
+      "rank": 8
+    },
+    "comparison": {
+      "rows": 7
+    }
+  },
+  "findings": [
+    "delta: forced rank 6's status (rejected) differs from the primary's (not rejected) at \u03b1 = 0.05: rank dependence, not a result at that rank; the primary's status stays the result (sweep rules 1 and 2)"
+  ],
+  "git_revision": {
+    "commit": "08e5ddcb2d7ce6e0a2143f5afc555e0c9234a616",
+    "dirty": false
+  },
+  "inputs": {
+    "export": {
+      "dir": "results/motco_input",
+      "export_created_at": "2026-10-27T14:13:06+00:00",
+      "export_git_revision": {
+        "commit": "b10da517bed5919012610813aa8d7cdd778ce7bf",
+        "dirty": false
+      },
+      "export_manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      },
+      "files": {
+        "covariates.csv": {
+          "bytes": 35630,
+          "equals_export_manifest": true,
+          "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+          "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+        },
+        "manifest.json": {
+          "bytes": 14840,
+          "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+        },
+        "metadata.csv": {
+          "bytes": 21092,
+          "equals_export_manifest": true,
+          "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+          "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+        },
+        "nmr.csv": {
+          "bytes": 4802997,
+          "equals_export_manifest": true,
+          "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+          "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+        },
+        "p180.csv": {
+          "bytes": 3756402,
+          "equals_export_manifest": true,
+          "recorded": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e",
+          "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+        }
+      }
+    },
+    "primary": {
+      "chain": {
+        "covariates.csv": true,
+        "metadata.csv": true,
+        "nmr.csv": true,
+        "p180.csv": true
+      },
+      "component_selection": "cv",
+      "created_at": "2026-10-27T18:14:42+00:00",
+      "dir": "results/motco_analysis",
+      "export_manifest_equals": true,
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 11512,
+          "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+        },
+        "result.json": {
+          "bytes": 7818,
+          "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+        }
+      },
+      "git_revision": {
+        "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+        "dirty": false
+      },
+      "latent_adjustment": null,
+      "motco": "0.10.0",
+      "n_jobs": 1,
+      "primary_records_export": true,
+      "result_equals_primary_manifest": true,
+      "seed_and_permutations_equal_constants": true,
+      "selected_rank": 8,
+      "step": "analyze"
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+    "cpus_available": 24,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-office",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "rank_sensitivity.csv": {
+      "bytes": 2569,
+      "participant_level": false,
+      "sha256": "b1cf80981fc03aac1233526f6c0a0926460455fbf0bcbb9b72d103598cae7f20"
+    },
+    "rank_sensitivity.md": {
+      "bytes": 13899,
+      "participant_level": false,
+      "sha256": "f6dee1af0cbb71a625205f1108d92c85665e4e4140c81dbe1e93c13bf7210040"
+    }
+  },
+  "ranks": {
+    "rank_02": {
+      "deviations": [],
+      "dir": "results/motco_rank_sensitivity/rank_02",
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 15224,
+          "sha256": "c06e44c25dcc5ddd85a2df7bfe3ddf8faaacf778b8bdcf47c934bb98dff8b56f"
+        },
+        "result.json": {
+          "bytes": 6224,
+          "sha256": "a8d39089a9ddd9948e679a1c5cdfd707298d8bb64bc74939c42bb65a7e41849d"
+        }
+      },
+      "findings": [],
+      "rank": 2
+    },
+    "rank_03": {
+      "deviations": [],
+      "dir": "results/motco_rank_sensitivity/rank_03",
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 15225,
+          "sha256": "604a82ea22a457fb35f4fc7c77c8c06a504fdcc3f217db607a63957aa6b9dd5b"
+        },
+        "result.json": {
+          "bytes": 6549,
+          "sha256": "af03583842c5f19453ee27bcdd65f59fd76eb75e67377c7900945353d52d761b"
+        }
+      },
+      "findings": [],
+      "rank": 3
+    },
+    "rank_04": {
+      "deviations": [],
+      "dir": "results/motco_rank_sensitivity/rank_04",
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 15224,
+          "sha256": "878cd8bd49a1dc277604f16ae169be93a5219412fa8ec4f442a4e120d8e66e42"
+        },
+        "result.json": {
+          "bytes": 6768,
+          "sha256": "7ce43a7629366aded2e271b7da9ae7308330fd0374307073a52f0b682579c53f"
+        }
+      },
+      "findings": [],
+      "rank": 4
+    },
+    "rank_06": {
+      "deviations": [],
+      "dir": "results/motco_rank_sensitivity/rank_06",
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 15439,
+          "sha256": "9b092438b06233ca04b32e5d91afa96c1a4c7c20d4109438a19ed15765fbeda6"
+        },
+        "result.json": {
+          "bytes": 7237,
+          "sha256": "8f1e2d19bf1bfca656455473f4cffc8afe37c9848ae9ae76e34cb10f3f0ffadb"
+        }
+      },
+      "findings": [
+        "delta: forced rank 6's status (rejected) differs from the primary's (not rejected) at \u03b1 = 0.05: rank dependence, not a result at that rank; the primary's status stays the result (sweep rules 1 and 2)"
+      ],
+      "rank": 6
+    },
+    "rank_09": {
+      "deviations": [],
+      "dir": "results/motco_rank_sensitivity/rank_09",
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 15227,
+          "sha256": "037add251a65c741064a8a82d74b1e0e6520cfac31ab7fe3025727b45293ec3c"
+        },
+        "result.json": {
+          "bytes": 7922,
+          "sha256": "50941a20dbbaf402140c33a22ed48ffab8a69442733fa661dfd6c18a1d76a34c"
+        }
+      },
+      "findings": [],
+      "rank": 9
+    },
+    "rank_12": {
+      "deviations": [],
+      "dir": "results/motco_rank_sensitivity/rank_12",
+      "files": {
+        "analysis_manifest.json": {
+          "bytes": 15236,
+          "sha256": "457fe88e0c1ea880c7080e3915a294344e88316b2ddcf0a944ad91f6e5728f69"
+        },
+        "result.json": {
+          "bytes": 8643,
+          "sha256": "109c085bb612ce8783356614f58a95aeed112e7476cb3807c18d2916dc6814f9"
+        }
+      },
+      "findings": [],
+      "rank": 12
+    }
+  },
+  "reference": {
+    "component_selection": "cv",
+    "created_at": "2026-10-27T18:14:42+00:00",
+    "dir": "results/motco_analysis",
+    "export": {
+      "dir": "results/motco_input",
+      "manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      }
+    },
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 11512,
+        "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+      },
+      "result.json": {
+        "bytes": 7818,
+        "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+      }
+    },
+    "git_revision": {
+      "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+      "dirty": false
+    },
+    "latent_adjustment": null,
+    "motco": "0.10.0",
+    "n_jobs": 1,
+    "selected_rank": 8
+  },
+  "settings": {
+    "ANALYSIS_ALPHA": 0.05,
+    "ANALYSIS_RANK_FLOOR": 2,
+    "ANALYSIS_REJECTION_RULE": "p <= alpha",
+    "RANK_SENSITIVITY_LADDER": {
+      "analysis": "the primary's (the primary export; ANALYSIS_* constants and MOTCO's defaults; no latent adjustment)",
+      "anchor": "one forced run at the primary record's rank, compared with the primary before any rank runs; not kept",
+      "change": "adni-rank-sensitivity",
+      "diagnosed_rank": 12,
+      "draws": "ANALYSIS_SEED and ANALYSIS_PERMUTATIONS at every rank (the same permutation indices at n_jobs = 1)",
+      "name": "forced_rank_ladder",
+      "ranks": [
+        2,
+        3,
+        4,
+        6,
+        9,
+        12
+      ],
+      "setting": "forced_components"
+    },
+    "REPORTED_N_JOBS": 1,
+    "columns": [
+      "analysis",
+      "directory",
+      "selected_rank",
+      "component_selection",
+      "cv_mean_auroc",
+      "cv_repeats_completed",
+      "eigengap",
+      "delta_observed",
+      "delta_p",
+      "delta_rejected",
+      "delta_null_mean",
+      "delta_null_sd",
+      "delta_null_q95",
+      "angle_observed",
+      "angle_p",
+      "angle_rejected",
+      "angle_null_mean",
+      "angle_null_sd",
+      "angle_null_q95",
+      "shape_observed",
+      "shape_p",
+      "shape_rejected",
+      "shape_null_mean",
+      "shape_null_sd",
+      "shape_null_q95"
+    ],
+    "n_jobs": 1,
+    "status_rule": "'same' when both rejections under ANALYSIS_REJECTION_RULE are equal, else 'differs (rank dependence)'; the primary's status is the result either way"
+  },
+  "step": "rank-sensitivity",
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

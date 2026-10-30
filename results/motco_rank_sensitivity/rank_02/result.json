@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "statistics": {
+    "delta": 0.4203213856832779,
+    "angle": 22.690843319686717,
+    "shape": 0.3282013818959221
+  },
+  "p_values": {
+    "delta": 0.5533,
+    "angle": 0.2758,
+    "shape": 0.4099
+  },
+  "null_summary": {
+    "delta": {
+      "count": 9999.0,
+      "mean": 0.5672996243047509,
+      "q50": 0.47803112009371906,
+      "q90": 1.1712191325716281,
+      "q95": 1.4192541570631985,
+      "q99": 1.8815872019197981,
+      "sd": 0.43241258250242903
+    },
+    "angle": {
+      "count": 9999.0,
+      "mean": 16.92528140872012,
+      "q50": 13.564023795209208,
+      "q90": 35.94066190349719,
+      "q95": 43.82808430658294,
+      "q99": 60.53146379596801,
+      "sd": 13.743941293757464
+    },
+    "shape": {
+      "count": 9999.0,
+      "mean": 0.3113144269680798,
+      "q50": 0.28671345373239027,
+      "q90": 0.5509723393748438,
+      "q95": 0.6350709288017164,
+      "q99": 0.7918808754448369,
+      "sd": 0.17401510941464
+    }
+  },
+  "config_spectrum": {
+    "version": 1,
+    "pooled": {
+      "n_points": 3,
+      "n_dimensions": 2,
+      "total_variance": 2.146735070098622,
+      "spectrum": [
+        0.9753252561003761,
+        0.024674743899623753
+      ],
+      "relative_eigengap": 0.9506505122007524
+    },
+    "groups": {
+      "Female": {
+        "n_points": 3,
+        "n_dimensions": 2,
+        "total_variance": 3.0455616708380195,
+        "spectrum": [
+          0.9992432186941618,
+          0.0007567813058382255
+        ],
+        "relative_eigengap": 0.9984864373883235
+      },
+      "Male": {
+        "n_points": 3,
+        "n_dimensions": 2,
+        "total_variance": 1.578049916585742,
+        "spectrum": [
+          0.9107446960284208,
+          0.08925530397157914
+        ],
+        "relative_eigengap": 0.8214893920568417
+      }
+    },
+    "permutation_pooled_eigengap": {
+      "count": 9999.0,
+      "mean": 0.903085825594534,
+      "q05": 0.669596911154456,
+      "q50": 0.9432256086702234,
+      "q95": 0.9994514907844094,
+      "sd": 0.11476155924814814
+    }
+  },
+  "latent": {
+    "integration_method": "pls",
+    "integration_role": "latent_space",
+    "integration_metadata_version": 1,
+    "integration_params": {
+      "stage_col": "stage",
+      "selected_lv": 2,
+      "forced_components": 2
+    },
+    "component_selection": "forced",
+    "cv_mean_auroc": null,
+    "cv_repeats_completed": 0,
+    "selected_lv": 2,
+    "shape": [
+      1501,
+      2
+    ],
+    "n_samples": 1501,
+    "n_features": 2,
+    "layer_feature_counts": {
+      "p180": 133,
+      "nmr": 165
+    },
+    "feature_order_signature": "5cc43dfde9419b2f"
+  },
+  "design": {
+    "group_col": "sex",
+    "stage_col": "stage",
+    "sample_col": "rid",
+    "group_levels": [
+      "Female",
+      "Male"
+    ],
+    "stage_levels": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "cell_sizes": {
+      "Female": {
+        "CN": 237,
+        "MCI": 310,
+        "AD": 125
+      },
+      "Male": {
+        "CN": 223,
+        "MCI": 448,
+        "AD": 158
+      }
+    },
+    "contrast": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        3,
+        4,
+        5
+      ]
+    ],
+    "n_samples": 1501
+  },
+  "covariates": {
+    "columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "kinds": {
+      "age": "numeric",
+      "education": "numeric",
+      "apoe4": "categorical",
+      "phase": "categorical",
+      "statin": "categorical"
+    },
+    "levels": {
+      "apoe4": [
+        "0",
+        "1",
+        "2"
+      ],
+      "phase": [
+        "ADNI1",
+        "ADNI2GO"
+      ],
+      "statin": [
+        "0",
+        "1"
+      ]
+    },
+    "reference_levels": {
+      "apoe4": "0",
+      "phase": "ADNI1",
+      "statin": "0"
+    },
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "reference_row": {
+      "age": 73.70299800133249,
+      "education": 15.927381745502998,
+      "apoe4[1]": 0.36109260493004663,
+      "apoe4[2]": 0.09926715522984676,
+      "phase[ADNI2GO]": 0.5443037974683544,
+      "statin[1]": 0.46902065289806794
+    },
+    "lsmean_reference": "pooled_mean",
+    "missing_policy": "error",
+    "n_dropped": 0,
+    "dropped_sample_ids": [],
+    "coefficients": {
+      "age": {
+        "pls_0": 0.019252470260536163,
+        "pls_1": -0.04743183232674045
+      },
+      "education": {
+        "pls_0": 0.07075898149538842,
+        "pls_1": 0.1526141721322889
+      },
+      "apoe4[1]": {
+        "pls_0": -0.30442892992144854,
+        "pls_1": -0.29235974055964364
+      },
+      "apoe4[2]": {
+        "pls_0": -0.9662400375547968,
+        "pls_1": -0.5737540985843954
+      },
+      "phase[ADNI2GO]": {
+        "pls_0": 8.00642288103002,
+        "pls_1": 1.4876072287558544
+      },
+      "statin[1]": {
+        "pls_0": 4.082097878918423,
+        "pls_1": 0.04852571177494441
+      }
+    }
+  },
+  "blocks": [
+    {
+      "name": "p180",
+      "n_features": 133,
+      "transform": "identity",
+      "units": "as_supplied"
+    },
+    {
+      "name": "nmr",
+      "n_features": 165,
+      "transform": "identity",
+      "units": "as_supplied"
+    }
+  ],
+  "measurement": {
+    "orientation_estimator": "net_displacement",
+    "selected_lv": 2,
+    "component_selection": "forced",
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "shape_available": true,
+    "runtime_seconds": 2.422845559000052
+  },
+  "params": {
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "orientation_estimator": "net_displacement",
+    "forced_components": 2,
+    "cv1_splits": 3,
+    "cv2_splits": 4,
+    "n_repeats": 5,
+    "max_components": 20,
+    "random_state": 1203,
+    "attribution": {
+      "enabled": false,
+      "bootstrap_replicates": 0,
+      "bootstrap_seed": 0,
+      "top_k": 20,
+      "zero_tolerance": 1e-12
+    },
+    "progress": false,
+    "min_components": 2
+  },
+  "software": {
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "scipy": "1.18.1",
+    "sklearn": "1.8.0",
+    "pandas": "2.3.3",
+    "python": "3.12.15"
+  },
+  "attribution": {
+    "schema_version": 2,
+    "status": "not_requested",
+    "reason": "attribution was not requested"
+  }
+}
