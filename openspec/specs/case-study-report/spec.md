@@ -6,10 +6,10 @@ Defines the `report` step: the case-study report of the ADNI sex × stage trajec
 ## Requirements
 
 ### Requirement: Inputs are the kept aggregate outputs only
-The step SHALL read only the committed aggregate files of the pipeline, of the latent arm and of every export variant of `EXPORT_VARIANTS`: manifests, records, summaries, count and comparison tables, diagnostics files and the `nist_bridge` bridge table. It SHALL open no participant-level file and SHALL NOT require one to be present.
+The step SHALL read only the committed aggregate files of the pipeline, of the latent arm, of every export variant of `EXPORT_VARIANTS` and of the CN / LMCI / AD arm: manifests, records, summaries, count and comparison tables, diagnostics files and the `nist_bridge` bridge table. It SHALL open no participant-level file and SHALL NOT require one to be present.
 
 #### Scenario: Clone without participant-level files
-- **WHEN** `report` runs on a clone that holds the tracked files under `results/` and none of `cohort.csv`, the export CSVs of the primary or of a variant, `latent_scores.csv` or `analysis_metadata.csv`
+- **WHEN** `report` runs on a clone that holds the tracked files under `results/` and none of `cohort.csv`, the export CSVs of the primary, of a variant or of the CN / LMCI / AD arm, `latent_scores.csv` or `analysis_metadata.csv`
 - **THEN** it writes the report, and every hash it quotes for a participant-level file is the value a manifest records
 
 #### Scenario: Input absent
@@ -18,11 +18,19 @@ The step SHALL read only the committed aggregate files of the pipeline, of the l
 
 #### Scenario: Variant inputs
 - **WHEN** the report runs with the two registered variants
-- **THEN** it reads, per variant in registry order, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files, and for `nist_bridge` `bridge/nist_bridge.csv`: 53 files in all, with the 26 of the primary and the arm
+- **THEN** it reads, per variant in registry order, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files, and for `nist_bridge` `bridge/nist_bridge.csv`: 27 files, beside the 26 of the primary and the arm
 
 #### Scenario: Variant input absent
 - **WHEN** `results/motco_export_sensitivity/per_run_standardized/diagnostics/diagnostics_manifest.json` does not exist
 - **THEN** the step stops naming the file and the `axis-diagnostics` command with that variant's export, analysis and diagnostics directories, and writes nothing
+
+#### Scenario: CN / LMCI / AD arm inputs
+- **WHEN** the report runs on the committed outputs
+- **THEN** it reads, under `results/motco_stage_sensitivity/`, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files: 13 files, 66 in all
+
+#### Scenario: CN / LMCI / AD arm input absent
+- **WHEN** `results/motco_stage_sensitivity/diagnostics/diagnostics_manifest.json` does not exist
+- **THEN** the step stops naming the file and the `axis-diagnostics` command with the arm's export, analysis and diagnostics directories, and writes nothing
 
 ### Requirement: Aggregate inputs are checked against their manifests
 The step SHALL compare the sha256 of every aggregate file it reads with the value the file's own manifest records under `outputs`, and for the bridge table under `bridge.table` of its variant's export manifest, and SHALL stop before writing anything on a mismatch, naming the file, both hashes and the step to rerun.
@@ -36,7 +44,7 @@ The step SHALL compare the sha256 of every aggregate file it reads with the valu
 - **THEN** the step stops naming the bridge table, both hashes and the `export-sensitivity` command for `nist_bridge`, and writes nothing
 
 ### Requirement: The pipeline chain is checked end to end
-The step SHALL verify every link of the pipeline chain: each manifest's recorded input hashes, from the clean manifests to the arm's and every variant's diagnostics, SHALL equal the hashes of the manifests and files now upstream, the primary's analysis and export included wherever a manifest records them as its `reference`. A broken link SHALL stop the step naming the file, both hashes and the step to rerun.
+The step SHALL verify every link of the pipeline chain: each manifest's recorded input hashes, from the clean manifests to the diagnostics of the arm, of every variant and of the CN / LMCI / AD arm, SHALL equal the hashes of the manifests and files now upstream, the primary's analysis, export and feature tables included wherever a manifest records them as its `reference`. A broken link SHALL stop the step naming the file, both hashes and the step to rerun.
 
 #### Scenario: Export regenerated after the analysis
 - **WHEN** the export manifest's sha256 differs from the value the primary's `analysis_manifest.json` records under its inputs
@@ -54,8 +62,16 @@ The step SHALL verify every link of the pipeline chain: each manifest's recorded
 - **WHEN** a variant export manifest's `reference` records a primary export manifest hash other than the one on disk
 - **THEN** the step stops naming the variant export manifest, both hashes and the `export-sensitivity` command for that variant, and writes nothing
 
+#### Scenario: CN / LMCI / AD arm from a replaced primary export
+- **WHEN** the arm's export manifest records under `reference` a primary export manifest hash, or a feature-table hash, other than the primary export's now on disk
+- **THEN** the step stops naming the arm's export manifest, the key, both hashes and the `stage-sensitivity` command, and writes nothing
+
+#### Scenario: Stale CN / LMCI / AD arm diagnostics
+- **WHEN** the arm was rerun with `--force` after its diagnostics were written, so its diagnostics manifest records an analysis manifest hash other than the one on disk
+- **THEN** the step stops naming the diagnostics manifest, both hashes and the `axis-diagnostics` command with the arm's three directories, and writes nothing
+
 ### Requirement: Only reported, pinned and version-consistent runs are reported
-The step SHALL stop, naming the manifest and the value, when the primary, the arm or an export variant records `n_jobs` other than 1, when any manifest with a `numerics` block records `pinned` false, or when two manifests record different versions of MOTCO, scikit-learn or metabo_adni. A manifest without a `numerics` block SHALL be accepted and noted.
+The step SHALL stop, naming the manifest and the value, when the primary, the arm, an export variant or the CN / LMCI / AD arm records `n_jobs` other than 1, when any manifest with a `numerics` block records `pinned` false, or when two manifests record different versions of MOTCO, scikit-learn or metabo_adni. A manifest without a `numerics` block SHALL be accepted and noted.
 
 #### Scenario: Parallel primary
 - **WHEN** the primary's manifest records `n_jobs` 4
@@ -69,6 +85,10 @@ The step SHALL stop, naming the manifest and the value, when the primary, the ar
 - **WHEN** the `per_run_standardized` analysis record holds `measurement.n_jobs` 4
 - **THEN** the step stops naming that `result.json`, 4 and the `export-sensitivity` command for that variant without `--n-jobs`, and writes nothing
 
+#### Scenario: Parallel CN / LMCI / AD arm
+- **WHEN** the CN / LMCI / AD arm's analysis manifest records `settings.n_jobs` 4
+- **THEN** the step stops naming that manifest, 4 and the `stage-sensitivity` command without `--n-jobs`, and writes nothing
+
 #### Scenario: Manifest written before the numerics change
 - **WHEN** the cohort manifest has no `numerics` block
 - **THEN** the report's provenance says so for that step, and the step completes
@@ -81,7 +101,7 @@ The step SHALL stop when the primary records a latent adjustment or its diagnost
 - **THEN** the step stops naming the directory and the setting, and writes nothing
 
 ### Requirement: Report content contract
-The report SHALL be one Markdown file with these sections in order: summary; provenance; cohort; export; primary analysis; axis diagnostics of the primary; latent-adjustment sensitivity; export sensitivity; findings; reading rules; reproduction. The primary's statistics SHALL be given in full, the arm and each export variant beside the primary with a status per statistic, and every value SHALL be aggregate.
+The report SHALL be one Markdown file with these sections in order: summary; provenance; cohort; export; primary analysis; axis diagnostics of the primary; latent-adjustment sensitivity; export sensitivity; stage-definition sensitivity; findings; reading rules; reproduction. The primary's statistics SHALL be given in full, the arm, each export variant and the CN / LMCI / AD arm beside the primary with a status per statistic, and every value SHALL be aggregate.
 
 #### Scenario: Primary statistics
 - **WHEN** the report is written
@@ -89,7 +109,7 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 
 #### Scenario: Sections present
 - **WHEN** the report is written
-- **THEN** its level-2 headings are the eleven sections in the order above, and the latent-adjustment section holds the comparison table with the primary row first, the arm's `latent_adjustment` block, the covariate roles and the arm's flagged diagnostic rows
+- **THEN** its level-2 headings are the twelve sections in the order above, and the latent-adjustment section holds the comparison table with the primary row first, the arm's `latent_adjustment` block, the covariate roles and the arm's flagged diagnostic rows
 
 #### Scenario: Diagnostics quoted
 - **WHEN** the report is written on the committed outputs
@@ -98,6 +118,10 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 #### Scenario: Export sensitivity section
 - **WHEN** the report is written on the committed outputs
 - **THEN** the export-sensitivity section holds the statistics table with the primary row first and one row per variant in registry order, each with its status; each variant's rank, floor and eigengap beside `angle`; the latent spaces; the run offset per block of the primary export and of each variant export; each variant export's counts beside its predeclared ones; the bridged metabolites per kit beside the predeclared counts and the unbridged metabolites; each variant's flagged diagnostic rows, components and block PCs; and each variant analysis' `cli_equivalent`
+
+#### Scenario: Stage-definition sensitivity section
+- **WHEN** the report is written on the committed outputs
+- **THEN** the stage-definition section holds the statistics table with the primary row first and the CN / LMCI / AD arm's row, each with its status; both ranks, floors and eigengaps beside `angle`; the latent spaces; the arm's definition with the participants kept and dropped by `dx_bl` and sex, the sex × stage cells, the runs within each stage and the covariate levels of the primary and the arm; the run offset per block of both beside the arm's predeclared counts; the arm export's counts beside `STAGE_SENSITIVITY_EXPECTED_COUNTS`; the arm's flagged diagnostic rows, components and block PCs; and the arm analysis' `cli_equivalent`
 
 #### Scenario: QC inputs in the provenance
 - **WHEN** the report is written on the committed outputs
@@ -118,8 +142,12 @@ Every number in the report SHALL be read from a record, a manifest or a CSV and 
 - **WHEN** the export-sensitivity tables are compared with each variant's `export_sensitivity.csv`, export manifest, `nist_bridge.csv` and diagnostics CSVs
 - **THEN** every value equals its source at the printed digits, and no cell is derived by the step
 
+#### Scenario: CN / LMCI / AD arm values equal their sources
+- **WHEN** the stage-definition tables are compared with `stage_sensitivity.csv`, the arm's export manifest, the primary export manifest and the arm's diagnostics CSVs
+- **THEN** every value equals its source at the printed digits, every row of the four arm-definition tables equals the corresponding row of the committed `stage_sensitivity.md`, and no cell is derived by the step
+
 ### Requirement: Interpretive sentences are generated by rule
-Each reading sentence in the report SHALL be produced from the rejection statuses by the same code that writes `summary.md`, `latent_sensitivity.md` and `export_sensitivity.md`, so that the sentences are string-equal across the documents. The report SHALL add no other interpretive sentence, and the primary's status SHALL be the result wherever the arm or a variant appears.
+Each reading sentence in the report SHALL be produced from the rejection statuses by the same code that writes `summary.md`, `latent_sensitivity.md`, `export_sensitivity.md` and `stage_sensitivity.md`, so that the sentences are string-equal across the documents. The report SHALL add no other interpretive sentence, and the primary's status SHALL be the result wherever the arm, a variant or the CN / LMCI / AD arm appears.
 
 #### Scenario: Non-rejection wording
 - **WHEN** `angle` is not rejected in the primary
@@ -137,16 +165,28 @@ Each reading sentence in the report SHALL be produced from the rejection statuse
 - **WHEN** both variants are reported
 - **THEN** no status or sentence of the report compares `nist_bridge` with `per_run_standardized`, and variant rule 5 appears only in the reading-rules section
 
+#### Scenario: CN / LMCI / AD arm status wording
+- **WHEN** the primary and the CN / LMCI / AD arm both leave `shape` unrejected
+- **THEN** the report marks the status `same` and states that the arm's non-rejection is no more informative than the primary's, in the sentence `stage_sensitivity.md` prints
+
+#### Scenario: No reading of the CN / LMCI / AD arm against another sensitivity
+- **WHEN** the CN / LMCI / AD arm is reported beside the latent arm and the export variants
+- **THEN** no status or sentence of the report compares the CN / LMCI / AD arm with the latent arm or with an export variant; a sentence that lists several sensitivities, each beside the primary, compares none
+
 ### Requirement: Reading rules carried verbatim
-The report SHALL print `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, then `EXPORT_VARIANT_READING_RULES` verbatim in its reading-rules section. It SHALL name `LATENT_SENSITIVITY_READING_RULES` beside every table that quotes the arm and `EXPORT_VARIANT_READING_RULES` beside every table that quotes a variant, each with `READING_RULES`.
+The report SHALL print `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, then `EXPORT_VARIANT_READING_RULES`, then `STAGE_SENSITIVITY_READING_RULES` verbatim in its reading-rules section. Beside every table that quotes the arm, a variant or the CN / LMCI / AD arm it SHALL name that sensitivity's rules (`LATENT_SENSITIVITY_READING_RULES`, `EXPORT_VARIANT_READING_RULES` or `STAGE_SENSITIVITY_READING_RULES`), each with `READING_RULES`.
 
 #### Scenario: Rules string-equal
-- **WHEN** the three numbered lists of the reading-rules section are compared with the constants
+- **WHEN** the four numbered lists of the reading-rules section are compared with the constants
 - **THEN** each item is string-equal to its constant, in order
 
 #### Scenario: Variant tables name their rules
 - **WHEN** the summary and the export-sensitivity section quote a variant
 - **THEN** the text that leads them names `READING_RULES` and `EXPORT_VARIANT_READING_RULES`
+
+#### Scenario: CN / LMCI / AD arm tables name their rules
+- **WHEN** the summary and the stage-definition section quote the CN / LMCI / AD arm
+- **THEN** the text that leads them names `READING_RULES` and `STAGE_SENSITIVITY_READING_RULES`
 
 ### Requirement: Deterministic report body
 The report body SHALL depend only on the input files and the report's file name: the date SHALL appear in the file name and the title only, and no revision, host, time or runtime of the report run SHALL be written. Two runs on the same inputs to the same path SHALL be byte-identical.
@@ -186,8 +226,12 @@ Without `--out`, `--check` SHALL read the newest `reports/motco-adni-<date>.md` 
 - **THEN** the check stops naming `manifest.json`, both hashes and `analyze`, before any cell is compared
 
 #### Scenario: Report of an earlier layout
-- **WHEN** `report --check --out reports/motco-adni-2026-10-28.md` runs after this change
-- **THEN** the check stops naming the report, the absent section `Export sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero
+- **WHEN** `report --check --out reports/motco-adni-2026-10-29.md` runs after the stage-definition section is added
+- **THEN** the check stops naming the report, the absent section `Stage-definition sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-29.md`, compares no cell, writes nothing and exits non-zero
+
+#### Scenario: Report of the first layout
+- **WHEN** `report --check --out reports/motco-adni-2026-10-28.md` runs
+- **THEN** the check stops naming the report, the absent sections `Export sensitivity` and `Stage-definition sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero
 
 ### Requirement: Output discipline
 The report SHALL be written to a temporary file and renamed when complete; an existing file at `--out` SHALL stop the step unless `--force`. After writing, the step SHALL parse the file through the check parser and verify that the parsed tables equal the generated ones.
@@ -214,6 +258,10 @@ The report's findings section SHALL list every deviation and finding of every in
 - **WHEN** the arm's manifest records the finding that its rank differs from the primary's
 - **THEN** the report's findings section lists it under `latent-sensitivity`, verbatim
 
+#### Scenario: CN / LMCI / AD arm rank finding carried
+- **WHEN** the CN / LMCI / AD arm's analysis manifest records the finding that its rank differs from the primary's
+- **THEN** the report's findings section lists it under `stage-sensitivity`, verbatim
+
 #### Scenario: Dirty revision
 - **WHEN** a manifest records `git_revision.dirty` true
 - **THEN** the findings section names the step and the revision, and the report is still written
@@ -232,3 +280,18 @@ The step SHALL stop, naming the directory, the setting and both values, when a v
 #### Scenario: Variant diagnostics read the primary
 - **WHEN** a variant's diagnostics manifest records `is_primary` true
 - **THEN** the step stops naming that manifest and the `axis-diagnostics` command with the variant's export, analysis and diagnostics directories, and writes nothing
+
+### Requirement: The CN / LMCI / AD arm is identified before reporting
+The step SHALL stop, naming the manifest, the setting and both values, when the arm's export manifest records a `stage_arm` block other than `STAGE_SENSITIVITY_ARM` or an export variant, when its analysis or comparison manifest names another arm, when its analysis records a latent adjustment, or when its diagnostics record `is_primary` true or another arm.
+
+#### Scenario: Arm constant moved after the run
+- **WHEN** a field of `STAGE_SENSITIVITY_ARM` differs from the `stage_arm` block the arm's export manifest recorded
+- **THEN** the step stops naming that manifest, `STAGE_SENSITIVITY_ARM`, the field, both values and the `stage-sensitivity` command, and writes nothing
+
+#### Scenario: Latent-adjusted analysis in the arm's directory
+- **WHEN** the analysis under `--stage-sensitivity-dir` records a latent adjustment
+- **THEN** the step stops naming the directory and the recorded setting, since the arm is not crossed with the latent adjustment, and writes nothing
+
+#### Scenario: Arm diagnostics read the primary
+- **WHEN** the arm's diagnostics manifest records `is_primary` true
+- **THEN** the step stops naming that manifest and the `axis-diagnostics` command with the arm's export, analysis and diagnostics directories, and writes nothing

@@ -245,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
         f"{'/, <variant>/'.join(EXPORT_SENSITIVITY_SUBDIRS.values())}/ (default: {EXPORT_SENSITIVITY_DIR})",
     )
     p.add_argument(
+        "--stage-sensitivity-dir", type=Path, default=None,
+        help=f"Root of stage-sensitivity (the CN / LMCI / AD arm), read as {'/, '.join(STAGE_SENSITIVITY_SUBDIRS.values())}/ "
+        f"(default: {STAGE_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
         "--out", type=Path, default=None,
         help=f"Report path, named {REPORT_NAME.format(date='<date>')}; the date is read from the name (default: "
         f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there)",
@@ -328,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             diagnostics_dir=args.diagnostics_dir,
             sensitivity_dir=args.sensitivity_dir,
             export_sensitivity_dir=args.export_sensitivity_dir,
+            stage_sensitivity_dir=args.stage_sensitivity_dir,
             out=args.out,
             check=args.check,
             force=args.force,
