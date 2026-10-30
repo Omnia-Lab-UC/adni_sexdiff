@@ -118,20 +118,24 @@ No task line records a participant value.
   - its rows for `pls_0` to `pls_7` in `axis_correlations.csv`, and its whole `block_pcs.csv`, equal the committed `results/motco_diagnostics/` files (design D8).
 
   Done 2026-10-30 on nixos-office, on the uncommitted implementation: the export, analysis and cohort chains pass (1501 both-flag rows, the exported participants in order); `is_primary` false, `rank_sweep` forced rank 12 with the primary's rank 8; no deviation on the expected keys (the rank-independent keys, the read rank 12 `forced` with no latent adjustment and `n_jobs` 1, rows 96 / 48 / 48 / 12); `numerics.pinned` true; the `pls_0` … `pls_7` rows of `axis_correlations.csv` equal the committed primary diagnostic's, and `block_pcs.csv` is byte-identical to it; `diagnostics.md` names forced rank 12 of the sweep, states that `pls_0` to `pls_7` are the primary's and prints both sets of rules. The flagged rows are in `diagnostics/diagnostics.md`.
-- [ ] 5.6 Rerun 5.3 and 5.5 with `--force` on the clean tree after the implementation commit, with the first run's `diagnostics/` moved aside so that no stale-diagnostics finding enters the committed outputs. Verify:
+- [x] 5.6 Rerun 5.3 and 5.5 with `--force` on the clean tree after the implementation commit, with the first run's `diagnostics/` moved aside so that no stale-diagnostics finding enters the committed outputs. Verify:
   - every non-JSON output is byte-identical to the first run;
   - the manifests are equal apart from time, revision, MOTCO's runtime and the hashes of the files that carry them.
 
   These are the committed outputs.
 
+  Done 2026-10-30 on nixos-office at `08e5ddc`, clean: a scratch copy of the first run kept under the ignored `results/*.tmp/`, the first run's `diagnostics/` removed, `rank-sensitivity --force` and `axis-diagnostics` on `rank_12` rerun (no stale-diagnostics finding). Against the first run: the 37 non-JSON files (every CSV, `summary.md`, `rank_sensitivity.md`, `diagnostics.md`) byte-identical; the eight manifests and six `result.json` equal apart from time, revision (dirty → clean), MOTCO's runtime and the hashes and sizes of `manifest.json`, `result.json` and `analysis_manifest.json`, which carry them; no deviation; every `numerics.pinned` true; scratch copy deleted.
+
 ## 6. Commit hygiene
 
-- [ ] 6.1 Before the commit of outputs, name every file added under `results/motco_rank_sensitivity/` (39: five per rank, three in `comparison/`, six in `diagnostics/`) with why it is aggregate. Verify:
+- [x] 6.1 Before the commit of outputs, name every file added under `results/motco_rank_sensitivity/` (39: five per rank, three in `comparison/`, six in `diagnostics/`) with why it is aggregate. Verify:
   - `git check-ignore` matches the twelve participant-level files (`latent_scores.csv` and `analysis_metadata.csv` per rank);
   - `scripts/sync_results.sh --dry-run` lists none of them;
   - no staged CSV has an `rid` or `RID` column, and `grep -w` finds `rid` only as a column name;
   - `openspec validate adni-rank-sensitivity --strict` passes;
   - `report --check` still passes on the committed report.
+
+  Done 2026-10-30 on nixos-office. The 39 files, each aggregate: per rank (`rank_02`, `rank_03`, `rank_04`, `rank_06`, `rank_09`, `rank_12`) `result.json` (statistics, p-values, null summaries, the design and latent blocks), `pls_loadings.csv` (one row per metabolite), `stage_means.csv` (one row per sex × stage cell), `analysis_manifest.json` (hashes, settings, counts, findings) and `summary.md`; `comparison/` `rank_sensitivity.csv` (the primary row and one row per rank), `rank_sensitivity.md` and `rank_sensitivity_manifest.json`; `diagnostics/` `axis_correlations.csv`, `block_pcs.csv`, `geometry_shares.csv` and `components.csv` (per component, block and variable), `diagnostics.md` and `diagnostics_manifest.json`. `git check-ignore` matches the twelve participant-level files and none of the 39; a local dry-run push of `sync_results.sh` (`--push -n` into an empty scratch target) lists the 39 and none of the twelve; no CSV has an `rid` or `RID` column and `grep -w` finds `rid` only as the sample column (`sample_col`, `sample_column`, `--sample-col rid`); `openspec validate adni-rank-sensitivity --strict` passes; `report --check` on the committed report: 71 tables, 3546 cells, 680 other lines, no mismatch. Committed as `7da3750`.
 
 ## Workflow follow-up
 
