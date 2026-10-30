@@ -978,7 +978,7 @@ adjustment or an export variant. The arm and its rule are constants,
 never flags; `--input-dir`, `--analysis-dir` and `--cohort-dir` name the
 primary and the cohort to read.
 
-What it changes, from the change's spike (`openspec/changes/adni-stage-sensitivity/spike.md`):
+What it changes, from the change's spike (`openspec/changes/archive/2026-10-29-adni-stage-sensitivity/spike.md`):
 each stage holds one `DX.bl` category in both runs, so the `phase`
 coefficient is estimated within one diagnosis. It does not balance the
 runs across stages (ADNI-1 share CN 0.527, MCI 0.700, AD 0.544, against
@@ -1099,7 +1099,7 @@ AD arm. The ladder is a constant, never a flag; `--input-dir` and
 `--analysis-dir` name the primary to read.
 
 What it rests on, from the change's spike
-(`openspec/changes/adni-rank-sensitivity/spike.md`, synthetic data only):
+(`openspec/changes/archive/2026-10-30-adni-rank-sensitivity/spike.md`, synthetic data only):
 PLS-DA components are nested (the latent scores at a forced rank k are
 bit for bit the first k columns of a higher forced rank's), so a rank at
 or below the primary's 8 measures the primary's own first components and
