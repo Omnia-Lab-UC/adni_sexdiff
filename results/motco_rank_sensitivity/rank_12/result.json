@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "statistics": {
+    "delta": 1.0329531798415572,
+    "angle": 17.422404498425628,
+    "shape": 0.10135497082168372
+  },
+  "p_values": {
+    "delta": 0.1212,
+    "angle": 0.7098,
+    "shape": 0.6914
+  },
+  "null_summary": {
+    "delta": {
+      "count": 9999.0,
+      "mean": 0.5284326033098266,
+      "q50": 0.4419368239600203,
+      "q90": 1.0966164726817496,
+      "q95": 1.3147497929599061,
+      "q99": 1.7255327589679417,
+      "sd": 0.40496348080419137
+    },
+    "angle": {
+      "count": 9999.0,
+      "mean": 21.85997953174763,
+      "q50": 20.77374484058794,
+      "q90": 31.325750223247063,
+      "q95": 35.275658667670704,
+      "q99": 42.76263891343554,
+      "sd": 7.110258379878641
+    },
+    "shape": {
+      "count": 9999.0,
+      "mean": 0.14989096021684636,
+      "q50": 0.13984115213086196,
+      "q90": 0.25842102875498624,
+      "q95": 0.295945378651968,
+      "q99": 0.3653004779055458,
+      "sd": 0.07963106084512311
+    }
+  },
+  "config_spectrum": {
+    "version": 1,
+    "pooled": {
+      "n_points": 3,
+      "n_dimensions": 12,
+      "total_variance": 7.261347710937672,
+      "spectrum": [
+        0.8518921883072845,
+        0.14810781169271547,
+        1.2200597047345187e-33
+      ],
+      "relative_eigengap": 0.703784376614569
+    },
+    "groups": {
+      "Female": {
+        "n_points": 3,
+        "n_dimensions": 12,
+        "total_variance": 9.785173384507507,
+        "spectrum": [
+          0.8583815353329615,
+          0.14161846466703862,
+          1.1796152893556295e-32
+        ],
+        "relative_eigengap": 0.7167630706659228
+      },
+      "Male": {
+        "n_points": 3,
+        "n_dimensions": 12,
+        "total_variance": 5.6835075846579795,
+        "spectrum": [
+          0.8047224021851775,
+          0.19527759781482246,
+          2.246661122746749e-32
+        ],
+        "relative_eigengap": 0.6094448043703551
+      }
+    },
+    "permutation_pooled_eigengap": {
+      "count": 9999.0,
+      "mean": 0.6797604357180419,
+      "q05": 0.5092291472565182,
+      "q50": 0.6920413734289088,
+      "q95": 0.810128006981375,
+      "sd": 0.09308743778436283
+    }
+  },
+  "latent": {
+    "integration_method": "pls",
+    "integration_role": "latent_space",
+    "integration_metadata_version": 1,
+    "integration_params": {
+      "stage_col": "stage",
+      "selected_lv": 12,
+      "forced_components": 12
+    },
+    "component_selection": "forced",
+    "cv_mean_auroc": null,
+    "cv_repeats_completed": 0,
+    "selected_lv": 12,
+    "shape": [
+      1501,
+      12
+    ],
+    "n_samples": 1501,
+    "n_features": 12,
+    "layer_feature_counts": {
+      "p180": 133,
+      "nmr": 165
+    },
+    "feature_order_signature": "5cc43dfde9419b2f"
+  },
+  "design": {
+    "group_col": "sex",
+    "stage_col": "stage",
+    "sample_col": "rid",
+    "group_levels": [
+      "Female",
+      "Male"
+    ],
+    "stage_levels": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "cell_sizes": {
+      "Female": {
+        "CN": 237,
+        "MCI": 310,
+        "AD": 125
+      },
+      "Male": {
+        "CN": 223,
+        "MCI": 448,
+        "AD": 158
+      }
+    },
+    "contrast": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        3,
+        4,
+        5
+      ]
+    ],
+    "n_samples": 1501
+  },
+  "covariates": {
+    "columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "kinds": {
+      "age": "numeric",
+      "education": "numeric",
+      "apoe4": "categorical",
+      "phase": "categorical",
+      "statin": "categorical"
+    },
+    "levels": {
+      "apoe4": [
+        "0",
+        "1",
+        "2"
+      ],
+      "phase": [
+        "ADNI1",
+        "ADNI2GO"
+      ],
+      "statin": [
+        "0",
+        "1"
+      ]
+    },
+    "reference_levels": {
+      "apoe4": "0",
+      "phase": "ADNI1",
+      "statin": "0"
+    },
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "reference_row": {
+      "age": 73.70299800133249,
+      "education": 15.927381745502998,
+      "apoe4[1]": 0.36109260493004663,
+      "apoe4[2]": 0.09926715522984676,
+      "phase[ADNI2GO]": 0.5443037974683544,
+      "statin[1]": 0.46902065289806794
+    },
+    "lsmean_reference": "pooled_mean",
+    "missing_policy": "error",
+    "n_dropped": 0,
+    "dropped_sample_ids": [],
+    "coefficients": {
+      "age": {
+        "pls_0": 0.019252470260536163,
+        "pls_1": -0.04743183232674045,
+        "pls_2": 0.0840374001840357,
+        "pls_3": -0.012769928875482228,
+        "pls_4": 0.01288217412712538,
+        "pls_5": 0.03189946370850577,
+        "pls_6": 0.016786259017144343,
+        "pls_7": 0.054587933941484076,
+        "pls_8": 0.020197399654679992,
+        "pls_9": 0.01580235054958965,
+        "pls_10": -0.026080903780063114,
+        "pls_11": 0.007416899094519008
+      },
+      "education": {
+        "pls_0": 0.07075898149538842,
+        "pls_1": 0.1526141721322889,
+        "pls_2": 0.18652974850571094,
+        "pls_3": 0.10992335625890957,
+        "pls_4": 0.018499395164123755,
+        "pls_5": -0.037005056519681334,
+        "pls_6": 0.018786116238213007,
+        "pls_7": 0.0297786142650212,
+        "pls_8": 0.022919903487618232,
+        "pls_9": -0.045013808120663246,
+        "pls_10": 0.018458336586748975,
+        "pls_11": 0.005173568747459707
+      },
+      "apoe4[1]": {
+        "pls_0": -0.30442892992144854,
+        "pls_1": -0.29235974055964364,
+        "pls_2": 0.8050303094559382,
+        "pls_3": -0.5630250969809947,
+        "pls_4": 0.08814462982665087,
+        "pls_5": -0.4295091697737484,
+        "pls_6": -0.10482127934599265,
+        "pls_7": -0.04284422621353166,
+        "pls_8": 0.09730357521865324,
+        "pls_9": -0.12095200932820607,
+        "pls_10": 0.24200071431595058,
+        "pls_11": -0.1145399397988055
+      },
+      "apoe4[2]": {
+        "pls_0": -0.9662400375547968,
+        "pls_1": -0.5737540985843954,
+        "pls_2": 1.4401053652140778,
+        "pls_3": -1.1238598910283546,
+        "pls_4": 0.05310760526188373,
+        "pls_5": -1.0093109276698373,
+        "pls_6": -0.15106233283998988,
+        "pls_7": 0.4049233162809689,
+        "pls_8": 0.09128680515579879,
+        "pls_9": -0.16928936755322527,
+        "pls_10": -0.0657477583713802,
+        "pls_11": -0.22527665719666237
+      },
+      "phase[ADNI2GO]": {
+        "pls_0": 8.00642288103002,
+        "pls_1": 1.4876072287558544,
+        "pls_2": -1.8260775115370076,
+        "pls_3": -3.8018643038223736,
+        "pls_4": 1.5768777143498494,
+        "pls_5": -1.0708326246866218,
+        "pls_6": 0.5432394318163214,
+        "pls_7": 0.25496833286969445,
+        "pls_8": 0.1876704073789033,
+        "pls_9": 0.26456411359967125,
+        "pls_10": -0.24198293896383422,
+        "pls_11": -0.038737291600681824
+      },
+      "statin[1]": {
+        "pls_0": 4.082097878918423,
+        "pls_1": 0.04852571177494441,
+        "pls_2": -1.1725921270593693,
+        "pls_3": 0.16589037813449603,
+        "pls_4": -1.7246707000546804,
+        "pls_5": 1.1668179648895505,
+        "pls_6": -0.11155752605455471,
+        "pls_7": -0.15462637479558233,
+        "pls_8": 0.20998414635384266,
+        "pls_9": 0.460894440779415,
+        "pls_10": 0.2145761696831017,
+        "pls_11": 0.35489819698326774
+      }
+    }
+  },
+  "blocks": [
+    {
+      "name": "p180",
+      "n_features": 133,
+      "transform": "identity",
+      "units": "as_supplied"
+    },
+    {
+      "name": "nmr",
+      "n_features": 165,
+      "transform": "identity",
+      "units": "as_supplied"
+    }
+  ],
+  "measurement": {
+    "orientation_estimator": "net_displacement",
+    "selected_lv": 12,
+    "component_selection": "forced",
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "shape_available": true,
+    "runtime_seconds": 2.8923890470005063
+  },
+  "params": {
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "orientation_estimator": "net_displacement",
+    "forced_components": 12,
+    "cv1_splits": 3,
+    "cv2_splits": 4,
+    "n_repeats": 5,
+    "max_components": 20,
+    "random_state": 1203,
+    "attribution": {
+      "enabled": false,
+      "bootstrap_replicates": 0,
+      "bootstrap_seed": 0,
+      "top_k": 20,
+      "zero_tolerance": 1e-12
+    },
+    "progress": false,
+    "min_components": 2
+  },
+  "software": {
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "scipy": "1.18.1",
+    "sklearn": "1.8.0",
+    "pandas": "2.3.3",
+    "python": "3.12.15"
+  },
+  "attribution": {
+    "schema_version": 2,
+    "status": "not_requested",
+    "reason": "attribution was not requested"
+  }
+}

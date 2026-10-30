@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "statistics": {
+    "delta": 1.1139374362888752,
+    "angle": 17.607458822426185,
+    "shape": 0.11122338823432808
+  },
+  "p_values": {
+    "delta": 0.1738,
+    "angle": 0.5433,
+    "shape": 0.8699
+  },
+  "null_summary": {
+    "delta": {
+      "count": 9999.0,
+      "mean": 0.6533097819798049,
+      "q50": 0.5497026495480095,
+      "q90": 1.3426344621444941,
+      "q95": 1.6196906252121315,
+      "q99": 2.0973499405703766,
+      "sd": 0.4964029811155183
+    },
+    "angle": {
+      "count": 9999.0,
+      "mean": 20.609185699903097,
+      "q50": 18.84856827957068,
+      "q90": 36.41671916705964,
+      "q95": 42.330356959133184,
+      "q99": 53.450821156304066,
+      "sd": 11.536237834869512
+    },
+    "shape": {
+      "count": 9999.0,
+      "mean": 0.2627650465352108,
+      "q50": 0.24855635785525088,
+      "q90": 0.44780617935116335,
+      "q95": 0.5090078722453075,
+      "q99": 0.6329398021722678,
+      "sd": 0.1363593401776427
+    }
+  },
+  "config_spectrum": {
+    "version": 1,
+    "pooled": {
+      "n_points": 3,
+      "n_dimensions": 3,
+      "total_variance": 3.784215051276798,
+      "spectrum": [
+        0.8970048153892598,
+        0.10299518461074021,
+        1.5367148073524274e-34
+      ],
+      "relative_eigengap": 0.7940096307785196
+    },
+    "groups": {
+      "Female": {
+        "n_points": 3,
+        "n_dimensions": 3,
+        "total_variance": 5.216967095242184,
+        "spectrum": [
+          0.8612232664973078,
+          0.1387767335026921,
+          1.6135137050886388e-32
+        ],
+        "relative_eigengap": 0.7224465329946157
+      },
+      "Male": {
+        "n_points": 3,
+        "n_dimensions": 3,
+        "total_variance": 2.7997885829172087,
+        "spectrum": [
+          0.9250994428244782,
+          0.07490055717552173,
+          8.243775849723838e-33
+        ],
+        "relative_eigengap": 0.8501988856489565
+      }
+    },
+    "permutation_pooled_eigengap": {
+      "count": 9999.0,
+      "mean": 0.7804085498756416,
+      "q05": 0.5013155815260082,
+      "q50": 0.8061232233533517,
+      "q95": 0.9714058774604956,
+      "sd": 0.14792531515175586
+    }
+  },
+  "latent": {
+    "integration_method": "pls",
+    "integration_role": "latent_space",
+    "integration_metadata_version": 1,
+    "integration_params": {
+      "stage_col": "stage",
+      "selected_lv": 3,
+      "forced_components": 3
+    },
+    "component_selection": "forced",
+    "cv_mean_auroc": null,
+    "cv_repeats_completed": 0,
+    "selected_lv": 3,
+    "shape": [
+      1501,
+      3
+    ],
+    "n_samples": 1501,
+    "n_features": 3,
+    "layer_feature_counts": {
+      "p180": 133,
+      "nmr": 165
+    },
+    "feature_order_signature": "5cc43dfde9419b2f"
+  },
+  "design": {
+    "group_col": "sex",
+    "stage_col": "stage",
+    "sample_col": "rid",
+    "group_levels": [
+      "Female",
+      "Male"
+    ],
+    "stage_levels": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "cell_sizes": {
+      "Female": {
+        "CN": 237,
+        "MCI": 310,
+        "AD": 125
+      },
+      "Male": {
+        "CN": 223,
+        "MCI": 448,
+        "AD": 158
+      }
+    },
+    "contrast": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        3,
+        4,
+        5
+      ]
+    ],
+    "n_samples": 1501
+  },
+  "covariates": {
+    "columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "kinds": {
+      "age": "numeric",
+      "education": "numeric",
+      "apoe4": "categorical",
+      "phase": "categorical",
+      "statin": "categorical"
+    },
+    "levels": {
+      "apoe4": [
+        "0",
+        "1",
+        "2"
+      ],
+      "phase": [
+        "ADNI1",
+        "ADNI2GO"
+      ],
+      "statin": [
+        "0",
+        "1"
+      ]
+    },
+    "reference_levels": {
+      "apoe4": "0",
+      "phase": "ADNI1",
+      "statin": "0"
+    },
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "reference_row": {
+      "age": 73.70299800133249,
+      "education": 15.927381745502998,
+      "apoe4[1]": 0.36109260493004663,
+      "apoe4[2]": 0.09926715522984676,
+      "phase[ADNI2GO]": 0.5443037974683544,
+      "statin[1]": 0.46902065289806794
+    },
+    "lsmean_reference": "pooled_mean",
+    "missing_policy": "error",
+    "n_dropped": 0,
+    "dropped_sample_ids": [],
+    "coefficients": {
+      "age": {
+        "pls_0": 0.019252470260536163,
+        "pls_1": -0.04743183232674045,
+        "pls_2": 0.0840374001840357
+      },
+      "education": {
+        "pls_0": 0.07075898149538842,
+        "pls_1": 0.1526141721322889,
+        "pls_2": 0.18652974850571094
+      },
+      "apoe4[1]": {
+        "pls_0": -0.30442892992144854,
+        "pls_1": -0.29235974055964364,
+        "pls_2": 0.8050303094559386
+      },
+      "apoe4[2]": {
+        "pls_0": -0.9662400375547968,
+        "pls_1": -0.5737540985843954,
+        "pls_2": 1.440105365214078
+      },
+      "phase[ADNI2GO]": {
+        "pls_0": 8.00642288103002,
+        "pls_1": 1.4876072287558544,
+        "pls_2": -1.8260775115370076
+      },
+      "statin[1]": {
+        "pls_0": 4.082097878918423,
+        "pls_1": 0.04852571177494441,
+        "pls_2": -1.1725921270593693
+      }
+    }
+  },
+  "blocks": [
+    {
+      "name": "p180",
+      "n_features": 133,
+      "transform": "identity",
+      "units": "as_supplied"
+    },
+    {
+      "name": "nmr",
+      "n_features": 165,
+      "transform": "identity",
+      "units": "as_supplied"
+    }
+  ],
+  "measurement": {
+    "orientation_estimator": "net_displacement",
+    "selected_lv": 3,
+    "component_selection": "forced",
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "shape_available": true,
+    "runtime_seconds": 2.488445877000231
+  },
+  "params": {
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "orientation_estimator": "net_displacement",
+    "forced_components": 3,
+    "cv1_splits": 3,
+    "cv2_splits": 4,
+    "n_repeats": 5,
+    "max_components": 20,
+    "random_state": 1203,
+    "attribution": {
+      "enabled": false,
+      "bootstrap_replicates": 0,
+      "bootstrap_seed": 0,
+      "top_k": 20,
+      "zero_tolerance": 1e-12
+    },
+    "progress": false,
+    "min_components": 2
+  },
+  "software": {
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "scipy": "1.18.1",
+    "sklearn": "1.8.0",
+    "pandas": "2.3.3",
+    "python": "3.12.15"
+  },
+  "attribution": {
+    "schema_version": 2,
+    "status": "not_requested",
+    "reason": "attribution was not requested"
+  }
+}
