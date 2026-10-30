@@ -125,18 +125,20 @@ Every task runs on any machine with the Nix shell and the committed tree. The in
 
 - [x] 5.1 Commit the implementation, the docs and the change's artifacts. Verify that `git status` is clean and that no file under `results/` or `reports/` changed.
   - Done 2026-10-29: the implementing commit on branch `adni-report-stage-arm` holds `cli.py`, `constants.py`, `data.py`, `README.md`, `AGENTS.md` and this change's artifacts; nothing under `results/` or `reports/`.
-- [ ] 5.2 Only once `date +%F` is later than 2026-10-29 (design D11), on the clean tree at the implementing commit:
+- [x] 5.2 Only once `date +%F` is later than 2026-10-29 (design D11), on the clean tree at the implementing commit:
   - run `uv run adni-sexdiff report` (no `--out`, so it is named by today's date), then `uv run adni-sexdiff report --check`;
   - verify the check passes and reads the new report as the newest;
   - verify that `grep -nE '\bRID\b|\brid\b'` over the new report hits only column-name mentions;
   - verify that `reports/motco-adni-2026-10-28.md` and `reports/motco-adni-2026-10-29.md` are byte-unchanged.
 
   Commit the new report alone, and record its name, sections, tables, cells and chain links in this line.
-- [ ] 5.3 Check commit hygiene. Verify that:
+  - Done 2026-10-30 (nixos-office): on the clean tree at the implementing commit 6883869, `report` wrote `reports/motco-adni-2026-10-30.md` (12 sections, 71 tables, 3546 cells, parsed back equal; 100 chain links; 153526 bytes, sha256 `2cf39009…5122af9`). `report --check` without `--out` read it as the newest: 71 tables, 3546 cells and 680 other lines compared, no mismatch, exit 0. The grep hits 11 lines: the export bullet (sample column `rid`) and the ten `--sample-col rid` of the `cli_equivalent` commands. `reports/motco-adni-2026-10-28.md` and `reports/motco-adni-2026-10-29.md` are byte-unchanged. The step's findings are the five no-`numerics` manifests. The report is committed alone as 2e4a3e1.
+- [x] 5.3 Check commit hygiene. Verify that:
   - `git status` is clean;
   - `git ls-files results` lists the same 76 files as `main`;
   - no file under `results/` changed in any commit of the branch;
   - over every file the branch adds or changes, the identifier grep finds only column names (`RID`, `rid`), never a participant value.
+  - Done 2026-10-30: `git status` clean but for this record, committed with it; `git ls-files results` lists the same 76 files as `main`; no commit of the branch touches `results/`. The branch adds or changes eleven files (`AGENTS.md`, `README.md`, `cli.py`, `constants.py`, `data.py`, the change's five artifacts and the report). Over their added lines the grep hits 14 lines, each the name of the column: the ten `--sample-col rid`, the report's export bullet and the task lines that quote them. No hit is followed by a value.
 
 ## Workflow follow-up
 
