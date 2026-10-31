@@ -135,18 +135,20 @@ Every task runs on any machine with the Nix shell and the committed tree. The in
 ## 5. The report and commit hygiene
 
 - [x] 5.1 Commit the implementation, the docs and the change's artifacts on the branch `adni-report-rank-sweep`. Verify that `git status` is clean and that no file under `results/` or `reports/` changed. (Committed on 2026-10-30 on `adni-report-rank-sweep`, from eb33b70; `git status` clean after it; the commit touches `src/`, `README.md`, `AGENTS.md` and the change's artifacts only.)
-- [ ] 5.2 Only once `date +%F` is later than 2026-10-30 (design D12), on the clean tree at the implementing commit:
+- [x] 5.2 Only once `date +%F` is later than 2026-10-30 (design D12), on the clean tree at the implementing commit:
   - run `uv run adni-sexdiff report` (no `--out`, so it is named by today's date), then `uv run adni-sexdiff report --check`;
   - verify the check passes and reads the new report as the newest;
   - verify that `grep -nE '\bRID\b|\brid\b'` over the new report hits only column-name mentions;
   - verify that the three earlier reports are byte-unchanged.
 
   Commit the new report alone, and record its name, sections, tables, cells, chain links and size in this line.
-- [ ] 5.3 Check commit hygiene. Verify that:
+  - Done 2026-10-31 (nixos-dell-laptop): on the clean tree at the implementing commit 5b3953b, `report` wrote `reports/motco-adni-2026-10-31.md` (13 sections, 80 tables, 4737 cells, parsed back equal; 167 chain links; 207049 bytes, 1770 lines, sha256 `089ebd78…117631`, equal to the scratch renders of 3.5 on 2026-10-30 and of `adni-nmr-all-columns` task 5.1 on nixos-office). `report --check` without `--out` read it as the newest: 80 tables, 4737 cells and 812 other lines compared, no mismatch, exit 0. The grep hits 23 lines: the export bullet (sample column `rid`) and the 22 `--sample-col rid` of the `cli_equivalent` commands. `reports/motco-adni-2026-10-28.md`, `reports/motco-adni-2026-10-29.md` and `reports/motco-adni-2026-10-30.md` are byte-unchanged. The step's findings are the five no-`numerics` manifests. The report is committed alone as 13ce7c8.
+- [x] 5.3 Check commit hygiene. Verify that:
   - `git status` is clean;
   - `git ls-files results` lists the same 115 files as `main`;
   - no file under `results/` changed in any commit of the branch;
   - over every file the branch adds or changes, the identifier grep finds only column names (`RID`, `rid`), never a participant value.
+  - Done 2026-10-31: `git status` clean but for this record, committed with it; `git ls-files results` lists the same 115 files as `main`; no commit of the branch touches `results/`. The branch adds or changes eleven files (`AGENTS.md`, `README.md`, `cli.py`, `constants.py`, `data.py`, the change's five artifacts and the report). Over their added lines the grep hits 25 lines, each the name of the column: the report's 22 `--sample-col rid` and its export bullet, and the two task lines that quote them. No hit is followed by a value.
 
 ## Workflow follow-up
 
