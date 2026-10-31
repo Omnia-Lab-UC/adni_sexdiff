@@ -284,6 +284,11 @@ def build_parser() -> argparse.ArgumentParser:
         f"(default: {STAGE_SENSITIVITY_DIR})",
     )
     p.add_argument(
+        "--rank-sensitivity-dir", type=Path, default=None,
+        help=f"Root of rank-sensitivity (the rank sweep), read as one {rank_dirs}/ per rank ({ranks}), then "
+        f"{'/, '.join(RANK_SENSITIVITY_SUBDIRS.values())}/ (default: {RANK_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
         "--out", type=Path, default=None,
         help=f"Report path, named {REPORT_NAME.format(date='<date>')}; the date is read from the name (default: "
         f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there)",
@@ -376,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             sensitivity_dir=args.sensitivity_dir,
             export_sensitivity_dir=args.export_sensitivity_dir,
             stage_sensitivity_dir=args.stage_sensitivity_dir,
+            rank_sensitivity_dir=args.rank_sensitivity_dir,
             out=args.out,
             check=args.check,
             force=args.force,

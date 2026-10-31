@@ -33,12 +33,14 @@ since change `adni-report-stage-arm`) and the sensitivity step
 `rank-sensitivity` (change `adni-rank-sensitivity`: the predeclared
 forced-rank ladder, the primary's analysis at the forced ranks 2, 3, 4, 6,
 9 and 12 after an anchor run at the primary's rank reproduces the primary,
-read beside the primary and never replacing it; a later change adds it to
-the report).
+read beside the primary and never replacing it; the report covers it
+since change `adni-report-rank-sweep`).
 Every step but `report` runs on a data machine; `report` reads committed aggregate
 files only and runs on any clone; the reports are committed under
-`reports/`, the newest covering the primary, the latent arm, both export
-variants and the CN / LMCI / AD arm. The cluster copy and clone do not exist yet. A data machine is
+`reports/`; since `adni-report-rank-sweep` a report covers the primary,
+the latent arm, both export variants, the CN / LMCI / AD arm and the rank
+sweep (the reports of 2026-10-28, 2026-10-29 and 2026-10-30, of earlier
+layouts, cover fewer). The cluster copy and clone do not exist yet. A data machine is
 any of the user's machines whose
 local participant-level files under `results/` (the export CSVs,
 `cohort.csv`, the primary's `latent_scores.csv` and
@@ -438,7 +440,7 @@ implemented by its own OpenSpec change, in order.
      ladder included), selects a rank, reruns the primary or defines an
      arm.
 6. `report` – from the kept aggregate outputs only (`REPORT_INPUT_FILES`,
-   66 committed files with 21 manifests: the two `clean_manifest.json`;
+   93 committed files with 29 manifests: the two `clean_manifest.json`;
    `stage_counts.csv` and `cohort_manifest.json`; the export
    `manifest.json`; the primary's `result.json`, `analysis_manifest.json`
    and `summary.md`; the primary diagnostics' six files; under
@@ -453,12 +455,19 @@ implemented by its own OpenSpec change, in order.
    (`REPORT_STAGE_ARM_FILES`, change `adni-report-stage-arm`) the
    CN / LMCI / AD arm export's `motco_input/manifest.json`, the arm
    analysis' three aggregate files, the comparison's three files and the
-   arm diagnostics' six files, the arm required), nothing else: no
+   arm diagnostics' six files, the arm required; under
+   `results/motco_rank_sensitivity/` (`REPORT_RANK_SWEEP_FILES`, change
+   `adni-report-rank-sweep`), per rank of `RANK_SENSITIVITY_LADDER` in
+   ladder order, `rank_<kk>/` `result.json`, `analysis_manifest.json` and
+   `summary.md`, then the comparison's three files and the top rank's
+   diagnostics' six files, the sweep required), nothing else: no
    participant-level file is opened or required (their hashes are quoted
-   from the manifests), no data root, no MOTCO call, no pinned numerics, so
-   it runs on any clone. Eleven flags: the eight directories
+   from the manifests; every rank's `stage_means.csv` and
+   `pls_loadings.csv` too), no data root, no MOTCO call, no pinned
+   numerics, so it runs on any clone. Twelve flags: the nine directories
    (`--export-sensitivity-dir` the root of the variants,
-   `--stage-sensitivity-dir` the root of the CN / LMCI / AD arm), `--out`,
+   `--stage-sensitivity-dir` the root of the CN / LMCI / AD arm,
+   `--rank-sensitivity-dir` the root of the rank sweep), `--out`,
    `--check`, `--force`. Gates before anything is written, each
    naming the file or setting, both values and the step to rerun: every
    input present; every aggregate file hashes to the value its own manifest
@@ -473,50 +482,75 @@ implemented by its own OpenSpec change, in order.
    `stage-sensitivity`, every field of the constant in its `stage_arm`
    block and no `variant` block, its analysis and comparison manifests name
    it, its analysis records no latent adjustment, `is_primary` false and
-   `stage_arm` `cn_lmci_ad` in its diagnostics); the primary, the arm,
-   every variant analysis and the CN / LMCI / AD arm's analysis are
-   reported runs (`n_jobs = REPORTED_N_JOBS`), every `numerics` block
-   present is pinned and all 21 manifests record the same MOTCO,
-   scikit-learn and metabo_adni versions; the chain holds link by link from
-   the clean manifests to the arm's, every variant's and the
-   CN / LMCI / AD arm's diagnostics (100 links: 31, then 23 for
-   `nist_bridge`, 22 for `per_run_standardized` and 24 for the
+   `stage_arm` `cn_lmci_ad` in its diagnostics); the rank sweep is
+   `RANK_SENSITIVITY_LADDER` (each rank directory holds its rank: step
+   `rank-sensitivity`, `settings.forced_components`,
+   `rank_sweep.forced_rank` and its record's `latent.selected_lv` the
+   directory's rank with selection `forced`; every field of the constant in
+   its `rank_sweep.ladder`; `rank_sweep.primary_rank` the primary record's
+   rank; no latent adjustment and no `variant` or `stage_arm` block; the
+   comparison manifest records the constant, exactly the ladder's
+   directories and an anchor equal at the primary record's rank; the
+   diagnostics record `is_primary` false and the forced rank
+   `diagnosed_rank`); the primary, the arm, every variant analysis, the
+   CN / LMCI / AD arm's analysis and every rank are reported runs
+   (`n_jobs = REPORTED_N_JOBS`), every `numerics` block present is pinned
+   and all 29 manifests record the same MOTCO, scikit-learn and
+   metabo_adni versions; the chain holds link by link from the clean
+   manifests to the arm's, every variant's, the CN / LMCI / AD arm's and
+   the rank sweep's diagnostics (167 links: 31, then 23 for
+   `nist_bridge`, 22 for `per_run_standardized`, 24 for the
    CN / LMCI / AD arm, among them the primary feature tables its export
-   manifest names as the source of its floors). Writes
+   manifest names as the source of its floors, and 67 for the rank sweep:
+   8 per rank against the primary export and the primary as `reference`,
+   15 for the comparison against the primary, every rank's two files and
+   the primary export, 4 for the top rank's diagnostics). Writes
    `reports/motco-adni-<date>.md` (the date from the file name, in the
    title line only; an existing file stops it unless `--force`; staged as
-   `<out>.tmp`, parsed back and renamed): the twelve sections of
+   `<out>.tmp`, parsed back and renamed): the thirteen sections of
    `REPORT_SECTIONS` (summary; provenance, the report's manifest with the
    QC archives and NIST workbooks; cohort; export; primary analysis; axis
    diagnostics of the primary; latent-adjustment sensitivity; export
    sensitivity; stage-definition sensitivity, the CN / LMCI / AD arm beside
    the primary with its four definition tables under their own headings;
-   findings; reading rules; reproduction), every reference to
+   rank sensitivity, the primary beside each forced rank of the ladder with
+   the anchor and nesting of `rank_sensitivity.md`, the predeclared counts
+   and the top rank's diagnostics under sweep rule 7; findings; reading
+   rules; reproduction), every reference to
    another section numbered from `REPORT_SECTIONS`, every table titled by
    a level-3 heading and keyed by its first column, every number copied
    from a record, a manifest or a CSV at the digits of the summary it
-   belongs to (no statistic, correlation, mean or count of its own), every
-   reading sentence from `_statistic_reading_line`, `_arm_status_line`,
-   `_export_variant_status_line` and `_stage_arm_status_line`, the variant
-   lines from `_export_variant_lines` and the CN / LMCI / AD arm's bullets
-   and four tables from `_stage_arm_lines` and `_stage_arm_tables` (the
-   code of `summary.md`, `latent_sensitivity.md`, `export_sensitivity.md`
-   and `stage_sensitivity.md`, string-equal across the documents; no
-   sentence reads one sensitivity against another), `READING_RULES`, then
+   belongs to (no statistic, correlation, mean or count of its own, no
+   value across ranks), every reading sentence from
+   `_statistic_reading_line`, `_arm_status_line`,
+   `_export_variant_status_line`, `_stage_arm_status_line` and
+   `_rank_status_line`, the variant lines from `_export_variant_lines`, the
+   CN / LMCI / AD arm's bullets and four tables from `_stage_arm_lines` and
+   `_stage_arm_tables` and the sweep's anchor and nesting bullets and
+   nesting table from `_rank_anchor_lines` and `_rank_nesting_table` (the
+   code of `summary.md`, `latent_sensitivity.md`, `export_sensitivity.md`,
+   `stage_sensitivity.md` and `rank_sensitivity.md`, string-equal across
+   the documents; no sentence reads one sensitivity against another, and no
+   forced rank is read against another sensitivity's CV-selected rank),
+   the flagged components of every diagnostics run in its
+   `components.csv` order, `READING_RULES`, then
    `LATENT_SENSITIVITY_READING_RULES`, then `EXPORT_VARIANT_READING_RULES`,
-   then `STAGE_SENSITIVITY_READING_RULES` verbatim, the arm's rules named
+   then `STAGE_SENSITIVITY_READING_RULES`, then
+   `RANK_SENSITIVITY_READING_RULES` verbatim, the arm's rules named
    beside every table that quotes the arm, the variants' beside every
-   table that quotes a variant and the CN / LMCI / AD arm's beside every
-   table that quotes it, the primary's status the result in every table;
+   table that quotes a variant, the CN / LMCI / AD arm's beside every
+   table that quotes it and the sweep's beside every table that quotes the
+   sweep, the primary's status the result in every table;
    the body depends on the inputs and the file name only, so two runs are
    byte-identical. With `--check` (default: the newest report under
    `reports/` by the date in its name) it first compares the report's
    level-2 headings with `REPORT_SECTIONS`: a report of an earlier layout
-   (`reports/motco-adni-2026-10-28.md`, ten sections, and
-   `reports/motco-adni-2026-10-29.md`, eleven sections) stops before any
+   (`reports/motco-adni-2026-10-28.md`, ten sections,
+   `reports/motco-adni-2026-10-29.md`, eleven sections, and
+   `reports/motco-adni-2026-10-30.md`, twelve sections) stops before any
    gate, naming its absent and extra sections and
    `git log -1 --format=%H -- <report>`, the revision where it checks
-   (36c9cc8 and c94f5e7 for those reports); otherwise it reruns the gates, regenerates
+   (36c9cc8, c94f5e7 and 2e4a3e1 for those reports); otherwise it reruns the gates, regenerates
    the report and compares every table cell by cell and every other line
    line by line, printing each mismatch (section, table, row key, column,
    both values; or the line with both texts), exits 1 on any and writes
@@ -683,9 +717,10 @@ behavior or defaults change.
   `os.environ` on import, before any module imports numpy.
 - `src/adni_sexdiff/cli.py` – argparse CLI (`build_parser`, `main`); thin
   layer that calls into `data.py` and prints `[command]`-prefixed progress
-  messages; `report` takes eleven flags (the eight directories, among them
-  `--export-sensitivity-dir` and `--stage-sensitivity-dir`, `--out`,
-  `--check`, `--force`) and `main` returns 1 on a `--check` mismatch;
+  messages; `report` takes twelve flags (the nine directories, among them
+  `--export-sensitivity-dir`, `--stage-sensitivity-dir` and
+  `--rank-sensitivity-dir`, `--out`, `--check`, `--force`) and `main`
+  returns 1 on a `--check` mismatch;
   `export-sensitivity` takes `--variant` (a name of `EXPORT_VARIANTS` or
   `all`; the variants and the rule are never flags) and the directories,
   `--n-jobs` and `--force`; `stage-sensitivity` takes `--input-dir`,
@@ -747,18 +782,24 @@ behavior or defaults change.
   `RANK_SENSITIVITY_MANIFEST`, change `adni-rank-sensitivity`); the
   report's conventions (`DIAGNOSTICS_FILES`,
   `REPORT_VARIANT_FILES`, `REPORT_STAGE_ARM_FILES` keyed by the
-  subdirectories of the CN / LMCI / AD arm, `REPORT_INPUT_FILES` keyed by
-  directory role with one role per variant subdirectory and per arm
-  subdirectory, `REPORT_SECTIONS` with twelve titles; no scientific
-  constant, changes `adni-report`, `adni-report-variants` and
-  `adni-report-stage-arm`).
+  subdirectories of the CN / LMCI / AD arm, `REPORT_RANK_SWEEP_FILES`
+  keyed `rank` then by the subdirectories of the rank sweep (an import-time
+  assertion ties its keys to `RANK_SENSITIVITY_SUBDIRS`),
+  `REPORT_INPUT_FILES` keyed by directory role with one role per variant
+  subdirectory, per arm subdirectory, per rank of the ladder and per sweep
+  subdirectory, `REPORT_SECTIONS` with thirteen titles; no scientific
+  constant, changes `adni-report`, `adni-report-variants`,
+  `adni-report-stage-arm` and `adni-report-rank-sweep`).
 - `src/adni_sexdiff/data.py` – all logic: the six steps (`clean`, `cohort`,
   `export`, `analyze`, `axis-diagnostics` and `report`: `run_report` with
   the loader and gates `_load_report_inputs` (the variant roles and labels
   `_variant_role` and `_variant_labels`, the CN / LMCI / AD arm's
-  `_stage_arm_role` and `_STAGE_ARM_LABELS`), the renderer `render_report`
-  with its table builders, `_export_sensitivity_section` and
-  `_stage_sensitivity_section`, the parser
+  `_stage_arm_role` and `_STAGE_ARM_LABELS`, the rank sweep's
+  `_rank_sweep_role` and `_RANK_SWEEP_LABELS`), the renderer
+  `render_report` with its table builders, `_flagged_components` (a run's
+  flagged components in its `components.csv` order),
+  `_export_sensitivity_section`, `_stage_sensitivity_section` and
+  `_rank_sensitivity_section`, the parser
   `parse_report` and the checker `check_report` with the earlier-layout
   gate `_check_report_layout`; the shared reading sentences
   `_statistic_reading_line` and `_arm_status_line` that `summary.md`,
@@ -780,8 +821,13 @@ behavior or defaults change.
   `render_stage_sensitivity`) and the sensitivity step `rank-sensitivity`
   (`run_rank_sensitivity`, with the anchor gate `_check_anchor`, the rank
   findings `_rank_findings`, the status sentence `_rank_status_line`, the
-  summary's "Rank sweep" lines `_rank_sweep_lines` with `_anchor_text`,
-  and `render_rank_sensitivity`),
+  summary's "Rank sweep" lines `_rank_sweep_lines` with `_anchor_text`
+  (the compared fields in the gate's order `_ANCHOR_FIELD_ORDER`, so the
+  clause read back from a manifest equals the step's), the anchor and
+  nesting bullets `_rank_anchor_lines` and the nesting table
+  `_rank_nesting_table`, the status sentence, bullets and table printed by
+  `rank_sensitivity.md` and the report alike, and
+  `render_rank_sensitivity`),
   `resolve_data_root`, the version gates
   (`check_metabo_adni_version`, `check_motco_version`,
   `check_motco_rank_floor`), the raw-input helpers, the analysis input

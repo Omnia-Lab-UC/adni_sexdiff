@@ -77,14 +77,16 @@ Scientific constants
     constant the six steps and the four sensitivity steps need is decided; a
     later variant or arm introduces its own by proposal. The changes
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
-    report extended to every export variant) and ``adni-report-stage-arm``
-    (the report extended to the CN / LMCI / AD arm) introduce no scientific
-    constant: their conventions ``REPORT_STAGE_ARM_FILES``,
-    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 66
-    with the variants and the CN / LMCI / AD arm) and ``REPORT_SECTIONS``
-    (the report's twelve section titles, in order) are defined below, and
-    the report quotes every setting by constant name from the manifests and
-    every number from the records.
+    report extended to every export variant), ``adni-report-stage-arm``
+    (the report extended to the CN / LMCI / AD arm) and
+    ``adni-report-rank-sweep`` (the report extended to the rank sweep)
+    introduce no scientific constant: their conventions
+    ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 93
+    with the variants, the CN / LMCI / AD arm and the rank sweep) and
+    ``REPORT_SECTIONS`` (the report's thirteen section titles, in order) are
+    defined below, and the report quotes every setting by constant name from
+    the manifests and every number from the records.
 """
 
 from __future__ import annotations
@@ -1597,6 +1599,22 @@ REPORT_STAGE_ARM_FILES: dict[str, tuple[str, ...]] = {
 assert tuple(REPORT_STAGE_ARM_FILES) == tuple(STAGE_SENSITIVITY_SUBDIRS), (
     "REPORT_STAGE_ARM_FILES must name the files of every STAGE_SENSITIVITY_SUBDIRS key, in its order"
 )
+#: The files the report reads in the rank sweep (change
+#: ``adni-report-rank-sweep``): ``rank`` in each rank directory
+#: (``RANK_SENSITIVITY_RANK_DIR``, one per rank of ``RANK_SENSITIVITY_LADDER``),
+#: then by the key of ``RANK_SENSITIVITY_SUBDIRS``: the comparison's three
+#: files and the top rank's diagnostics' six. Each rank's
+#: ``latent_scores.csv``, ``analysis_metadata.csv``, ``stage_means.csv`` and
+#: ``pls_loadings.csv`` are quoted by the hashes its manifest records.
+REPORT_RANK_SWEEP_FILES: dict[str, tuple[str, ...]] = {
+    "rank": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
+    "comparison": (RANK_SENSITIVITY_TABLE, RANK_SENSITIVITY_SUMMARY, RANK_SENSITIVITY_MANIFEST),
+    "diagnostics": DIAGNOSTICS_FILES,
+}
+assert tuple(REPORT_RANK_SWEEP_FILES) == ("rank", *RANK_SENSITIVITY_SUBDIRS), (
+    "REPORT_RANK_SWEEP_FILES must name the files of a rank directory, then of every RANK_SENSITIVITY_SUBDIRS key, in "
+    "its order"
+)
 #: Every file the ``report`` step reads (change ``adni-report``), by the role
 #: of the directory it lives in: ``cleaned`` (``--cleaned-dir``, paths
 #: relative to the cleaned root), ``cohort`` (``--cohort-dir``), ``export``
@@ -1612,7 +1630,12 @@ assert tuple(REPORT_STAGE_ARM_FILES) == tuple(STAGE_SENSITIVITY_SUBDIRS), (
 #: comparison's three files and the variant diagnostics' six), and the roles
 #: ``stage-sensitivity/<subdir>`` of ``--stage-sensitivity-dir`` (change
 #: ``adni-report-stage-arm``; ``STAGE_SENSITIVITY_SUBDIRS`` in its order, the
-#: files of ``REPORT_STAGE_ARM_FILES``). All 66 are aggregate and committed;
+#: files of ``REPORT_STAGE_ARM_FILES``), and the roles
+#: ``rank-sensitivity/<rank_kk>`` (one per rank of ``RANK_SENSITIVITY_LADDER``
+#: in ladder order, named by ``RANK_SENSITIVITY_RANK_DIR``) and
+#: ``rank-sensitivity/<subdir>`` of ``--rank-sensitivity-dir`` (change
+#: ``adni-report-rank-sweep``; ``RANK_SENSITIVITY_SUBDIRS`` in its order, the
+#: files of ``REPORT_RANK_SWEEP_FILES``). All 93 are aggregate and committed;
 #: no participant-level file is read, and the hashes the report quotes for
 #: one come from these manifests. No other file is read.
 REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
@@ -1635,10 +1658,16 @@ REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
         if key != "bridge" or spec["hook"] == "factors"
     },
     **{f"stage-sensitivity/{sub}": REPORT_STAGE_ARM_FILES[key] for key, sub in STAGE_SENSITIVITY_SUBDIRS.items()},
+    **{
+        f"rank-sensitivity/{RANK_SENSITIVITY_RANK_DIR.format(rank=rank)}": REPORT_RANK_SWEEP_FILES["rank"]
+        for rank in RANK_SENSITIVITY_LADDER["ranks"]
+    },
+    **{f"rank-sensitivity/{sub}": REPORT_RANK_SWEEP_FILES[key] for key, sub in RANK_SENSITIVITY_SUBDIRS.items()},
 }
 #: The report's level-2 sections, in order (design D4 of ``adni-report``;
 #: "Export sensitivity" added by ``adni-report-variants``, "Stage-definition
-#: sensitivity" by ``adni-report-stage-arm``).
+#: sensitivity" by ``adni-report-stage-arm``, "Rank sensitivity" by
+#: ``adni-report-rank-sweep``).
 #: ``report --check`` names a mismatch by section, table, row and column.
 REPORT_SECTIONS: tuple[str, ...] = (
     "Summary",
@@ -1650,6 +1679,7 @@ REPORT_SECTIONS: tuple[str, ...] = (
     "Latent-adjustment sensitivity",
     "Export sensitivity",
     "Stage-definition sensitivity",
+    "Rank sensitivity",
     "Findings",
     "Reading rules",
     "Reproduction",
