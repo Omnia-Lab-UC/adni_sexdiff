@@ -100,7 +100,7 @@ No task line records a participant value.
 
 ## 5. The report pin (any clone)
 
-- [ ] 5.1 Make the report loop over `REPORT_EXPORT_VARIANTS` wherever it reads or names a variant, and print one progress line per registered variant outside the pin (design D6). Verify on the committed tree:
+- [x] 5.1 Make the report loop over `REPORT_EXPORT_VARIANTS` wherever it reads or names a variant, and print one progress line per registered variant outside the pin (design D6). Verify on the committed tree:
   - `report --check` on the newest committed report passes with no mismatch, exit 0, and prints the line naming `nmr_all_columns`;
   - `report --out <scratch>/<the newest report's file name>` is byte-identical to that report;
   - an audit hook over `run_report` lists 93 files opened under `results/`, equal to `REPORT_INPUT_FILES`, none under `results/motco_export_sensitivity/nmr_all_columns/`.
@@ -111,7 +111,11 @@ No task line records a participant value.
   - a fresh render: byte-identical to it;
   - the audit hook: 93 files opened under `results/`, equal to `REPORT_INPUT_FILES`, none under `nmr_all_columns/`.
 
-  Still to run: the first two checks against the committed rank-sweep report, once this branch is rebased onto `main`.
+  Done 2026-10-31 (nixos-dell-laptop), against the committed rank-sweep report `reports/motco-adni-2026-10-31.md` (13ce7c8, merged in #15), on the clean tree at 7ac3ed6, this branch rebased onto `main`:
+  - `report --check` without `--out` read it as the newest: exit 0, no mismatch (80 tables, 4737 cells, 812 other lines), and the line "export variant nmr_all_columns (change adni-nmr-all-columns) is registered and not covered by this report";
+  - `report --out <scratch>/motco-adni-2026-10-31.md`: byte-identical to the committed report;
+  - the audit hook: 93 files opened under `results/`, equal to `REPORT_INPUT_FILES` resolved through `_report_dirs`, every one tracked, none ignored by git, none under `nmr_all_columns/`;
+  - the four committed reports byte-unchanged and `git status` clean after the checks.
 - [x] 5.2 Update the docs for groups 1, 2, 4 and 5:
   - `README.md`, the `export-sensitivity` section: the third variant, its hook, its rules, its counts, and `--variant nmr_all_columns` for the real run, since `--variant all` stops on the existing variants without `--force`;
   - `README.md`, the `report` section: the pin, and the report change that adds the variant;
@@ -128,10 +132,10 @@ No task line records a participant value.
 ## 6. The real run and commit hygiene (data machine)
 
 - [x] 6.1 Commit the implementation, the docs and the change's artifacts on the branch. Verify that `git status` is clean and that no file under `results/` or `reports/` changed.
-  Committed 2026-10-30 on `adni-nmr-all-columns`, on top of the rank sweep's implementing commit 5b3953b. The rank-sweep report was not yet written, archived or merged (design D8). Not yet run:
-  - the rebase onto `main`, once that change is merged;
-  - 5.1's two checks against the committed rank-sweep report;
-  - 6.2, which runs on the clean tree after the rebase.
+  Committed 2026-10-30 on `adni-nmr-all-columns`, on top of the rank sweep's implementing commit 5b3953b. The rank-sweep report was not yet written, archived or merged (design D8). Since then:
+  - 2026-10-31: `adni-report-rank-sweep` merged into `main` (#15, 87c707d), and this branch rebased onto it. The implementing commit is now 7ac3ed6, unchanged by the rebase (`git range-diff`: `=`); no file it touches changed on `main` after 5b3953b;
+  - 2026-10-31: 5.1's checks against the committed rank-sweep report, recorded in the commit after 7ac3ed6, which changes this file only;
+  - not yet run: 6.2, on a data machine, on the clean tree at the branch head, whose code is 7ac3ed6's.
 - [ ] 6.2 On the clean tree at that commit, run `export-sensitivity --variant nmr_all_columns` pinned at `n_jobs = 1`, then `axis-diagnostics --input-dir results/motco_export_sensitivity/nmr_all_columns/motco_input --analysis-dir results/motco_export_sensitivity/nmr_all_columns/analysis --out-dir results/motco_export_sensitivity/nmr_all_columns/diagnostics`. Verify:
   - no deviation from `EXPORT_VARIANT_EXPECTED_COUNTS["nmr_all_columns"]` in the export, analysis and comparison manifests, nor in the diagnostics manifest;
   - the export counts equal the spike's;
