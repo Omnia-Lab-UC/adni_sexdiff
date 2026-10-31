@@ -12,17 +12,16 @@ layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 `adni-analyze`, `adni-axis-diagnostics`, `adni-latent-sensitivity`,
 `adni-nist-bridge`, `adni-report`, `adni-report-variants`,
 `adni-stage-sensitivity`, `adni-report-stage-arm`,
-`adni-rank-sensitivity` and `adni-report-rank-sweep`); every step but
-`report` runs on a data machine, `report` on any clone (it reads committed
-aggregate files only), and the reports are committed under `reports/` and
-checked by `report --check`; since `adni-report-rank-sweep` a report
-covers the primary, the latent arm, both p180 export variants, the
-CN / LMCI / AD arm and the rank sweep (the reports of 2026-10-28, 2026-10-29
-and 2026-10-30, of earlier layouts, cover fewer). The change
-`adni-nmr-all-columns` registers a third export variant, `nmr_all_columns`
-(all 245 cleaned NMR columns in the block), run by `export-sensitivity`;
-the report does not cover it yet (`REPORT_EXPORT_VARIANTS`, the report's
-pin), and a later report change adds it.
+`adni-rank-sensitivity`, `adni-report-rank-sweep`, `adni-nmr-all-columns`
+and `adni-report-nmr-all-columns`); every step but `report` runs on a data
+machine, `report` on any clone (it reads committed aggregate files only),
+and the reports are committed under `reports/` and checked by
+`report --check`; since `adni-report-nmr-all-columns` a report covers the
+primary, the latent arm, the three export variants (the two p180 variants
+and `nmr_all_columns`, all 245 cleaned NMR columns in the block, each read
+under its own rule set), the CN / LMCI / AD arm and the rank sweep (the
+reports of 2026-10-28, 2026-10-29, 2026-10-30 and 2026-10-31, of earlier
+layouts, cover fewer).
 The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
 `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis
@@ -1295,8 +1294,8 @@ uv run adni-sexdiff report --check [--out FILE] [the same directory flags]
 ```
 
 The last step of the pipeline (changes `adni-report`,
-`adni-report-variants`, `adni-report-stage-arm` and
-`adni-report-rank-sweep`): the case-study report, generated in full from
+`adni-report-variants`, `adni-report-stage-arm`, `adni-report-rank-sweep`
+and `adni-report-nmr-all-columns`): the case-study report, generated in full from
 the kept aggregate outputs, and its check. Twelve flags; every directory
 default is the pipeline's directory (`results/cleaned`, `results/cohort`,
 `results/motco_input`, `results/motco_analysis`,
@@ -1312,21 +1311,20 @@ variant of `REPORT_EXPORT_VARIANTS`, the CN / LMCI / AD arm and the rank
 sweep are required and no flag selects what is reported.
 
 The report's pin (`REPORT_EXPORT_VARIANTS`, change
-`adni-nmr-all-columns`) holds the variants it covers: `nist_bridge` and
-`per_run_standardized`, a subsequence of `EXPORT_VARIANTS` in registry
-order (an import-time assertion). A registered variant outside it,
-`nmr_all_columns` for now, is not read or required and leaves the body
-unchanged. `report` names it on a progress line ("export variant
-nmr_all_columns … is registered and not covered by this report"), never
-in the report. The newest report therefore stays checkable while the
-variant is registered. The report change that follows adds the variant
-to the pin and its rules to the reading-rules section, and re-issues the
-report. `--out` must be named `reports/motco-adni-<date>.md`
+`adni-nmr-all-columns`) holds the variants it covers, a subsequence of
+`EXPORT_VARIANTS` in registry order (an import-time assertion): since
+change `adni-report-nmr-all-columns` all three, `nist_bridge`,
+`per_run_standardized` and `nmr_all_columns`. A variant registered later
+and left outside it is not read or required and leaves the body
+unchanged; `report` names it on a progress line ("export variant … is
+registered and not covered by this report"), never in the report, so the
+newest report stays checkable until the report change that adds the
+variant to the pin and re-issues the report. `--out` must be named `reports/motco-adni-<date>.md`
 (`REPORT_NAME`): the date is read from the name and written in the title
 line only, write mode defaults to today's date and `--check` to the newest
 report under `reports/` by the date in its name.
 
-Inputs (`REPORT_INPUT_FILES`, 93 files with 29 manifests, all
+Inputs (`REPORT_INPUT_FILES`, 106 files with 33 manifests, all
 committed): the two `clean_manifest.json`; `stage_counts.csv` and
 `cohort_manifest.json`; the export `manifest.json`; the primary's
 `result.json`, `analysis_manifest.json` and `summary.md`; the primary
@@ -1336,8 +1334,8 @@ variant of `REPORT_EXPORT_VARIANTS`, in registry order, `bridge/nist_bridge.csv`
 only), `motco_input/manifest.json`, the variant analysis' three aggregate
 files, the comparison's three files (`export_sensitivity.csv`,
 `export_sensitivity.md`, `export_sensitivity_manifest.json`) and the
-variant diagnostics' six files (14 for `nist_bridge`, 13 for
-`per_run_standardized`); and under `results/motco_stage_sensitivity/`
+variant diagnostics' six files (14 for `nist_bridge`, 13 each for
+`per_run_standardized` and `nmr_all_columns`); and under `results/motco_stage_sensitivity/`
 (`REPORT_STAGE_ARM_FILES`) the CN / LMCI / AD arm export's
 `motco_input/manifest.json`, the arm analysis' three aggregate files, the
 comparison's three files (`stage_sensitivity.csv`, `stage_sensitivity.md`,
@@ -1391,10 +1389,11 @@ analysis in a rank directory, a moved ladder or an unanchored sweep is
 named as such; the primary, the arm, every variant analysis, the
 CN / LMCI / AD arm's analysis and every rank are reported runs
 (`n_jobs = 1` in manifest and record), every `numerics` block present
-records `pinned` true, and all 29 manifests record the same MOTCO,
-scikit-learn and metabo_adni versions (the arm export manifest records
-metabo_adni only);
-the chain holds link by link (167 links: the first report's 31 (the clean
+records `pinned` true, and all 33 manifests record the same MOTCO,
+scikit-learn and metabo_adni versions (the clean, cohort and export
+manifests, the variant and arm exports among them, record metabo_adni
+only);
+the chain holds link by link (189 links: the first report's 31 (the clean
 manifests in the cohort and export manifests, the cohort manifest in the
 export manifest, the export manifest and files in the four
 analysis-reading manifests, the primary's two files as the arm's and the
@@ -1403,7 +1402,8 @@ arm diagnostics), then per variant its export manifest against the clean,
 cohort and primary export manifests, its analysis against its export and
 the primary, its comparison against both analyses, both exports and the
 bridge table, and its diagnostics against its analysis, its export and the
-cohort manifest: 23 for `nist_bridge`, 22 for `per_run_standardized`;
+cohort manifest: 23 for `nist_bridge`, 22 each for `per_run_standardized`
+and `nmr_all_columns`;
 then 24 for the CN / LMCI / AD arm: its export manifest against the cohort
 manifest, the primary export manifest (as input and as `reference`) and
 the primary feature tables it names as the source of its floors (against
@@ -1427,10 +1427,11 @@ names `rank-sensitivity --force`. An existing `--out` stops write mode
 unless `--force`.
 
 The report (`REPORT_SECTIONS`, thirteen level-2 sections in order): summary
-(with the rank and status lines of each variant and of the CN / LMCI / AD
-arm, the sweep's status lines, and the flagged components of every
+(one paragraph per group of export variants, naming its rule set and its
+dependence label, with the rank and status lines of each variant, those of
+the CN / LMCI / AD arm, the sweep's status lines, and the flagged components of every
 diagnostics run, the top rank's among them); provenance (versions,
-revisions and numerics per step, the 93 inputs
+revisions and numerics per step, the 106 inputs
 with their sha256, the raw
 LONI inputs as the clean and cohort manifests record them, the QC archives
 and NIST workbooks beside their predeclared sha256 as the `nist_bridge`
@@ -1451,16 +1452,31 @@ latent-adjustment sensitivity (the comparison with a status per
 statistic, the status lines, the latent spaces, the arm's
 `latent_adjustment` block, the covariate roles, MOTCO's two decisions, the
 arm's diagnostics, the first component against `phase` beside the
-primary's, the arm's `cli_equivalent`); export sensitivity (the
-statistics of the primary and of each variant with a status per variant
-row, each variant's rank, floor and eigengap beside `angle`, the status
-lines, the latent spaces, the run offset per block of every export, each
-variant export's counts beside `EXPORT_VARIANT_EXPECTED_COUNTS`, the
-variant lines of `export_sensitivity.md`, for `nist_bridge` the bridged
-metabolites per kit beside the predeclared 102 / 24 / 7 and the seven
-unbridged metabolites with their NIST replicates (the full bridge table
-quoted by hash), each variant's diagnostics, the first component against
-`phase`, each variant's `cli_equivalent`); stage-definition sensitivity
+primary's, the arm's `cli_equivalent`); export sensitivity (a lead that
+names the groups, then one group of tables per rule set of
+`EXPORT_VARIANT_RULE_SETS`, in registry order: the run-handling group,
+`nist_bridge` and `per_run_standardized` under
+`EXPORT_VARIANT_READING_RULES`, with the titles of the 2026-10-31 report,
+and the membership group, `nmr_all_columns` under
+`NMR_MEMBERSHIP_READING_RULES`, its tables titled `nmr_all_columns: …`;
+each group's tables hold the primary and that group's variants only, so
+no table puts `nmr_all_columns` beside a p180 variant (membership rule 8).
+Each group: its lead, which names its rule set and cites its rules 1 and 2
+(and membership rule 8, `_GROUP_PRIMARY_ONLY_RULE`); the statistics of
+the primary and of each variant with a status per variant row, each
+variant's rank, floor and eigengap beside `angle`, the status lines, the
+latent spaces, the run offset per block of every export, each variant
+export's counts beside `EXPORT_VARIANT_EXPECTED_COUNTS` (every key but
+`analysis`, `phase_offset` and `diagnostics`, which the steps compare
+themselves), the variant lines of `export_sensitivity.md`, for
+`nist_bridge` the bridged metabolites per kit beside the predeclared
+102 / 24 / 7 and the seven unbridged metabolites with their NIST
+replicates (the full bridge table quoted by hash), for `nmr_all_columns`
+its membership, derived columns kept, joint features, block shares and
+NMR shape counts, each variant's diagnostics, the first component against
+`phase`, each variant's `cli_equivalent`; every word that depends on the
+variant, its rule set, citation word, dependence label and what it
+changes, from `_variant_words`); stage-definition sensitivity
 (the statistics of the primary and the CN / LMCI / AD arm with a status,
 both ranks, floors and eigengaps beside `angle`, the status lines, the
 latent spaces, the arm's bullets of `stage_sensitivity.md` and its four
@@ -1482,9 +1498,12 @@ primary's rank in `components.csv` order; the first component against
 `phase`; each rank's `cli_equivalent`); findings (every
 deviation and finding of every manifest, verbatim under its step, then the
 report's own: a dirty recorded revision, a manifest without a `numerics`
-block); `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, then
-`EXPORT_VARIANT_READING_RULES`, then `STAGE_SENSITIVITY_READING_RULES`,
-then `RANK_SENSITIVITY_READING_RULES`, verbatim; the commands that
+block); six rule lists, verbatim: `READING_RULES`, then
+`LATENT_SENSITIVITY_READING_RULES`, then one list per rule set of the
+pinned variants in group order (`EXPORT_VARIANT_READING_RULES`, then
+`NMR_MEMBERSHIP_READING_RULES`), then `STAGE_SENSITIVITY_READING_RULES`,
+then `RANK_SENSITIVITY_READING_RULES`, each led by the line its own
+documents print; the commands that
 reproduce the pipeline (the variants, the CN / LMCI / AD arm, the rank
 sweep and their diagnostics included) and check the report. Every reference to another section is numbered from
 `REPORT_SECTIONS`. Every table is
@@ -1508,7 +1527,9 @@ read against another sensitivity's CV-selected rank); the primary's
 status is the result wherever the arm, a variant, the CN / LMCI / AD arm
 or a forced rank appears, and `LATENT_SENSITIVITY_READING_RULES` is named
 beside every table that quotes the arm, `EXPORT_VARIANT_READING_RULES`
-beside every table that quotes a variant, `STAGE_SENSITIVITY_READING_RULES`
+beside every table that quotes a p180 variant,
+`NMR_MEMBERSHIP_READING_RULES` beside every table that quotes
+`nmr_all_columns`, `STAGE_SENSITIVITY_READING_RULES`
 beside every table that quotes the CN / LMCI / AD arm and
 `RANK_SENSITIVITY_READING_RULES` beside every table that quotes the sweep,
 each with `READING_RULES`. The body depends on the inputs and the
@@ -1520,15 +1541,19 @@ renamed. It quotes aggregate values only and holds no participant
 identifier.
 
 `--check` first compares the report's level-2 headings with
-`REPORT_SECTIONS`: a report written by an earlier layout
-(`reports/motco-adni-2026-10-28.md`, ten sections, which checks at
-36c9cc8, `reports/motco-adni-2026-10-29.md`, eleven sections, which
-checks at c94f5e7, and `reports/motco-adni-2026-10-30.md`, twelve
-sections, which checks at 2e4a3e1) stops before any gate,
-naming its absent and extra sections and the command
-`git log -1 --format=%H -- <report>` that finds the revision that
-committed it, where `report --check --out <report>` passes in a worktree;
-nothing is compared or written and the CLI exits 1. Then it reads the
+`REPORT_SECTIONS`, then the export variants it lists (its level-3
+headings ``Export variant `<name>` `` in "Export sensitivity", in order)
+with `REPORT_EXPORT_VARIANTS` (change `adni-report-nmr-all-columns`): a
+report written by an earlier layout (`reports/motco-adni-2026-10-28.md`,
+ten sections, which checks at 36c9cc8, `reports/motco-adni-2026-10-29.md`,
+eleven sections, which checks at c94f5e7,
+`reports/motco-adni-2026-10-30.md`, twelve sections, which checks at
+2e4a3e1, and `reports/motco-adni-2026-10-31.md`, thirteen sections and two
+export variants, which checks at 13ce7c8) stops before any gate, naming
+its absent and extra sections or variants (or that their order differs)
+and the command `git log -1 --format=%H -- <report>` that finds the
+revision that committed it, where `report --check --out <report>` passes
+in a worktree; nothing is compared or written and the CLI exits 1. Then it reads the
 report, runs every gate, regenerates the report from
 the outputs now on disk with the date taken from the file name and
 compares: every table cell by cell (section, table, row key, column, both
