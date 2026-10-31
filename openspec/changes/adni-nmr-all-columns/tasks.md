@@ -136,7 +136,7 @@ No task line records a participant value.
   - 2026-10-31: `adni-report-rank-sweep` merged into `main` (#15, 87c707d), and this branch rebased onto it. The implementing commit is now 7ac3ed6, unchanged by the rebase (`git range-diff`: `=`); no file it touches changed on `main` after 5b3953b;
   - 2026-10-31: 5.1's checks against the committed rank-sweep report, recorded in the commit after 7ac3ed6, which changes this file only;
   - not yet run: 6.2, on a data machine, on the clean tree at the branch head, whose code is 7ac3ed6's.
-- [ ] 6.2 On the clean tree at that commit, run `export-sensitivity --variant nmr_all_columns` pinned at `n_jobs = 1`, then `axis-diagnostics --input-dir results/motco_export_sensitivity/nmr_all_columns/motco_input --analysis-dir results/motco_export_sensitivity/nmr_all_columns/analysis --out-dir results/motco_export_sensitivity/nmr_all_columns/diagnostics`. Verify:
+- [x] 6.2 On the clean tree at that commit, run `export-sensitivity --variant nmr_all_columns` pinned at `n_jobs = 1`, then `axis-diagnostics --input-dir results/motco_export_sensitivity/nmr_all_columns/motco_input --analysis-dir results/motco_export_sensitivity/nmr_all_columns/analysis --out-dir results/motco_export_sensitivity/nmr_all_columns/diagnostics`. Verify:
   - no deviation from `EXPORT_VARIANT_EXPECTED_COUNTS["nmr_all_columns"]` in the export, analysis and comparison manifests, nor in the diagnostics manifest;
   - the export counts equal the spike's;
   - `p180.csv`, `metadata.csv` and `covariates.csv` equal the primary's, and the rule's columns equal the primary's;
@@ -145,12 +145,36 @@ No task line records a participant value.
   - the primary's, the latent arm's, the p180 variants', the CN / LMCI / AD arm's and the rank sweep's tracked files are unchanged.
 
   Record the hostname, and point to the committed files for the rank, statistics and statuses: none is written in this line.
-- [ ] 6.3 Rerun 6.2 with `--force` on the same clean tree, with the first run's `diagnostics/` moved aside. Verify that every non-JSON file is byte-identical to the first run, and that the manifests and `result.json` differ only in time, revision, runtime and the hashes of the files that carry them.
-- [ ] 6.4 Commit the outputs. Before the commit, name every file added under `results/motco_export_sensitivity/nmr_all_columns/` with why it is aggregate: `motco_input/manifest.json`, the analysis' `result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six. Verify:
+  - Done 2026-10-31 on nixos-dell-laptop, on the clean tree at 84c66a5 (the branch head; its code is 7ac3ed6's, see 6.1). The machine became a data machine that day:
+    - its data root `data/` holds the archive, the documented repair of `ADMCDUKEP180UPLCADNI2GO_10Jul2024.csv` (LONI's bytes `f28ede9a…` to `7ad17d63…`), the four LOD workbooks extracted from the two supplement zips into `Metabolomics/p180/LOD/`, and the 14 top-level symlinks with the targets the committed manifests record, each input equal to `RAW_INPUT_SHA256`;
+    - a pinned rebuild (`clean --platform all` → `cohort` → `export` → `analyze`) into the scratchpad reproduced every output the committed manifests record, byte for byte (`result.json` differing in MOTCO's runtime only), and its participant-level files were copied into their ignored paths under `results/`.
+  - Verified:
+    - no deviation in the export, analysis, comparison and diagnostics manifests;
+    - the export counts equal the spike's: 245 kept with 80 derived, 378 joint features with shares 0.352 / 0.648, 41 zero cells in 3 columns, 0 floors not positive, 0 non-finite cells, NMR shape 24 / 19 / 0.265 / 38 / 9 / 1, NMR spectrum 0.335 / 0.712 / 0.887 / 4.964 / 245, and NMR run offset 0.196 / 0.694 / 5 / 0 / 0.148 / 0.011;
+    - `p180.csv`, `metadata.csv`, `covariates.csv` and `features_p180.csv` byte-equal to the primary's, and `rule_columns_equal_primary` true (the 165 columns, 0 cells differ);
+    - every `numerics.pinned` true, with host nixos-dell-laptop;
+    - the diagnostics passed their chain checks, with `is_primary` false and `export_variant` `nmr_all_columns`;
+    - the 115 tracked files under `results/` unchanged (sha256 before and after).
+  - The rank, statistics and statuses are in the committed `results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.md` and its manifest's findings.
+- [x] 6.3 Rerun 6.2 with `--force` on the same clean tree, with the first run's `diagnostics/` moved aside. Verify that every non-JSON file is byte-identical to the first run, and that the manifests and `result.json` differ only in time, revision, runtime and the hashes of the files that carry them.
+  - Done 2026-10-31 on nixos-dell-laptop, at 84c66a5, with the first run's 23 files copied to the scratchpad.
+  - The 18 non-JSON files are byte-identical.
+  - The five JSON files differ only in:
+    - `created_at` and the creation times they quote;
+    - `measurement.runtime_seconds` and `counts.runtime_seconds`;
+    - the bytes and sha256 of `result.json` and of the manifests that carry them.
+  - The revision is the same in both runs. The second run's files are the ones committed.
+- [x] 6.4 Commit the outputs. Before the commit, name every file added under `results/motco_export_sensitivity/nmr_all_columns/` with why it is aggregate: `motco_input/manifest.json`, the analysis' `result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six. Verify:
   - `git check-ignore` matches the participant-level files: the four export CSVs, the two feature tables, `latent_scores.csv` and `analysis_metadata.csv`;
   - no staged CSV has an `rid` or `RID` column, and `grep -w` finds `rid` only as a column name;
   - `report --check` on the newest committed report still passes with no mismatch;
   - `openspec validate adni-nmr-all-columns --strict` passes.
+  - Done 2026-10-31, committed as f4255e8. The commit message names the 15 aggregate files and why each is aggregate. Verified:
+    - `git check-ignore` matches all 8 participant-level files;
+    - the staged CSV headers are `block`/`feature`, `group`/`stage`, `analysis` and the diagnostics' `component`/`quantity` columns, never `rid` or `RID`;
+    - `grep -w` finds `rid` only as the sample column's name: `sample_column`, `sample_col`, and the `--sample-col` argument of the `cli_equivalent`;
+    - `report --check` on `reports/motco-adni-2026-10-31.md` passes with no mismatch (80 tables, 4737 cells, 812 other lines);
+    - `openspec validate adni-nmr-all-columns --strict` passes.
 
 ## Workflow follow-up
 
