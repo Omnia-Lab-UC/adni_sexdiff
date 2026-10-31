@@ -73,9 +73,22 @@ Scientific constants
     the change ``adni-rank-sensitivity``, with the predeclared
     ``RANK_SENSITIVITY_EXPECTED_COUNTS`` and the conventions
     ``RANK_SENSITIVITY_DIR``, ``RANK_SENSITIVITY_RANK_DIR``,
-    ``RANK_SENSITIVITY_SUBDIRS`` and the output names. Every scientific
-    constant the six steps and the four sensitivity steps need is decided; a
-    later variant or arm introduces its own by proposal. The changes
+    ``RANK_SENSITIVITY_SUBDIRS`` and the output names; the ``EXPORT_VARIANTS``
+    entry ``nmr_all_columns`` (every cleaned NMR column in the block, the 80
+    the feature rule marks ``derived`` among them, each on the rule's scale
+    with its own floor; hook ``membership``), ``NMR_MEMBERSHIP_READING_RULES``
+    (the eight statements every reader of that variant carries after
+    ``READING_RULES``, in place of ``EXPORT_VARIANT_READING_RULES``) and its
+    dependence label ``feature-membership dependence``, by the change
+    ``adni-nmr-all-columns``, with the predeclared
+    ``EXPORT_VARIANT_EXPECTED_COUNTS["nmr_all_columns"]`` (``analysis`` and
+    ``diagnostics`` among its keys) and the conventions
+    ``EXPORT_VARIANT_RULE_SETS`` (per variant its rules, citation word and
+    dependence label; tied to ``EXPORT_VARIANTS`` by two import-time
+    assertions) and ``REPORT_EXPORT_VARIANTS`` (the variants the report
+    covers; a subsequence of the registry by an import-time assertion). Every
+    scientific constant the six steps and the four sensitivity steps need is
+    decided; a later variant or arm introduces its own by proposal. The changes
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
     report extended to every export variant), ``adni-report-stage-arm``
     (the report extended to the CN / LMCI / AD arm) and
@@ -83,7 +96,8 @@ Scientific constants
     introduce no scientific constant: their conventions
     ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
     ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 93
-    with the variants, the CN / LMCI / AD arm and the rank sweep) and
+    with the variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD arm
+    and the rank sweep) and
     ``REPORT_SECTIONS`` (the report's thirteen section titles, in order) are
     defined below, and the report quotes every setting by constant name from
     the manifests and every number from the records.
@@ -1171,19 +1185,21 @@ NIST_BRIDGE_WORKBOOK_SHA256: dict[str, str] = {
 
 #: Decided by the change ``adni-nist-bridge`` (2026-10-29, before any run): the
 #: registry of export variants ``export-sensitivity`` runs, in this order. Each
-#: changes one p180 setting of the primary export (``block``, through the hook
-#: ``hook`` of the shared export body) and keeps every other setting of
-#: ``EXPORT_FEATURE_RULE``, the participants, the NMR block, the metadata and
-#: the covariates; its analysis keeps every setting of the primary's. A
+#: changes one setting of one block of the primary export (``block``, through
+#: the hook ``hook`` of the shared export body) and keeps every other setting
+#: of ``EXPORT_FEATURE_RULE``, the participants, the other block, the metadata
+#: and the covariates; its analysis keeps every setting of the primary's. A
 #: variant is read beside the primary and never replaces it. ``nist_bridge``
 #: multiplies every cleaned p180 concentration of an ADNI-GO/2 participant (the
 #: run of ``p180_runs.csv``) by 2^b of its metabolite under
 #: ``NIST_BRIDGE_RULE`` before the floors; ``per_run_standardized`` centres
 #: each p180 metabolite on the rule's scale (pooled floors) and divides it by
-#: its population SD within its run. The other registered export variants
-#: (all 245 NMR columns, the raw scale, ``log2(x + 1)``, the generalized log)
-#: join by their own proposals. Never set or changed by a flag, a result or a
-#: count.
+#: its population SD within its run. ``nmr_all_columns`` (decided by the change
+#: ``adni-nmr-all-columns``, 2026-10-30, before any run of it) keeps every
+#: cleaned NMR column, the 80 the rule marks ``derived`` among them, in cleaned
+#: order, each on the rule's scale with its own floor. The other registered
+#: export variants (the raw scale, ``log2(x + 1)``, the generalized log) join by
+#: their own proposals. Never set or changed by a flag, a result or a count.
 EXPORT_VARIANTS: dict[str, dict] = {
     "nist_bridge": {
         "block": "p180",
@@ -1207,6 +1223,19 @@ EXPORT_VARIANTS: dict[str, dict] = {
             "centred and divided by its population SD within its run of p180_runs.csv"
         ),
         "change": "adni-nist-bridge",
+    },
+    "nmr_all_columns": {
+        "block": "nmr",
+        "hook": "membership",
+        "rule": None,
+        "reads_data_root": False,
+        "setting": (
+            "every cleaned NMR column enters the block (245): the 165 concentrations of EXPORT_FEATURE_RULE and its 80 "
+            "derived columns (72 percentages, 4 ratios, the degree of unsaturation, 3 sizes), each on the rule's scale, "
+            "log2(x + floor) with its own 5 % floor over the exported participants; the p180 block, the participants, "
+            "the metadata and the covariates the primary's"
+        ),
+        "change": "adni-nmr-all-columns",
     },
 }
 
@@ -1242,6 +1271,92 @@ EXPORT_VARIANT_READING_RULES: tuple[str, ...] = (
     "diagnostic is a measurement-space finding and never grounds to adopt the variant.",
 )
 
+#: Decided by the change ``adni-nmr-all-columns``, written before any run: the
+#: binding reading rules of ``nmr_all_columns``, printed verbatim after
+#: ``READING_RULES`` in its ``summary.md``, its ``export_sensitivity.md``, its
+#: ``diagnostics.md`` and every report that quotes it, in place of
+#: ``EXPORT_VARIANT_READING_RULES`` (whose rule 2 says a variant differs only
+#: in the p180 values). Rules 1, 2, 3, 6 and 7 have the roles of
+#: ``EXPORT_VARIANT_READING_RULES`` 1, 2, 3, 6 and 7, so a sentence that cites
+#: a rule by its role cites the same number under both sets. The numbers
+#: quoted are from the change's spike, none from a run of the variant.
+NMR_MEMBERSHIP_READING_RULES: tuple[str, ...] = (
+    "`nmr_all_columns` is read beside the primary and never replaces it. No result of it changes a constant "
+    "(`EXPORT_FEATURE_RULE` included), reruns the primary or adopts the variant.",
+    "The variant shares a great deal with the primary: the cleaned tables, the participants, the p180 block, the "
+    "165 NMR concentrations with their floors and cells, the covariates and their design, the cells, the settings, "
+    "the CV folds, the seed and the permutations. It differs only in the NMR block's membership. It adds the 80 "
+    "columns `EXPORT_FEATURE_RULE` marks `derived`, so the joint matrix holds 378 features, and the p180 share falls "
+    "from 133 / 298 (0.446) to 133 / 378 (0.352). A rejection status that differs is dependence on the feature "
+    "membership, not a result of the variant.",
+    "The variant's CV-selected rank, floor, eigengap and `angle` null summary are reported beside its `angle`. A "
+    "rank that differs from the primary's is reported, not ranked.",
+    "The 80 columns add no measurement. Each is a function of the block's concentrations: a lipid's share of its "
+    "lipoprotein subclass (72 percentages), a ratio (4), the degree of unsaturation, or a particle size (3). On the "
+    "rule's scale the 165 concentrations explain a median 0.998 of a derived column's variance (lowest 0.798). MOTCO "
+    "z-scores every feature and weights features, not blocks, so the columns add weight to the lipoprotein "
+    "directions they are computed from. On the rule's scale, 21 of them have |skew| > 1 and 8 a largest |z| above 8, "
+    "mostly percentages of the large HDL and VLDL lipids. A difference reflects the weight of those directions and "
+    "those tails, never evidence that the derived columns measure what the concentrations do not.",
+    "The 2022 study (doi:10.3389/fradi.2022.782864) used all 245 NMR columns, with `log2(x + 1)`, winsorizing, "
+    "outlier removal and medication residuals. The variant changes the membership only, on the rule's scale. It is "
+    "not a reproduction of that study, and no agreement or disagreement with it is read from the variant.",
+    "A non-rejection in the variant is no more informative than the primary's: reading rule 3 holds, and no power "
+    "statement exists at this design. A rejection that appears only in the variant is dependence on the feature "
+    "membership, read beside the variant's rank and null summary.",
+    "The variant's export manifest records the block shares, the NMR block's shape counts and the run offset per "
+    "block. Its axis diagnostic records each block's loading share per component (`components.csv`). They are "
+    "reported beside the results. A variant component that tracks a variable in its axis diagnostic is a "
+    "measurement-space finding and never grounds to adopt the variant.",
+    "The variant is read against the primary only, never against another export variant, arm or rank. No sentence "
+    "reads it against another sensitivity.",
+)
+
+#: A convention (change ``adni-nmr-all-columns``, design D3): per variant of
+#: ``EXPORT_VARIANTS``, in its order, the reading rules it carries and the
+#: words its readers print. ``rules`` names the rule tuple of this module and
+#: ``change`` the change that decided it; ``heading`` and ``reader`` are the
+#: heading and the reader of the rules section; ``cite`` is the citation word
+#: ("variant rule N"); ``dependence`` the status label of a differing statistic
+#: (``differs (<dependence>)``) and ``source`` what a differing status depends
+#: on. The p180 variants keep the words their committed outputs print; the
+#: entries are kept apart from ``EXPORT_VARIANTS``, whose entries the variant
+#: manifests record. The ``dependence`` of ``nmr_all_columns`` is decided by
+#: ``adni-nmr-all-columns``.
+_P180_RUN_RULE_SET: dict[str, str] = {
+    "rules": "EXPORT_VARIANT_READING_RULES",
+    "change": "adni-nist-bridge",
+    "cite": "variant rule",
+    "dependence": "run-handling dependence",
+    "source": "the handling of the p180 run",
+    "heading": "Reading rules of the export variants",
+    "reader": "an export variant",
+}
+EXPORT_VARIANT_RULE_SETS: dict[str, dict[str, str]] = {
+    "nist_bridge": _P180_RUN_RULE_SET,
+    "per_run_standardized": _P180_RUN_RULE_SET,
+    "nmr_all_columns": {
+        "rules": "NMR_MEMBERSHIP_READING_RULES",
+        "change": "adni-nmr-all-columns",
+        "cite": "membership rule",
+        "dependence": "feature-membership dependence",
+        "source": "the NMR feature membership",
+        "heading": "Reading rules of the NMR membership variant",
+        "reader": "the NMR membership variant",
+    },
+}
+assert tuple(EXPORT_VARIANT_RULE_SETS) == tuple(EXPORT_VARIANTS), (
+    "EXPORT_VARIANT_RULE_SETS must name the rule set of every EXPORT_VARIANTS entry, in its order"
+)
+assert all(isinstance(globals().get(entry["rules"]), tuple) for entry in EXPORT_VARIANT_RULE_SETS.values()), (
+    "EXPORT_VARIANT_RULE_SETS names a reading-rule tuple this module does not define: "
+    + ", ".join(
+        f"{variant} ({entry['rules']!r})" for variant, entry in EXPORT_VARIANT_RULE_SETS.items()
+        if not isinstance(globals().get(entry["rules"]), tuple)
+    )
+    + "; every EXPORT_VARIANTS entry needs its rules"
+)
+
 # --- export-sensitivity: predeclared counts -----------------------------------
 
 #: Predeclared by the change ``adni-nist-bridge`` from its spike (``spike.md``,
@@ -1255,9 +1370,19 @@ EXPORT_VARIANT_READING_RULES: tuple[str, ...] = (
 #: ``p180_runs.csv`` differs from their ``phase``; and ``nmr.csv``,
 #: ``metadata.csv`` and ``covariates.csv`` equal to the primary export
 #: manifest's hashes. ``analysis``: every key of ``ANALYSIS_EXPECTED_COUNTS``.
-#: The ranks are not predeclared. ``export-sensitivity`` compares each variant
-#: manifest with these and records every difference as a finding; a difference
-#: never stops the step and never changes a setting.
+#: ``nmr_all_columns`` is predeclared by the change ``adni-nmr-all-columns``
+#: from its spike (``spike.md``, 2026-10-30) and the committed manifests: the
+#: NMR features with every derived column kept (``derived`` 0 per family, the
+#: kept ones under ``derived_kept``), the joint features, the NMR block's shape
+#: counts (|skew| > 1, largest |z| > 8), the run offset per block, ``p180.csv``,
+#: ``metadata.csv`` and ``covariates.csv`` equal to the primary's, the rule's
+#: NMR columns equal to the primary ``nmr.csv``'s (``rule_columns_equal_primary``),
+#: ``analysis`` with its features, and ``diagnostics``: the rank-independent
+#: keys of ``DIAGNOSTICS_EXPECTED_COUNTS`` with its NMR features, which
+#: ``axis-diagnostics`` expects on the variant's read. The ranks are not
+#: predeclared. ``export-sensitivity`` compares each variant manifest with
+#: these and records every difference as a finding; a difference never stops
+#: the step and never changes a setting.
 EXPORT_VARIANT_EXPECTED_COUNTS: dict[str, dict] = {
     "nist_bridge": {
         **{key: value for key, value in EXPORT_EXPECTED_COUNTS.items() if key != "phase_offset"},
@@ -1274,6 +1399,32 @@ EXPORT_VARIANT_EXPECTED_COUNTS: dict[str, dict] = {
         "runs_differing_from_phase": 0,
         "unchanged_equal_primary": {EXPORT_METADATA: True, EXPORT_COVARIATES: True, "nmr.csv": True},
         "analysis": ANALYSIS_EXPECTED_COUNTS,
+    },
+    "nmr_all_columns": {
+        **EXPORT_EXPECTED_COUNTS,
+        "features": {
+            "p180": EXPORT_EXPECTED_COUNTS["features"]["p180"],
+            "nmr": {
+                "cleaned": 245,
+                "kept": 245,
+                "derived": {"percentage": 0, "ratio": 0, "degree": 0, "size": 0},
+                "derived_kept": {"percentage": 72, "ratio": 4, "degree": 1, "size": 3},
+            },
+        },
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 109, "abs_d_gt_1": 80}, "nmr": {"abs_d_gt_0_5": 5, "abs_d_gt_1": 0}},
+        "joint_features": 378,
+        "shape": {"nmr": {"abs_skew_gt_1": 24, "max_abs_z_gt_8": 9}},
+        "runs_differing_from_phase": 0,
+        "unchanged_equal_primary": {EXPORT_METADATA: True, EXPORT_COVARIATES: True, "p180.csv": True},
+        "rule_columns_equal_primary": True,
+        "analysis": {**ANALYSIS_EXPECTED_COUNTS, "features": {"p180": 133, "nmr": 245, "joint": 378}},
+        "diagnostics": {
+            **{key: DIAGNOSTICS_EXPECTED_COUNTS[key] for key in DIAGNOSTICS_RANK_INDEPENDENT_KEYS},
+            "blocks": {
+                "p180": DIAGNOSTICS_EXPECTED_COUNTS["blocks"]["p180"],
+                "nmr": {"features": 245, "pcs": DIAGNOSTIC_N_BLOCK_PCS},
+            },
+        },
     },
 }
 assert tuple(EXPORT_VARIANT_EXPECTED_COUNTS) == tuple(EXPORT_VARIANTS), (
@@ -1615,6 +1766,16 @@ assert tuple(REPORT_RANK_SWEEP_FILES) == ("rank", *RANK_SENSITIVITY_SUBDIRS), (
     "REPORT_RANK_SWEEP_FILES must name the files of a rank directory, then of every RANK_SENSITIVITY_SUBDIRS key, in "
     "its order"
 )
+#: The export variants the report reads, checks and quotes, in registry order
+#: (change ``adni-nmr-all-columns``, design D6): the report's coverage. A
+#: registered variant outside it is not read or required and leaves the
+#: report's body unchanged; ``report`` names it on a progress line. The change
+#: that adds a variant to the report extends this tuple and re-issues the
+#: report.
+REPORT_EXPORT_VARIANTS: tuple[str, ...] = ("nist_bridge", "per_run_standardized")
+assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIANTS] == list(REPORT_EXPORT_VARIANTS), (
+    "REPORT_EXPORT_VARIANTS must be a subsequence of EXPORT_VARIANTS, in registry order, each name once"
+)
 #: Every file the ``report`` step reads (change ``adni-report``), by the role
 #: of the directory it lives in: ``cleaned`` (``--cleaned-dir``, paths
 #: relative to the cleaned root), ``cohort`` (``--cohort-dir``), ``export``
@@ -1622,8 +1783,9 @@ assert tuple(REPORT_RANK_SWEEP_FILES) == ("rank", *RANK_SENSITIVITY_SUBDIRS), (
 #: ``diagnostics`` (``--diagnostics-dir``, the primary's) and the three
 #: subdirectories of ``--sensitivity-dir`` (``LATENT_SENSITIVITY_SUBDIRS``:
 #: the arm's analysis, the comparison and the arm's diagnostics), and, per
-#: variant of ``EXPORT_VARIANTS`` in registry order (change
-#: ``adni-report-variants``), the roles ``export-sensitivity/<variant>/<subdir>``
+#: variant of ``REPORT_EXPORT_VARIANTS`` in registry order (change
+#: ``adni-report-variants``; the pin, change ``adni-nmr-all-columns``), the
+#: roles ``export-sensitivity/<variant>/<subdir>``
 #: of ``--export-sensitivity-dir`` (``EXPORT_SENSITIVITY_SUBDIRS`` in its
 #: order: the bridge table for a variant with hook ``factors``, the variant
 #: export's manifest, the variant analysis' three aggregate files, the
@@ -1653,9 +1815,9 @@ REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
     f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['diagnostics']}": DIAGNOSTICS_FILES,
     **{
         f"export-sensitivity/{variant}/{sub}": REPORT_VARIANT_FILES[key]
-        for variant, spec in EXPORT_VARIANTS.items()
+        for variant in REPORT_EXPORT_VARIANTS
         for key, sub in EXPORT_SENSITIVITY_SUBDIRS.items()
-        if key != "bridge" or spec["hook"] == "factors"
+        if key != "bridge" or EXPORT_VARIANTS[variant]["hook"] == "factors"
     },
     **{f"stage-sensitivity/{sub}": REPORT_STAGE_ARM_FILES[key] for key, sub in STAGE_SENSITIVITY_SUBDIRS.items()},
     **{
