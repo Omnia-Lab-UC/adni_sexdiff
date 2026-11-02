@@ -1,20 +1,24 @@
 # motco-export-sensitivity Specification
 
 ## Purpose
-Defines the `export-sensitivity` step: predeclared variants of the MOTCO export, each changing one thing in the export: how the p180 assay run is handled (a NIST SRM 1950 bridge between the runs, per-run standardization) or which NMR columns enter (all 245 cleaned columns). Each variant is exported, analysed at the primary's settings and compared with the primary, which stays primary.
+Defines the `export-sensitivity` step: predeclared variants of the MOTCO export, each changing one thing in the export: how the p180 assay run is handled (a NIST SRM 1950 bridge between the runs, per-run standardization), which NMR columns enter (all 245 cleaned columns) or the scale of both blocks (the raw scale, `log2(x + 1)`, the generalized log). Each variant is exported, analysed at the primary's settings and compared with the primary, which stays primary.
 
 ## Requirements
 
 ### Requirement: Predeclared variant registry
-The step SHALL run only the variants of the registry `EXPORT_VARIANTS`, a constant decided by a change proposal before any run: `nist_bridge`, `per_run_standardized` and `nmr_all_columns`. A variant SHALL be selected by name (`--variant`, or `all`); no flag SHALL set or change a variant's settings, the bridge rule or any analysis setting.
+The step SHALL run only the variants of the registry `EXPORT_VARIANTS`, a constant decided by a change proposal before any run: `nist_bridge`, `per_run_standardized`, `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`. A variant SHALL be selected by name (`--variant`, or `all`); no flag SHALL set or change a variant's settings, the bridge rule, a scale or any analysis setting.
 
 #### Scenario: Unknown variant
-- **WHEN** `export-sensitivity --variant raw_scale` runs and `raw_scale` is not in the registry
+- **WHEN** `export-sensitivity --variant log10_scale` runs and `log10_scale` is not in the registry
 - **THEN** the command is rejected naming the registered variants, and nothing is read or written
 
 #### Scenario: All variants
 - **WHEN** `export-sensitivity --variant all` runs
 - **THEN** each registered variant runs in registry order, each into its own directory
+
+#### Scenario: Scale variant by name
+- **WHEN** `export-sensitivity --variant glog` runs with the other variants' outputs present
+- **THEN** it runs `glog` alone into its own directory and reads or writes no other variant's directory
 
 ### Requirement: Inputs are kept outputs and the QC archives
 A variant SHALL read only the outputs of `clean` (`p180/P180.csv`, `p180/p180_runs.csv`, `nmr/NMR.csv`, both `clean_manifest.json`), of `cohort` (`cohort.csv`, `cohort_manifest.json`), the primary export (`results/motco_input/`) and the primary analysis (`result.json`, `analysis_manifest.json`). `nist_bridge` SHALL also read the two QC archives of the data root. The step SHALL NOT read any diagnostics output.
@@ -108,6 +112,10 @@ A variant export SHALL keep the primary's participants, order, metadata, covaria
 - **WHEN** the `nmr_all_columns` export is written
 - **THEN** its `p180.csv`, `metadata.csv` and `covariates.csv` have the sha256 the primary export manifest records
 
+#### Scenario: Unchanged files of a scale variant
+- **WHEN** a scale variant's export is written
+- **THEN** its `metadata.csv` and `covariates.csv` have the sha256 the primary export manifest records, and no block CSV is expected to
+
 ### Requirement: Variant values are label-blind
 No variant SHALL read sex, stage or a covariate to compute a value. A participant whose run differs from its `phase` SHALL be a finding.
 
@@ -183,7 +191,7 @@ The step SHALL NOT write under `results/motco_input/`, `results/motco_analysis/`
 - **THEN** every value in `export_sensitivity.csv` equals the field it is read from in one of the two records
 
 ### Requirement: Comparison summary
-`export_sensitivity.md` SHALL print the table with a status per statistic, `same` or `differs (<dependence>)` with the variant's dependence label, the primary's status named the result, and the run offset per block from both export manifests. It SHALL add the bridge summary for `nist_bridge` and the block shares and NMR shape counts for `nmr_all_columns`, then print `READING_RULES` and the variant's rule set verbatim.
+`export_sensitivity.md` SHALL print a status per statistic, `same` or `differs (<dependence>)` with the variant's label, name the primary's status the result, and print both exports' run offsets per block with the variant's context: the bridge summary (`nist_bridge`), the block shares and NMR shape counts (`nmr_all_columns`), or the transform, offsets, shape counts and numerical ranks of both exports (a scale variant). It SHALL end with `READING_RULES` and the variant's rule set, verbatim.
 
 #### Scenario: Status differs
 - **WHEN** `angle` is not rejected in the primary and rejected in `per_run_standardized`
@@ -193,8 +201,16 @@ The step SHALL NOT write under `results/motco_input/`, `results/motco_analysis/`
 - **WHEN** `delta` is not rejected in the primary and rejected in `nmr_all_columns`
 - **THEN** its status reads `differs (feature-membership dependence)`, the sentence cites membership rules 2 and 6, the primary's status is named the result, and a finding records it
 
+#### Scenario: Status differs in a scale variant
+- **WHEN** `delta` is not rejected in the primary and rejected in `raw_scale`
+- **THEN** its status reads `differs (scale dependence)`, the sentence cites scale rules 2 and 6, the primary's status is named the result, and a finding records it
+
+#### Scenario: Scale variant lines
+- **WHEN** the `glog` comparison summary is written
+- **THEN** its export-variant section names the transform, λ's rule, the offset summary, and per block the shape counts and numerical rank of the primary export and of the variant export, every value read from the two export manifests
+
 ### Requirement: Predeclared counts
-Each variant manifest SHALL record `EXPORT_VARIANT_EXPECTED_COUNTS` beside the observed counts: the keys of `EXPORT_EXPECTED_COUNTS` with the variant's run offset, the unchanged files' hashes, every key of `ANALYSIS_EXPECTED_COUNTS` with the variant's features, and its own keys: the bridged metabolites for `nist_bridge`; for `nmr_all_columns` the derived columns kept, the joint features, the NMR shape counts and the rule's columns equal. A deviation SHALL be a finding, never a stop.
+Each variant manifest SHALL record `EXPORT_VARIANT_EXPECTED_COUNTS` beside the observed counts: the export keys with its run offset, the unchanged files, the analysis keys with its features, and its own keys (`nist_bridge`: bridged metabolites; `nmr_all_columns`: derived columns kept, joint features, NMR shape counts, rule's columns equal; a scale variant: shape counts and numerical rank per block, medians below the offset for `log2_plus_one`). A deviation SHALL be a finding, never a stop.
 
 #### Scenario: Count deviation
 - **WHEN** the bridge rule bridges 125 metabolites against the predeclared 126
@@ -203,6 +219,10 @@ Each variant manifest SHALL record `EXPORT_VARIANT_EXPECTED_COUNTS` beside the o
 #### Scenario: NMR variant counts
 - **WHEN** `nmr_all_columns` runs on the committed inputs
 - **THEN** its export manifest records 378 joint features, NMR |skew| > 1 at 24 and largest |z| > 8 at 9, NMR phase |d| > 0.5 at 5, and no deviation, and its analysis manifest expects features p180 133, NMR 245, joint 378
+
+#### Scenario: Scale variant counts
+- **WHEN** `raw_scale` runs on the committed inputs
+- **THEN** its export manifest records p180 |skew| > 1 at 46 and largest |z| > 8 at 12, NMR at 43 and 4, NMR numerical rank 104, p180 phase |d| > 0.5 / > 1 at 108 / 76, and no deviation, and its analysis manifest expects every key of `ANALYSIS_EXPECTED_COUNTS`
 
 ### Requirement: Findings
 Findings SHALL record:
@@ -222,6 +242,10 @@ A finding SHALL name counts, settings and files, never a participant.
 - **WHEN** `nmr_all_columns` selects rank 5 and the primary rank 8
 - **THEN** the finding records both and cites membership rule 3
 
+#### Scenario: Rank differs in a scale variant
+- **WHEN** `log2_plus_one` selects rank 6 and the primary rank 8
+- **THEN** the finding records both and cites scale rule 3
+
 ### Requirement: Reproducible run
 Two pinned runs of a variant on the same inputs SHALL write byte-identical CSVs, `summary.md`, `export_sensitivity.md` and bridge table, a `result.json` equal apart from MOTCO's runtime, and manifests that differ only in time, revision, runtime and the hashes of the files that carry them; the bridge table SHALL depend only on the four workbooks.
 
@@ -230,7 +254,7 @@ Two pinned runs of a variant on the same inputs SHALL write byte-identical CSVs,
 - **THEN** every CSV, `summary.md`, `export_sensitivity.md` and the bridge table hash identically, `result.json` differs only in MOTCO's runtime, and the manifests only in their timestamps, revision, runtime and the hashes of the manifests and `result.json`
 
 ### Requirement: Reading rules bind every reader of a variant
-Each variant SHALL carry its rule set, named by `EXPORT_VARIANT_RULE_SETS`: `EXPORT_VARIANT_READING_RULES` for the p180 variants, `NMR_MEMBERSHIP_READING_RULES` for `nmr_all_columns`. That set SHALL be printed verbatim after `READING_RULES` in its `summary.md`, `export_sensitivity.md`, `diagnostics.md` and every report that quotes it. No variant value SHALL change a constant, select a metabolite or covariate, rerun the primary or define a new variant.
+Each variant SHALL carry the rule set `EXPORT_VARIANT_RULE_SETS` names (`EXPORT_VARIANT_READING_RULES` for the p180 variants, `NMR_MEMBERSHIP_READING_RULES` for `nmr_all_columns`, `SCALE_VARIANT_READING_RULES` for the scale variants), printed verbatim after `READING_RULES` in its `summary.md`, `export_sensitivity.md`, `diagnostics.md` and every report that quotes it. No variant value SHALL change a constant, select a metabolite, a covariate or a scale, rerun the primary or define a new variant.
 
 #### Scenario: Variant summary
 - **WHEN** a variant's `summary.md` is written
@@ -239,6 +263,10 @@ Each variant SHALL carry its rule set, named by `EXPORT_VARIANT_RULE_SETS`: `EXP
 #### Scenario: NMR variant summary
 - **WHEN** the `nmr_all_columns` `summary.md` is written
 - **THEN** it prints `READING_RULES` then the eight `NMR_MEMBERSHIP_READING_RULES`, string-equal to the constant, and no line of `EXPORT_VARIANT_READING_RULES`
+
+#### Scenario: Scale variant summary
+- **WHEN** a scale variant's `summary.md` is written
+- **THEN** it prints `READING_RULES` then the eight `SCALE_VARIANT_READING_RULES`, string-equal to the constant, cited as "scale rule N", and its `phase` line says the variant changes the scale of both blocks only and `phase` carries the run difference as in the primary
 
 #### Scenario: Mapping out of step
 - **WHEN** `EXPORT_VARIANTS` holds a variant that `EXPORT_VARIANT_RULE_SETS` does not name
@@ -279,4 +307,60 @@ After this change the two p180 variants SHALL keep their committed outputs. On a
 
 #### Scenario: Re-rendered text
 - **WHEN** the variant renderers run on the committed records of `nist_bridge`
+- **THEN** its `summary.md`, `export_sensitivity.md` and `diagnostics.md` equal the committed files byte for byte
+
+### Requirement: Scale variant export
+Under a scale variant (`raw_scale`, `log2_plus_one`, `glog`), every kept cell of both blocks SHALL take the variant's transform of `SCALE_VARIANT_RULE` in place of the rule's `log2(x + floor)`, on the primary's membership. The rule's floor SHALL be computed, gated and recorded per metabolite and not applied. The participants, the metadata and the covariates SHALL be the primary's, and the variant SHALL read no data-root file.
+
+#### Scenario: Raw scale
+- **WHEN** `export-sensitivity --variant raw_scale` exports the committed clean and cohort outputs
+- **THEN** each kept cell of its `p180.csv` and `nmr.csv` equals the cleaned concentration, its manifest records units `x`, and each feature table records the rule's floor beside an empty offset
+
+#### Scenario: log2(x + 1)
+- **WHEN** `export-sensitivity --variant log2_plus_one` exports the committed clean and cohort outputs
+- **THEN** each kept cell equals `log2` of the cleaned concentration plus 1, its manifest records units `log2(x + 1)`, and each feature's offset is 1
+
+#### Scenario: Generalized log
+- **WHEN** `export-sensitivity --variant glog` exports the committed clean and cohort outputs
+- **THEN** each kept cell equals `log2((x + sqrt(x² + λ²)) / 2)` with λ the metabolite's smallest positive value over the exported participants divided by 10, each feature's offset is its λ, and a zero cell lands at `log2(λ / 2)`
+
+#### Scenario: Membership and labels unchanged
+- **WHEN** a scale variant is exported
+- **THEN** its `p180.csv` and `nmr.csv` hold the primary's columns in the primary's order, and its `metadata.csv` and `covariates.csv` hash to the primary export manifest's records
+
+#### Scenario: No data root
+- **WHEN** a scale variant runs with no data root present
+- **THEN** it completes, since only `nist_bridge` reads the data root
+
+### Requirement: Undefined λ stops the generalized log
+`glog` SHALL stop before anything is written when a kept metabolite has no positive cell among the exported participants, naming the block and the count of such metabolites, never a participant.
+
+#### Scenario: A metabolite with no positive cell
+- **WHEN** a kept column of a scratch copy of a cleaned table holds no positive value and `glog` runs on it
+- **THEN** the step stops naming the block and the count of metabolites whose λ is undefined, exits with an error and writes nothing
+
+#### Scenario: Committed inputs
+- **WHEN** `glog` runs on the committed clean outputs
+- **THEN** every kept metabolite of both blocks has a positive λ and the step completes
+
+### Requirement: Scale variant counts are recorded
+A scale variant's export manifest SHALL record, per block on the variant's scale, the shape counts and the numerical rank, the run offset, and the offset summary (for `log2_plus_one` the metabolites whose median lies below the offset), with the primary's shape counts copied beside its own.
+
+#### Scenario: Counts on the committed inputs
+- **WHEN** the three scale variants export the committed inputs
+- **THEN** their manifests record p180 |skew| > 1 / largest |z| > 8 at 46 / 12, 14 / 9 and 6 / 6, NMR at 43 / 4, 30 / 4 and 25 / 13, NMR numerical rank 104, 165 and 165, and for `log2_plus_one` a median below 1 for 46 p180 and 129 NMR metabolites, with no deviation
+
+#### Scenario: Primary shape copied
+- **WHEN** a scale variant's export manifest is written
+- **THEN** its reference block carries the primary export manifest's shape counts per block, value for value
+
+### Requirement: The variants registered before the scale variants are unchanged
+After the change `adni-scale-variants`, `nist_bridge`, `per_run_standardized` and `nmr_all_columns` SHALL keep their committed outputs. On a data machine, a pinned in-place rerun of each SHALL write every CSV, `summary.md`, `export_sensitivity.md` and bridge table with the committed bytes, and each committed `summary.md`, `export_sensitivity.md` and `diagnostics.md`, re-rendered from its records, SHALL equal the committed file.
+
+#### Scenario: Pinned rerun of the registered variants
+- **WHEN** `export-sensitivity --variant <name> --force` reruns pinned in place for each of the three, with its `diagnostics/` moved aside
+- **THEN** every CSV, `summary.md`, `export_sensitivity.md` and `nist_bridge.csv` hashes to the committed file or to the hash its committed manifest records, and the manifests and `result.json` differ only in time, revision, runtime and the hashes of the files that carry them
+
+#### Scenario: Re-rendered text
+- **WHEN** the variant renderers run on the committed records of `nmr_all_columns`
 - **THEN** its `summary.md`, `export_sensitivity.md` and `diagnostics.md` equal the committed files byte for byte

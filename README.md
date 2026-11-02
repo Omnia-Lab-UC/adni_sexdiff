@@ -12,8 +12,8 @@ layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 `adni-analyze`, `adni-axis-diagnostics`, `adni-latent-sensitivity`,
 `adni-nist-bridge`, `adni-report`, `adni-report-variants`,
 `adni-stage-sensitivity`, `adni-report-stage-arm`,
-`adni-rank-sensitivity`, `adni-report-rank-sweep`, `adni-nmr-all-columns`
-and `adni-report-nmr-all-columns`); every step but `report` runs on a data
+`adni-rank-sensitivity`, `adni-report-rank-sweep`, `adni-nmr-all-columns`,
+`adni-report-nmr-all-columns` and `adni-scale-variants`); every step but `report` runs on a data
 machine, `report` on any clone (it reads committed aggregate files only),
 and the reports are committed under `reports/` and checked by
 `report --check`; since `adni-report-nmr-all-columns` a report covers the
@@ -21,7 +21,10 @@ primary, the latent arm, the three export variants (the two p180 variants
 and `nmr_all_columns`, all 245 cleaned NMR columns in the block, each read
 under its own rule set), the CN / LMCI / AD arm and the rank sweep (the
 reports of 2026-10-28, 2026-10-29, 2026-10-30 and 2026-10-31, of earlier
-layouts, cover fewer).
+layouts, cover fewer). The three scale variants of `export-sensitivity`
+(`raw_scale`, `log2_plus_one`, `glog`; change `adni-scale-variants`) are
+registered and run, and not yet in the report: a later report change adds
+them.
 The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
 `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis
@@ -31,7 +34,8 @@ diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 `DIAGNOSTIC_CORRELATION_THRESHOLD`) and the sensitivity constants
 (`LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
 `LATENT_SENSITIVITY_READING_RULES`; `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`,
-`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`; `STAGE_SENSITIVITY_ARM`,
+`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
+`SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES`; `STAGE_SENSITIVITY_ARM`,
 `STAGE_SENSITIVITY_READING_RULES`; `RANK_SENSITIVITY_LADDER`,
 `RANK_SENSITIVITY_READING_RULES`); every constant the six steps and the
 four sensitivity steps need is decided.
@@ -151,6 +155,9 @@ uv run adni-sexdiff export-sensitivity --variant all
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/nist_bridge/motco_input --analysis-dir results/motco_export_sensitivity/nist_bridge/analysis --out-dir results/motco_export_sensitivity/nist_bridge/diagnostics
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/per_run_standardized/motco_input --analysis-dir results/motco_export_sensitivity/per_run_standardized/analysis --out-dir results/motco_export_sensitivity/per_run_standardized/diagnostics
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/nmr_all_columns/motco_input --analysis-dir results/motco_export_sensitivity/nmr_all_columns/analysis --out-dir results/motco_export_sensitivity/nmr_all_columns/diagnostics
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/raw_scale/motco_input --analysis-dir results/motco_export_sensitivity/raw_scale/analysis --out-dir results/motco_export_sensitivity/raw_scale/diagnostics
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/log2_plus_one/motco_input --analysis-dir results/motco_export_sensitivity/log2_plus_one/analysis --out-dir results/motco_export_sensitivity/log2_plus_one/diagnostics
+uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/glog/motco_input --analysis-dir results/motco_export_sensitivity/glog/analysis --out-dir results/motco_export_sensitivity/glog/diagnostics
 uv run adni-sexdiff stage-sensitivity
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_stage_sensitivity/motco_input --analysis-dir results/motco_stage_sensitivity/analysis --out-dir results/motco_stage_sensitivity/diagnostics
 uv run adni-sexdiff rank-sensitivity
@@ -649,7 +656,10 @@ names the variant and the block it changes, calls a flagged row a finding
 about the variant's measurement space, and prints the variant's rule set
 (`EXPORT_VARIANT_RULE_SETS`) after `READING_RULES`:
 `EXPORT_VARIANT_READING_RULES` for the p180 variants,
-`NMR_MEMBERSHIP_READING_RULES` for `nmr_all_columns`. With the
+`NMR_MEMBERSHIP_READING_RULES` for `nmr_all_columns`,
+`SCALE_VARIANT_READING_RULES` for the scale variants (whose
+`diagnostics.md` names an export whose scale differs, with the
+rank-independent counts and 165 NMR features). With the
 CN / LMCI / AD arm of `stage-sensitivity` (below) the cohort check
 compares the both-flag rows whose `dx_bl` the arm keeps, the expected
 participants and cells are the arm's (`STAGE_SENSITIVITY_EXPECTED_COUNTS`),
@@ -833,13 +843,14 @@ variant.
 ## `export-sensitivity`
 
 ```
-uv run adni-sexdiff export-sensitivity --variant {nist_bridge,per_run_standardized,nmr_all_columns,all} [--data-root DIR] [--cleaned-dir DIR] [--cohort-dir DIR] [--input-dir DIR] [--analysis-dir DIR] [--out-dir DIR] [--n-jobs N] [--force]
+uv run adni-sexdiff export-sensitivity --variant {nist_bridge,per_run_standardized,nmr_all_columns,raw_scale,log2_plus_one,glog,all} [--data-root DIR] [--cleaned-dir DIR] [--cohort-dir DIR] [--input-dir DIR] [--analysis-dir DIR] [--out-dir DIR] [--n-jobs N] [--force]
 uv run adni-sexdiff axis-diagnostics --input-dir results/motco_export_sensitivity/<variant>/motco_input --analysis-dir results/motco_export_sensitivity/<variant>/analysis --out-dir results/motco_export_sensitivity/<variant>/diagnostics [--force]
 ```
 
 A sensitivity step, read beside the primary and never replacing it
-(changes `adni-nist-bridge` and `adni-nmr-all-columns`). Each registered
-variant reruns the export with one setting of one block changed, analyses
+(changes `adni-nist-bridge`, `adni-nmr-all-columns` and
+`adni-scale-variants`). Each registered variant reruns the export with one
+setting changed (of one block, or the scale of both), analyses
 it at the primary's settings (one `analyze_trajectories` call through the
 code `analyze` uses: `ANALYSIS_*`, MOTCO's defaults, no latent
 adjustment, `n_jobs = 1`, pinned) and compares it with the primary. The
@@ -848,12 +859,13 @@ not change are the primary's, byte for byte. Two variants handle the p180
 run: the p180 block's first axis is the assay run (ADNI-1 against
 ADNI-GO/2: median |d| 1.12, PC1 correlation 0.73 with phase), and the
 primary keeps `phase` as a covariate of the stage means. The third,
-`nmr_all_columns`, changes the NMR block's membership. The variants and the
-bridge rule are constants, never flags. `--variant` selects a registered
-name, or `all` for every variant in registry order. With a variant's
-outputs present, `all` stops at the existing-variant gate unless
-`--force`, so a run of one new variant names it
-(`--variant nmr_all_columns`). `--input-dir` and `--analysis-dir` name the
+`nmr_all_columns`, changes the NMR block's membership. The last three,
+`raw_scale`, `log2_plus_one` and `glog`, change the scale of both blocks.
+The variants, the bridge rule and the scales are constants, never flags.
+`--variant` selects a registered name, or `all` for every variant in
+registry order. With a variant's outputs present, `all` stops at the
+existing-variant gate unless `--force`, so a run of one new variant names
+it (`--variant raw_scale`). `--input-dir` and `--analysis-dir` name the
 primary to read as the reference.
 
 Variants (`EXPORT_VARIANTS`):
@@ -863,6 +875,9 @@ Variants (`EXPORT_VARIANTS`):
 | `nist_bridge` | p180, `factors` | every cleaned p180 concentration of an ADNI-GO/2 participant (the run of `p180_runs.csv`) multiplied by 2^b of its metabolite under `NIST_BRIDGE_RULE`, before the floors; `EXPORT_FEATURE_RULE` then unchanged, its floors recomputed | yes: the two QC archives |
 | `per_run_standardized` | p180, `standardize_by_run` | the rule's p180 values (pooled floors, `log2(x + floor)`), each metabolite centred and divided by its population SD within its run | no |
 | `nmr_all_columns` | nmr, `membership` | every cleaned NMR column enters the block (245): the 165 concentrations of `EXPORT_FEATURE_RULE` and its 80 derived columns (72 percentages, 4 ratios, the degree of unsaturation, 3 sizes), in cleaned order, each on the rule's scale, `log2(x + floor)` with its own 5 % floor over the exported participants | no |
+| `raw_scale` | all, `scale` | every kept cell of both blocks the cleaned concentration in its platform's unit, no log and no offset (`SCALE_VARIANT_RULE`); the rule's floors recorded, not applied | no |
+| `log2_plus_one` | all, `scale` | every kept cell of both blocks `log2(x + 1)`, offset 1 in the platform's unit (the 2022 study's transform); the rule's floors recorded, not applied | no |
+| `glog` | all, `scale` | every kept cell of both blocks `log2((x + sqrt(x² + λ²)) / 2)`, λ per metabolite its smallest positive value over the exported participants divided by 10; the rule's floors recorded, not applied | no |
 
 The membership variant (`nmr_all_columns`, change `adni-nmr-all-columns`,
 decided before any run of it):
@@ -882,6 +897,34 @@ decided before any run of it):
   but with `log2(x + 1)`, winsorizing, outlier removal and medication
   residuals; the variant changes the membership only and is no
   reproduction of it.
+
+The scale variants (`raw_scale`, `log2_plus_one`, `glog`; change
+`adni-scale-variants`, decided before any run of them; block `all`, hook
+`scale`, rule `SCALE_VARIANT_RULE`):
+- **What they keep.** The primary's membership of both blocks (133 p180
+  metabolites, 165 NMR concentrations), participants, metadata and
+  covariates; `metadata.csv` and `covariates.csv` equal the primary's.
+  Every scale is monotone in the concentration, so each participant's rank
+  on each feature is the primary's.
+- **What they change.** The scale of every kept cell, in place of the
+  rule's `log2(x + floor)`. The rule's floor is still computed, gated and
+  recorded per metabolite (the feature tables' `floor`), and not applied;
+  the feature tables gain an `offset` column (empty for `raw_scale`, 1 for
+  `log2_plus_one`, λ for `glog`). `settings.units` records the variant's
+  transform.
+- **What they show.** `raw_scale` has right tails (|skew| > 1 for 46 p180
+  and 43 NMR metabolites) and an NMR block of numerical rank 104 of 165,
+  since the lipoprotein measures are exact sums on the concentration
+  scale. `log2(x + 1)` is nearly linear for a scarce metabolite (median
+  below 1: 46 p180, 129 NMR). `glog` is `log2(x)` within 0.004 bits, puts
+  the 41 NMR zero cells at `log2(λ / 2)` and keeps left tails. The run
+  offset barely moves (p180 median |d| 1.08 to 1.13).
+- **The λ gate.** A kept metabolite with no positive cell leaves λ
+  undefined: `glog` stops naming the block and the count, before anything
+  is written (none on the committed inputs).
+- **What they share.** The CV folds and the RRPP draws are the primary's.
+  `log2_plus_one` is the 2022 study's transform, but the variant is no
+  reproduction of that study.
 
 The bridge (`NIST_BRIDGE_RULE`), from NIST SRM 1950 alone (the one
 material both runs measured; no participant row, label or covariate is
@@ -919,8 +962,9 @@ manifest and against the clean and cohort files now on disk; the primary
 analysis as a chained reference (its recorded export hashes, no latent
 adjustment, the installed MOTCO, the seed and permutations); for
 `nist_bridge`, the archives (an absent one names the file; a missing
-member names the archive and the member). `per_run_standardized` and
-`nmr_all_columns` read no data-root file.
+member names the archive and the member); for `glog`, a kept metabolite
+with no positive cell (λ undefined). `per_run_standardized`,
+`nmr_all_columns` and the scale variants read no data-root file.
 
 Outputs under `results/motco_export_sensitivity/<variant>/`, each
 subdirectory staged as `<sub>.tmp/` and the set renamed together when
@@ -934,14 +978,14 @@ MOTCO's runtime:
 |---|---|---|
 | `bridge/nist_bridge.csv` | `nist_bridge` only: one row per exported p180 metabolite, its kit and NIST column, per run the replicates, valid replicates, ISTD flags, mean log2 and plate-clustered SE, then `b`, its SE, `bridged` and the applied `factor_log2` (reference material only) | yes (aggregate) |
 | `motco_input/p180.csv`, `nmr.csv`, `metadata.csv`, `covariates.csv` | the variant export, laid out as the primary's | no (participant-level; matched by `results/motco_export_sensitivity/*/motco_input/*.csv`) |
-| `motco_input/features_p180.csv`, `features_nmr.csv` | per feature, as the primary's | no (ignored with the other CSVs, regenerable) |
-| `motco_input/manifest.json` | step `export-sensitivity`; the variant; the primary export as `reference` (its manifest hash, output hashes and run offset); the QC archives and members with their hashes beside the predeclared ones and the bridge table's hash, summary and factor per metabolite (`nist_bridge`); the counts with the runs, the participants whose run differs from `phase` and the unchanged files against the primary's, for `nmr_all_columns` also the derived columns kept (`derived_kept`) and the rule's columns against the primary's (`rule_columns_equal_primary`); `EXPORT_VARIANT_EXPECTED_COUNTS` beside them with deviations; output hashes; findings | yes (aggregate, no `RID`) |
+| `motco_input/features_p180.csv`, `features_nmr.csv` | per feature, as the primary's; a scale variant adds `offset` | no (ignored with the other CSVs, regenerable) |
+| `motco_input/manifest.json` | step `export-sensitivity`; the variant; the primary export as `reference` (its manifest hash, output hashes and run offset); the QC archives and members with their hashes beside the predeclared ones and the bridge table's hash, summary and factor per metabolite (`nist_bridge`); the counts with the runs, the participants whose run differs from `phase` and the unchanged files against the primary's, for `nmr_all_columns` also the derived columns kept (`derived_kept`) and the rule's columns against the primary's (`rule_columns_equal_primary`); for a scale variant `settings.scale` (the constant and its entry), `counts.scale` (the transform and offset; the medians below the offset for `log2_plus_one`, the quantiles of λ over the median for `glog`) and the primary's shape counts and spectrum in `reference`; `EXPORT_VARIANT_EXPECTED_COUNTS` beside them with deviations; output hashes; findings | yes (aggregate, no `RID`) |
 | `analysis/result.json`, `pls_loadings.csv`, `stage_means.csv` | as for the primary | yes (aggregate) |
 | `analysis/latent_scores.csv`, `analysis_metadata.csv` | as for the primary | no (participant-level; matched by `results/**/`) |
 | `analysis/analysis_manifest.json` | step `export-sensitivity`; the variant export's five files as inputs; the variant; the primary as `reference` (its two hashes, rank, MOTCO, `n_jobs`, its export); every setting as the primary's; the variant's `analysis` expected counts with deviations; findings | yes (aggregate) |
-| `analysis/summary.md` | the primary's renderer with the variant's title, an "Export variant" section (the setting, the blocks kept, the runs, the bridge for `nist_bridge`, the membership, block shares and NMR shape counts for `nmr_all_columns`, the run offset per block of both exports), the variant's note on each reading line and the variant's rule set after `READING_RULES` | yes (aggregate) |
+| `analysis/summary.md` | the primary's renderer with the variant's title, an "Export variant" section (the setting, the blocks kept, the runs, the bridge for `nist_bridge`, the membership, block shares and NMR shape counts for `nmr_all_columns`, the transform, offset, offset summary and per block the shape counts and numerical rank of both exports for a scale variant, the run offset per block of both exports), the variant's note on each reading line and the variant's rule set after `READING_RULES` | yes (aggregate) |
 | `comparison/export_sensitivity.csv` | the primary row then the variant row: selected rank and mode, `cv_mean_auroc`, CV repeats, eigengap, per statistic observed, p, rejection, null mean, SD and q95; every value read from the two records | yes (aggregate) |
-| `comparison/export_sensitivity.md` | the statistics with a status per statistic (`same`, or `differs (<dependence>)` with the variant's label: `run-handling dependence` for the p180 variants, `feature-membership dependence` for `nmr_all_columns`; the primary's status is the result either way), the variant's reading lines, the latent spaces, the export variant section, the findings, `READING_RULES` then the variant's rule set | yes (aggregate) |
+| `comparison/export_sensitivity.md` | the statistics with a status per statistic (`same`, or `differs (<dependence>)` with the variant's label: `run-handling dependence` for the p180 variants, `feature-membership dependence` for `nmr_all_columns`, `scale dependence` for the scale variants; the primary's status is the result either way), the variant's reading lines, the latent spaces, the export variant section, the findings, `READING_RULES` then the variant's rule set | yes (aggregate) |
 | `comparison/export_sensitivity_manifest.json` | the inputs (both exports and analyses, the bridge table, the QC files) with sha256 and chains; the settings; the counts (statuses, ranks, run offsets); both expected counts and deviations; output hashes; findings | yes (aggregate) |
 | `diagnostics/` (six files) | `axis-diagnostics` on the variant, run with the second command above | yes (aggregate) |
 
@@ -970,6 +1014,24 @@ of `ANALYSIS_EXPECTED_COUNTS` for the analysis. For `nmr_all_columns`
 - **Diagnostics:** the rank-independent keys of
   `DIAGNOSTICS_EXPECTED_COUNTS` with 245 NMR features.
 
+For the scale variants (from the change's spike and the committed
+manifests), shared by the three: 1501 participants in the primary's cells;
+the primary's features (p180 133 / 133, NMR 245 cleaned, 165 kept); zero
+cells p180 0 and NMR 41 in 3 metabolites (before the transform); 0 floors
+not positive and 0 non-finite cells; 0 participants whose run differs from
+`phase`; `metadata.csv` and `covariates.csv` equal to the primary's; every
+key of `ANALYSIS_EXPECTED_COUNTS` for the analysis; no `diagnostics` key
+(the rank-independent counts, 165 NMR features). Per variant:
+
+| quantity | `raw_scale` | `log2_plus_one` | `glog` |
+|---|---|---|---|
+| p180 shape: \|skew\| > 1; largest \|z\| > 8 | 46; 12 | 14; 9 | 6; 6 |
+| NMR shape: \|skew\| > 1; largest \|z\| > 8 | 43; 4 | 30; 4 | 25; 13 |
+| numerical rank p180; NMR | 133; 104 | 133; 165 | 133; 165 |
+| p180 phase \|d\| > 0.5 / > 1 | 108 / 76 | 108 / 80 | 109 / 80 |
+| NMR phase \|d\| > 0.5 / > 1 | 2 / 0 | 2 / 0 | 2 / 0 |
+| median below the offset (p180; NMR) | n/a | 46; 129 | n/a |
+
 The ranks are not predeclared. A deviation is a finding, never a stop.
 Findings also record:
 - every finding of `export` and `analyze`;
@@ -985,8 +1047,9 @@ Diagnostics on a variant: the second command above writes the six files of
 `axis-diagnostics` under `diagnostics/`, with `is_primary` false. The
 expected counts are the rank-independent ones, or the variant's own
 `diagnostics` counts when its entry holds them (`nmr_all_columns`: 245 NMR
-features). Its `diagnostics.md` names the variant and the block it
-changes, and prints `READING_RULES` and the variant's rule set. The
+features; the scale variants hold none). Its `diagnostics.md` names the
+variant and the block it changes (for a scale variant, an export whose
+scale differs), and prints `READING_RULES` and the variant's rule set. The
 bridged block keeps a run axis: in the spike, a shift common to most
 metabolites puts the run on PC2, ρ 0.58. A flagged row is a
 measurement-space finding about the variant and never grounds to adopt it.
@@ -994,10 +1057,11 @@ measurement-space finding about the variant and never grounds to adopt it.
 Each variant carries one rule set, named by the convention
 `EXPORT_VARIANT_RULE_SETS` (an import-time assertion keeps it in step with
 the registry). The entry also gives the word readers cite ("variant rule
-N", "membership rule N") and the dependence label. The two p180 variants
-carry `EXPORT_VARIANT_READING_RULES`; `nmr_all_columns` carries
-`NMR_MEMBERSHIP_READING_RULES`. Rules 1, 2, 3, 6 and 7 have the same
-roles in both sets.
+N", "membership rule N", "scale rule N") and the dependence label. The two
+p180 variants carry `EXPORT_VARIANT_READING_RULES`; `nmr_all_columns`
+carries `NMR_MEMBERSHIP_READING_RULES`; the three scale variants share
+`SCALE_VARIANT_READING_RULES`. Rules 1, 2, 3, 6 and 7 have the same roles
+in every set.
 
 Reading rules of the p180 variants (`EXPORT_VARIANT_READING_RULES`, written
 before any run and printed verbatim after `READING_RULES` in each
@@ -1037,6 +1101,30 @@ decided by `adni-nmr-all-columns` before any run and printed verbatim after
 7. The block shares, the NMR shape counts, the run offset and the loading
    shares are reported beside the results.
 8. It is read against the primary only.
+
+Reading rules of the scale variants (`SCALE_VARIANT_READING_RULES`,
+decided by `adni-scale-variants` before any run, shared by the three and
+printed verbatim after `READING_RULES` in each one's `summary.md`,
+`export_sensitivity.md`, `diagnostics.md` and every report that quotes
+it), in brief:
+1. A scale variant never replaces the primary, and no result of it changes
+   a constant (the scale of `EXPORT_FEATURE_RULE` included).
+2. It differs from the primary only in the scale of both blocks; each
+   participant's rank on each feature is the primary's and the spacing
+   changes, so a differing status is scale dependence.
+3. Its rank, floor, eigengap and null summary are read beside its
+   `angle`.
+4. `log2_plus_one` and `glog` keep the log and change its offset;
+   `log2_plus_one` is not a reproduction of the 2022 study, and `glog`
+   carries left tails.
+5. `raw_scale` has right tails and an NMR block of numerical rank 104; a
+   difference reflects those tails and that geometry.
+6. Its non-rejection is no more informative than the primary's, and a
+   rejection only in a variant is scale dependence.
+7. The shape counts, numerical ranks, run offset and offsets per
+   metabolite are reported beside the results.
+8. It is read against the primary only, never against another scale
+   variant.
 
 ## `stage-sensitivity`
 
@@ -1319,7 +1407,11 @@ and left outside it is not read or required and leaves the body
 unchanged; `report` names it on a progress line ("export variant … is
 registered and not covered by this report"), never in the report, so the
 newest report stays checkable until the report change that adds the
-variant to the pin and re-issues the report. `--out` must be named `reports/motco-adni-<date>.md`
+variant to the pin and re-issues the report. Since change
+`adni-scale-variants` the three scale variants (`raw_scale`,
+`log2_plus_one`, `glog`) are registered outside the pin: `report` reads
+the same 106 files, writes the same body and prints one such line for
+each. `--out` must be named `reports/motco-adni-<date>.md`
 (`REPORT_NAME`): the date is read from the name and written in the title
 line only, write mode defaults to today's date and `--check` to the newest
 report under `reports/` by the date in its name.

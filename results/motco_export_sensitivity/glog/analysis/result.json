@@ -1,0 +1,327 @@
+{
+  "schema_version": 1,
+  "statistics": {
+    "delta": 0.8663813803198028,
+    "angle": 14.840265790152811,
+    "shape": 0.09679870087207806
+  },
+  "p_values": {
+    "delta": 0.2127,
+    "angle": 0.7251,
+    "shape": 0.7625
+  },
+  "null_summary": {
+    "delta": {
+      "count": 9999.0,
+      "mean": 0.5543182832228432,
+      "q50": 0.46934916147649464,
+      "q90": 1.144753892319379,
+      "q95": 1.3791733556011887,
+      "q99": 1.8115638248028523,
+      "sd": 0.4245362926033168
+    },
+    "angle": {
+      "count": 9999.0,
+      "mean": 20.093219176431383,
+      "q50": 19.01275108584283,
+      "q90": 30.46459932233784,
+      "q95": 34.68980823485418,
+      "q99": 42.60653269454932,
+      "sd": 7.786369166264104
+    },
+    "shape": {
+      "count": 9999.0,
+      "mean": 0.16650883230754882,
+      "q50": 0.15479377124969101,
+      "q90": 0.2895723077901995,
+      "q95": 0.3288601571925778,
+      "q99": 0.40563480402868324,
+      "sd": 0.08852190584702811
+    }
+  },
+  "config_spectrum": {
+    "version": 1,
+    "pooled": {
+      "n_points": 3,
+      "n_dimensions": 7,
+      "total_variance": 6.6177281601158375,
+      "spectrum": [
+        0.885641837692252,
+        0.114358162307748,
+        6.247354853389592e-33
+      ],
+      "relative_eigengap": 0.771283675384504
+    },
+    "groups": {
+      "Female": {
+        "n_points": 3,
+        "n_dimensions": 7,
+        "total_variance": 8.568969861592151,
+        "spectrum": [
+          0.8858917256797068,
+          0.1141082743202932,
+          7.821519172926899e-33
+        ],
+        "relative_eigengap": 0.7717834513594135
+      },
+      "Male": {
+        "n_points": 3,
+        "n_dimensions": 7,
+        "total_variance": 5.340527260775599,
+        "spectrum": [
+          0.8525609033500134,
+          0.14743909664998647,
+          6.037470754825864e-33
+        ],
+        "relative_eigengap": 0.705121806700027
+      }
+    },
+    "permutation_pooled_eigengap": {
+      "count": 9999.0,
+      "mean": 0.7449515873016551,
+      "q05": 0.567675868715339,
+      "q50": 0.7597300874355757,
+      "q95": 0.8744885455687033,
+      "sd": 0.09518870457622108
+    }
+  },
+  "latent": {
+    "integration_method": "pls",
+    "integration_role": "latent_space",
+    "integration_metadata_version": 1,
+    "integration_params": {
+      "stage_col": "stage",
+      "selected_lv": 7,
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203,
+      "min_components": 2
+    },
+    "component_selection": "cv",
+    "cv_mean_auroc": 0.6031789866440473,
+    "cv_repeats_completed": 5,
+    "selected_lv": 7,
+    "shape": [
+      1501,
+      7
+    ],
+    "n_samples": 1501,
+    "n_features": 7,
+    "layer_feature_counts": {
+      "p180": 133,
+      "nmr": 165
+    },
+    "feature_order_signature": "5cc43dfde9419b2f"
+  },
+  "design": {
+    "group_col": "sex",
+    "stage_col": "stage",
+    "sample_col": "rid",
+    "group_levels": [
+      "Female",
+      "Male"
+    ],
+    "stage_levels": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "cell_sizes": {
+      "Female": {
+        "CN": 237,
+        "MCI": 310,
+        "AD": 125
+      },
+      "Male": {
+        "CN": 223,
+        "MCI": 448,
+        "AD": 158
+      }
+    },
+    "contrast": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        3,
+        4,
+        5
+      ]
+    ],
+    "n_samples": 1501
+  },
+  "covariates": {
+    "columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "kinds": {
+      "age": "numeric",
+      "education": "numeric",
+      "apoe4": "categorical",
+      "phase": "categorical",
+      "statin": "categorical"
+    },
+    "levels": {
+      "apoe4": [
+        "0",
+        "1",
+        "2"
+      ],
+      "phase": [
+        "ADNI1",
+        "ADNI2GO"
+      ],
+      "statin": [
+        "0",
+        "1"
+      ]
+    },
+    "reference_levels": {
+      "apoe4": "0",
+      "phase": "ADNI1",
+      "statin": "0"
+    },
+    "design_columns": [
+      "age",
+      "education",
+      "apoe4[1]",
+      "apoe4[2]",
+      "phase[ADNI2GO]",
+      "statin[1]"
+    ],
+    "reference_row": {
+      "age": 73.70299800133249,
+      "education": 15.927381745502998,
+      "apoe4[1]": 0.36109260493004663,
+      "apoe4[2]": 0.09926715522984676,
+      "phase[ADNI2GO]": 0.5443037974683544,
+      "statin[1]": 0.46902065289806794
+    },
+    "lsmean_reference": "pooled_mean",
+    "missing_policy": "error",
+    "n_dropped": 0,
+    "dropped_sample_ids": [],
+    "coefficients": {
+      "age": {
+        "pls_0": 0.019324012174330517,
+        "pls_1": -0.043943301688156335,
+        "pls_2": 0.08348799785759907,
+        "pls_3": -0.010021754547719676,
+        "pls_4": 0.014124901529630056,
+        "pls_5": 0.03448879755391702,
+        "pls_6": -0.013333586419344866
+      },
+      "education": {
+        "pls_0": 0.0731972076110219,
+        "pls_1": 0.1732671447104535,
+        "pls_2": 0.15788183978383158,
+        "pls_3": 0.10412597759216133,
+        "pls_4": 0.01928470225517803,
+        "pls_5": -0.033585499226331327,
+        "pls_6": -0.011358030046192109
+      },
+      "apoe4[1]": {
+        "pls_0": -0.30373439889089127,
+        "pls_1": -0.2582725845210962,
+        "pls_2": 0.791433152954534,
+        "pls_3": -0.5456844111284963,
+        "pls_4": 0.13710240631612894,
+        "pls_5": -0.3790248207345321,
+        "pls_6": 0.08784814225736841
+      },
+      "apoe4[2]": {
+        "pls_0": -0.8956526985621972,
+        "pls_1": -0.5183770330509616,
+        "pls_2": 1.4518146292281484,
+        "pls_3": -1.1095659804878506,
+        "pls_4": 0.09810253792900235,
+        "pls_5": -0.9093261116095717,
+        "pls_6": 0.1640464241915268
+      },
+      "phase[ADNI2GO]": {
+        "pls_0": 7.979608013200507,
+        "pls_1": 1.3266015118310912,
+        "pls_2": -2.1120844037479527,
+        "pls_3": -3.74197783232558,
+        "pls_4": 1.6658442082008618,
+        "pls_5": -0.8351919721319274,
+        "pls_6": -0.4965980736860497
+      },
+      "statin[1]": {
+        "pls_0": 4.003136458316772,
+        "pls_1": -0.07646793125062389,
+        "pls_2": -1.1365680747853892,
+        "pls_3": 0.12066719935343918,
+        "pls_4": -1.917865757887317,
+        "pls_5": 0.9219311520609933,
+        "pls_6": 0.08899071311176018
+      }
+    }
+  },
+  "blocks": [
+    {
+      "name": "p180",
+      "n_features": 133,
+      "transform": "identity",
+      "units": "as_supplied"
+    },
+    {
+      "name": "nmr",
+      "n_features": 165,
+      "transform": "identity",
+      "units": "as_supplied"
+    }
+  ],
+  "measurement": {
+    "orientation_estimator": "net_displacement",
+    "selected_lv": 7,
+    "component_selection": "cv",
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "shape_available": true,
+    "runtime_seconds": 94.12793979300022
+  },
+  "params": {
+    "permutations": 9999,
+    "seed": 20261027,
+    "n_jobs": 1,
+    "orientation_estimator": "net_displacement",
+    "forced_components": null,
+    "cv1_splits": 3,
+    "cv2_splits": 4,
+    "n_repeats": 5,
+    "max_components": 20,
+    "random_state": 1203,
+    "attribution": {
+      "enabled": false,
+      "bootstrap_replicates": 0,
+      "bootstrap_seed": 0,
+      "top_k": 20,
+      "zero_tolerance": 1e-12
+    },
+    "progress": false,
+    "min_components": 2
+  },
+  "software": {
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "scipy": "1.18.1",
+    "sklearn": "1.8.0",
+    "pandas": "2.3.3",
+    "python": "3.12.15"
+  },
+  "attribution": {
+    "schema_version": 2,
+    "status": "not_requested",
+    "reason": "attribution was not requested"
+  }
+}

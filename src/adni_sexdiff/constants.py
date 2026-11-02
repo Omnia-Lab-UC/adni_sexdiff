@@ -86,9 +86,23 @@ Scientific constants
     ``EXPORT_VARIANT_RULE_SETS`` (per variant its rules, citation word and
     dependence label; tied to ``EXPORT_VARIANTS`` by two import-time
     assertions) and ``REPORT_EXPORT_VARIANTS`` (the variants the report
-    covers; a subsequence of the registry by an import-time assertion). Every
-    scientific constant the six steps and the four sensitivity steps need is
-    decided; a later variant or arm introduces its own by proposal. The changes
+    covers; a subsequence of the registry by an import-time assertion);
+    ``SCALE_VARIANT_RULE`` (per scale variant the transform of a kept cell
+    and its offset: ``x``, ``log2(x + 1)``, and the generalized log with λ per
+    metabolite its smallest positive value over the exported participants
+    divided by 10), the ``EXPORT_VARIANTS`` entries ``raw_scale``,
+    ``log2_plus_one`` and ``glog`` (block ``all``, hook ``scale``: both blocks
+    on the variant's scale, the primary's membership, the rule's floors
+    recorded and not applied), ``SCALE_VARIANT_READING_RULES`` (the eight
+    statements every reader of a scale variant carries after
+    ``READING_RULES``, in place of ``EXPORT_VARIANT_READING_RULES``) and their
+    dependence label ``scale dependence``, by the change
+    ``adni-scale-variants``, with the predeclared
+    ``EXPORT_VARIANT_EXPECTED_COUNTS`` of the three (``analysis`` among their
+    keys, no ``diagnostics``) and their shared ``EXPORT_VARIANT_RULE_SETS``
+    entry. Every scientific constant the six steps and the four sensitivity
+    steps need is decided; a later variant or arm introduces its own by
+    proposal. The changes
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
     report extended to every export variant), ``adni-report-stage-arm``
     (the report extended to the CN / LMCI / AD arm),
@@ -1185,11 +1199,38 @@ NIST_BRIDGE_WORKBOOK_SHA256: dict[str, str] = {
     "4610 UPLC p180 QC and NIST Data.xlsx": "807575d5b5937e39ae32db0b6812ddff76758ce508155c9b1305795bfbdcb602",
 }
 
+#: Decided by the change ``adni-scale-variants`` (2026-11-02, before any run of
+#: a scale variant) and never changed by a flag, a result or a count. Per scale
+#: variant of ``EXPORT_VARIANTS`` (hook ``scale``, both blocks), the transform
+#: of a kept cell ``x`` (a cleaned concentration in its platform's unit: p180
+#: µM, NMR mostly mmol/L) that replaces the rule's ``log2(x + floor)`` on the
+#: primary's membership, and its additive ``offset``: ``None`` (no offset),
+#: ``1`` (in the platform's unit) or ``"lambda"`` (``glog``: λ per metabolite
+#: its smallest positive value over the exported participants divided by
+#: ``lambda_divisor``). Every transform is monotone in the concentration. The
+#: rule's floor is still computed, gated and recorded per metabolite, and not
+#: applied; MOTCO's transform stays ``identity`` and MOTCO z-scores every
+#: feature. A metabolite with no positive cell leaves λ undefined and stops
+#: ``glog`` before anything is written.
+SCALE_VARIANT_RULE: dict[str, dict] = {
+    "raw_scale": {"transform": "x", "offset": None},
+    "log2_plus_one": {"transform": "log2(x + 1)", "offset": 1},
+    "glog": {
+        "transform": "log2((x + sqrt(x² + λ²)) / 2)",
+        "offset": "lambda",
+        "lambda_divisor": 10,
+        "lambda": (
+            "per metabolite, its smallest positive value over the exported participants divided by lambda_divisor; a "
+            "metabolite with no positive cell leaves λ undefined and stops the step before anything is written"
+        ),
+    },
+}
+
 #: Decided by the change ``adni-nist-bridge`` (2026-10-29, before any run): the
 #: registry of export variants ``export-sensitivity`` runs, in this order. Each
-#: changes one setting of one block of the primary export (``block``, through
-#: the hook ``hook`` of the shared export body) and keeps every other setting
-#: of ``EXPORT_FEATURE_RULE``, the participants, the other block, the metadata
+#: changes one setting of the primary export (``block``, through the hook
+#: ``hook`` of the shared export body) and keeps every other setting of
+#: ``EXPORT_FEATURE_RULE``, the participants, the other block, the metadata
 #: and the covariates; its analysis keeps every setting of the primary's. A
 #: variant is read beside the primary and never replaces it. ``nist_bridge``
 #: multiplies every cleaned p180 concentration of an ADNI-GO/2 participant (the
@@ -1199,9 +1240,12 @@ NIST_BRIDGE_WORKBOOK_SHA256: dict[str, str] = {
 #: its population SD within its run. ``nmr_all_columns`` (decided by the change
 #: ``adni-nmr-all-columns``, 2026-10-30, before any run of it) keeps every
 #: cleaned NMR column, the 80 the rule marks ``derived`` among them, in cleaned
-#: order, each on the rule's scale with its own floor. The other registered
-#: export variants (the raw scale, ``log2(x + 1)``, the generalized log) join by
-#: their own proposals. Never set or changed by a flag, a result or a count.
+#: order, each on the rule's scale with its own floor. ``raw_scale``,
+#: ``log2_plus_one`` and ``glog`` (decided by the change
+#: ``adni-scale-variants``, 2026-11-02, before any run of them; block ``all``,
+#: hook ``scale``) put every kept cell of both blocks on the scale of
+#: ``SCALE_VARIANT_RULE`` in place of the rule's, on the primary's membership.
+#: Never set or changed by a flag, a result or a count.
 EXPORT_VARIANTS: dict[str, dict] = {
     "nist_bridge": {
         "block": "p180",
@@ -1238,6 +1282,43 @@ EXPORT_VARIANTS: dict[str, dict] = {
             "the metadata and the covariates the primary's"
         ),
         "change": "adni-nmr-all-columns",
+    },
+    "raw_scale": {
+        "block": "all",
+        "hook": "scale",
+        "rule": "SCALE_VARIANT_RULE",
+        "reads_data_root": False,
+        "setting": (
+            "both blocks on the raw scale: every kept cell the cleaned concentration as metabo_adni leaves it, in its "
+            "platform's unit, with no log and no offset (SCALE_VARIANT_RULE); MOTCO's transform identity and its "
+            "z-scoring; the membership, the participants, the metadata and the covariates the primary's; the rule's "
+            "floors recorded, not applied"
+        ),
+        "change": "adni-scale-variants",
+    },
+    "log2_plus_one": {
+        "block": "all",
+        "hook": "scale",
+        "rule": "SCALE_VARIANT_RULE",
+        "reads_data_root": False,
+        "setting": (
+            "both blocks on log2(x + 1): every kept cell log2 of the cleaned concentration plus 1 in its platform's "
+            "unit, the transform of the 2022 study (SCALE_VARIANT_RULE); the membership, the participants, the "
+            "metadata and the covariates the primary's; the rule's floors recorded, not applied"
+        ),
+        "change": "adni-scale-variants",
+    },
+    "glog": {
+        "block": "all",
+        "hook": "scale",
+        "rule": "SCALE_VARIANT_RULE",
+        "reads_data_root": False,
+        "setting": (
+            "both blocks on the generalized log log2((x + sqrt(x² + λ²)) / 2), λ per metabolite its smallest positive "
+            "value over the exported participants divided by 10 (SCALE_VARIANT_RULE); the membership, the "
+            "participants, the metadata and the covariates the primary's; the rule's floors recorded, not applied"
+        ),
+        "change": "adni-scale-variants",
     },
 }
 
@@ -1314,6 +1395,56 @@ NMR_MEMBERSHIP_READING_RULES: tuple[str, ...] = (
     "reads it against another sensitivity.",
 )
 
+#: Decided by the change ``adni-scale-variants``, written before any run: the
+#: binding reading rules shared by the scale variants ``raw_scale``,
+#: ``log2_plus_one`` and ``glog``, printed verbatim after ``READING_RULES`` in
+#: each one's ``summary.md``, its ``export_sensitivity.md``, its
+#: ``diagnostics.md`` and every report that quotes it, in place of
+#: ``EXPORT_VARIANT_READING_RULES``, and cited as "scale rule N". Rules 1, 2, 3,
+#: 6 and 7 have the roles of ``EXPORT_VARIANT_READING_RULES`` 1, 2, 3, 6 and 7,
+#: so a sentence that cites a rule by its role cites the same number under
+#: every set. The numbers quoted are from the change's spike, none from a run
+#: of a scale variant.
+SCALE_VARIANT_READING_RULES: tuple[str, ...] = (
+    "A scale variant is read beside the primary and never replaces it. No result of a scale variant changes a "
+    "constant (the scale of `EXPORT_FEATURE_RULE` included), reruns the primary or adopts a variant.",
+    "A scale variant shares with the primary the cleaned tables, the participants, the membership of both blocks (133 "
+    "p180 metabolites, 165 NMR concentrations), the covariates and their design, the cells, the settings, the CV "
+    "folds, the seed and the permutations. It differs only in the scale of the cell values of both blocks. Every "
+    "scale is a monotone function of the concentration, so each participant's rank on each feature is the primary's; "
+    "what changes is the spacing of the values, which MOTCO's z-scoring passes to the basis and the statistics. A "
+    "rejection status that differs is dependence on the scale, not a result of the variant.",
+    "The variant's CV-selected rank, floor, eigengap and `angle` null summary are reported beside its `angle`. A "
+    "rank that differs from the primary's is reported, not ranked.",
+    "`log2_plus_one` and `glog` keep the log and change its offset. The primary's offset is the metabolite's 5 % "
+    "quantile (floor over median: p180 median 0.60, NMR 0.65), which compresses the lowest values of every metabolite "
+    "alike. `log2_plus_one` is the transform of the 2022 study (doi:10.3389/fradi.2022.782864): its offset is 1 in "
+    "each platform's unit (p180 µM, NMR mostly mmol/L), so an abundant metabolite gets nearly `log2(x)` and a scarce "
+    "one a nearly linear scale (median below 1: 46 of 133 p180 metabolites, 129 of 165 NMR concentrations). It is not "
+    "a reproduction of that study, whose membership, winsorizing, outlier removal and medication residuals differ, "
+    "and no agreement or disagreement with it is read from the variant. `glog` is the generalized log with λ a tenth "
+    "of the metabolite's smallest positive value: `log2(x)` within 0.004 bits on every positive cell, a zero cell 4.3 "
+    "bits below the smallest positive value (41 NMR cells in 3 metabolites), and no compression of the low values, "
+    "so it carries left tails (|skew| > 1 for 6 p180 and 25 NMR metabolites, a largest |z| above 8 for 6 and 13).",
+    "`raw_scale` takes the cleaned concentrations with no log. MOTCO z-scores each feature, so the right tails of the "
+    "concentration distributions carry leverage (|skew| > 1 for 46 p180 and 43 NMR metabolites, a largest |z| above 8 "
+    "for 12 and 4, against 1 and 3, 0 and 1 on the rule's scale), and the NMR block loses numerical rank (104 of 165; "
+    "the joint matrix 237 of 298): the lipoprotein measures are exact sums of their components on the concentration "
+    "scale, a relation the log breaks. A difference reflects those tails and that geometry, never evidence that one "
+    "scale measures what another does not.",
+    "A non-rejection in a variant is no more informative than the primary's: reading rule 3 holds, and no power "
+    "statement exists at this design. A rejection that appears only in a variant is dependence on the scale, read "
+    "beside the variant's rank and null summary.",
+    "The variant's export manifest records the shape counts of each block on its scale, the numerical rank of each "
+    "block, the run offset per block and the offset of each metabolite (the feature tables). They are reported "
+    "beside the results. The run offset barely moves with the scale (p180 median |d| 1.08 to 1.13 against the "
+    "primary's 1.12). A variant component that tracks a variable in its axis diagnostic is a measurement-space "
+    "finding and never grounds to adopt the variant.",
+    "A scale variant is read against the primary only, never against another scale variant, another export variant, "
+    "an arm or a rank. No sentence reads it against another sensitivity, and a difference between two scale variants "
+    "is not evidence for either.",
+)
+
 #: A convention (change ``adni-nmr-all-columns``, design D3): per variant of
 #: ``EXPORT_VARIANTS``, in its order, the reading rules it carries and the
 #: words its readers print. ``rules`` names the rule tuple of this module and
@@ -1324,7 +1455,8 @@ NMR_MEMBERSHIP_READING_RULES: tuple[str, ...] = (
 #: on. The p180 variants keep the words their committed outputs print; the
 #: entries are kept apart from ``EXPORT_VARIANTS``, whose entries the variant
 #: manifests record. The ``dependence`` of ``nmr_all_columns`` is decided by
-#: ``adni-nmr-all-columns``.
+#: ``adni-nmr-all-columns``; the scale variants share one entry, whose
+#: ``dependence`` is decided by ``adni-scale-variants``.
 _P180_RUN_RULE_SET: dict[str, str] = {
     "rules": "EXPORT_VARIANT_READING_RULES",
     "change": "adni-nist-bridge",
@@ -1333,6 +1465,15 @@ _P180_RUN_RULE_SET: dict[str, str] = {
     "source": "the handling of the p180 run",
     "heading": "Reading rules of the export variants",
     "reader": "an export variant",
+}
+_SCALE_RULE_SET: dict[str, str] = {
+    "rules": "SCALE_VARIANT_READING_RULES",
+    "change": "adni-scale-variants",
+    "cite": "scale rule",
+    "dependence": "scale dependence",
+    "source": "the scale of both blocks",
+    "heading": "Reading rules of the scale variants",
+    "reader": "a scale variant",
 }
 EXPORT_VARIANT_RULE_SETS: dict[str, dict[str, str]] = {
     "nist_bridge": _P180_RUN_RULE_SET,
@@ -1346,6 +1487,9 @@ EXPORT_VARIANT_RULE_SETS: dict[str, dict[str, str]] = {
         "heading": "Reading rules of the NMR membership variant",
         "reader": "the NMR membership variant",
     },
+    "raw_scale": _SCALE_RULE_SET,
+    "log2_plus_one": _SCALE_RULE_SET,
+    "glog": _SCALE_RULE_SET,
 }
 assert tuple(EXPORT_VARIANT_RULE_SETS) == tuple(EXPORT_VARIANTS), (
     "EXPORT_VARIANT_RULE_SETS must name the rule set of every EXPORT_VARIANTS entry, in its order"
@@ -1381,10 +1525,28 @@ assert all(isinstance(globals().get(entry["rules"]), tuple) for entry in EXPORT_
 #: NMR columns equal to the primary ``nmr.csv``'s (``rule_columns_equal_primary``),
 #: ``analysis`` with its features, and ``diagnostics``: the rank-independent
 #: keys of ``DIAGNOSTICS_EXPECTED_COUNTS`` with its NMR features, which
-#: ``axis-diagnostics`` expects on the variant's read. The ranks are not
-#: predeclared. ``export-sensitivity`` compares each variant manifest with
-#: these and records every difference as a finding; a difference never stops
-#: the step and never changes a setting.
+#: ``axis-diagnostics`` expects on the variant's read. ``raw_scale``,
+#: ``log2_plus_one`` and ``glog`` are predeclared by the change
+#: ``adni-scale-variants`` from its spike (``spike.md``, 2026-11-02) and the
+#: committed manifests (``_SCALE_VARIANT_SHARED_COUNTS`` holds what the three
+#: share): every key of ``EXPORT_EXPECTED_COUNTS`` (the zero cells counted
+#: before the transform) with the run offset per block replaced by the
+#: variant's, per block the shape counts (|skew| > 1, largest |z| > 8) and the
+#: numerical rank on the variant's scale, for ``log2_plus_one`` the kept
+#: metabolites whose median lies below its offset 1 (``scale``), the
+#: participants whose run differs from ``phase``, ``metadata.csv`` and
+#: ``covariates.csv`` equal to the primary's, and ``analysis``; no
+#: ``diagnostics`` key, so ``axis-diagnostics`` expects the rank-independent
+#: keys (165 NMR features). The ranks are not predeclared.
+#: ``export-sensitivity`` compares each variant manifest with these and
+#: records every difference as a finding; a difference never stops the step
+#: and never changes a setting.
+_SCALE_VARIANT_SHARED_COUNTS: dict = {
+    **{key: value for key, value in EXPORT_EXPECTED_COUNTS.items() if key != "phase_offset"},
+    "runs_differing_from_phase": 0,
+    "unchanged_equal_primary": {EXPORT_METADATA: True, EXPORT_COVARIATES: True},
+    "analysis": ANALYSIS_EXPECTED_COUNTS,
+}
 EXPORT_VARIANT_EXPECTED_COUNTS: dict[str, dict] = {
     "nist_bridge": {
         **{key: value for key, value in EXPORT_EXPECTED_COUNTS.items() if key != "phase_offset"},
@@ -1427,6 +1589,25 @@ EXPORT_VARIANT_EXPECTED_COUNTS: dict[str, dict] = {
                 "nmr": {"features": 245, "pcs": DIAGNOSTIC_N_BLOCK_PCS},
             },
         },
+    },
+    "raw_scale": {
+        **_SCALE_VARIANT_SHARED_COUNTS,
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 108, "abs_d_gt_1": 76}, "nmr": {"abs_d_gt_0_5": 2, "abs_d_gt_1": 0}},
+        "shape": {"p180": {"abs_skew_gt_1": 46, "max_abs_z_gt_8": 12}, "nmr": {"abs_skew_gt_1": 43, "max_abs_z_gt_8": 4}},
+        "spectrum": {"p180": {"numerical_rank": 133}, "nmr": {"numerical_rank": 104}},
+    },
+    "log2_plus_one": {
+        **_SCALE_VARIANT_SHARED_COUNTS,
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 108, "abs_d_gt_1": 80}, "nmr": {"abs_d_gt_0_5": 2, "abs_d_gt_1": 0}},
+        "shape": {"p180": {"abs_skew_gt_1": 14, "max_abs_z_gt_8": 9}, "nmr": {"abs_skew_gt_1": 30, "max_abs_z_gt_8": 4}},
+        "spectrum": {"p180": {"numerical_rank": 133}, "nmr": {"numerical_rank": 165}},
+        "scale": {"median_below_offset": {"p180": 46, "nmr": 129}},
+    },
+    "glog": {
+        **_SCALE_VARIANT_SHARED_COUNTS,
+        "phase_offset": {"p180": {"abs_d_gt_0_5": 109, "abs_d_gt_1": 80}, "nmr": {"abs_d_gt_0_5": 2, "abs_d_gt_1": 0}},
+        "shape": {"p180": {"abs_skew_gt_1": 6, "max_abs_z_gt_8": 6}, "nmr": {"abs_skew_gt_1": 25, "max_abs_z_gt_8": 13}},
+        "spectrum": {"p180": {"numerical_rank": 133}, "nmr": {"numerical_rank": 165}},
     },
 }
 assert tuple(EXPORT_VARIANT_EXPECTED_COUNTS) == tuple(EXPORT_VARIANTS), (

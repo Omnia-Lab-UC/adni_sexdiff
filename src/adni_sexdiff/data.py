@@ -13,7 +13,8 @@ latent-adjustment arm), ``export-sensitivity`` (change
 ``adni-nist-bridge``: the predeclared export variants of the p180 run
 handling, a NIST SRM 1950 bridge and per-run standardization; change
 ``adni-nmr-all-columns``: the NMR membership variant, every cleaned NMR
-column in the block),
+column in the block; change ``adni-scale-variants``: the scale variants,
+both blocks on the raw scale, ``log2(x + 1)`` or the generalized log),
 ``stage-sensitivity`` (change ``adni-stage-sensitivity``: the predeclared
 CN / LMCI / AD arm) and ``rank-sensitivity`` (change
 ``adni-rank-sensitivity``: the predeclared forced-rank ladder after an
@@ -180,6 +181,7 @@ from .constants import (
     REPORTED_N_JOBS,
     REPORTS_DIR,
     SAMPLE_COLUMN,
+    SCALE_VARIANT_RULE,
     STAGE_COLUMN,
     STAGE_LABELS,
     STAGE_RULE,
@@ -1847,9 +1849,10 @@ def run_export(
 
     The body is ``_run_export`` with no variant; the ``export-sensitivity``
     step (change ``adni-nist-bridge``) calls the same function with one hook
-    of ``EXPORT_VARIANTS`` set (a p180 hook, or ``membership`` on the NMR
-    block, change ``adni-nmr-all-columns``), and the primary's outputs are
-    its byte gate.
+    of ``EXPORT_VARIANTS`` set (a p180 hook, ``membership`` on the NMR
+    block, change ``adni-nmr-all-columns``, or ``scale`` on both blocks,
+    change ``adni-scale-variants``), and the primary's outputs are its byte
+    gate.
     """
     cleaned = Path(cleaned_dir) if cleaned_dir is not None else Path(CLEANED_DIR)
     cohort_path = Path(cohort_dir) if cohort_dir is not None else Path(COHORT_DIR)
@@ -1878,6 +1881,39 @@ def _standardize_by_run(T: np.ndarray, run: np.ndarray) -> np.ndarray:
         if rows.any():
             out[rows] = (T[rows] - T[rows].mean(axis=0)) / T[rows].std(axis=0)
     return out
+
+
+#: The quantiles of λ over the median a ``glog`` export records per block.
+_SCALE_QUANTILES: tuple[str, ...] = ("q05", "q25", "q50", "q75", "q95")
+
+
+def _scale_transform(Xk: np.ndarray, variant: str, platform: str) -> tuple[np.ndarray, np.ndarray | None]:
+    """The kept cells of one block on a scale variant's transform (``SCALE_VARIANT_RULE``), and the offset per column.
+
+    ``raw_scale`` returns the cells and no offset, ``log2_plus_one``
+    ``log2(x + 1)`` and offset 1 per column, ``glog``
+    ``log2((x + sqrt(x² + λ²)) / 2)`` and λ per column (the column's smallest
+    positive value over the exported participants divided by
+    ``lambda_divisor``). A column with no positive cell leaves λ undefined:
+    ``glog`` stops naming the block and the count of such columns, before
+    anything is written.
+    """
+    rule = SCALE_VARIANT_RULE[variant]
+    if rule["offset"] is None:
+        return Xk.copy(), None
+    if rule["offset"] == "lambda":
+        positive_min = np.where(Xk > 0, Xk, np.inf).min(axis=0)
+        n_undefined = int((~np.isfinite(positive_min)).sum())
+        if n_undefined:
+            raise RuntimeError(
+                f"{platform}: {n_undefined} kept metabolite(s) with no positive cell over the exported participants, so "
+                f"the λ of {variant} is undefined (SCALE_VARIANT_RULE); the scale needs a proposal, not a patch; nothing "
+                "was written"
+            )
+        lam = positive_min / rule["lambda_divisor"]
+        return np.log2((Xk + np.sqrt(Xk * Xk + lam * lam)) / 2.0), lam
+    offset = np.full(Xk.shape[1], float(rule["offset"]))
+    return np.log2(Xk + offset), offset
 
 
 def _run_export(
@@ -1919,15 +1955,31 @@ def _run_export(
         from ``reference["dir"]`` with ``float_precision="round_trip"``):
         names, order and every cell, recorded as
         ``counts.rule_columns_equal_primary``, a difference a finding naming
-        the block and the count of columns.
+        the block and the count of columns; ``scale`` (block ``all``, change
+        ``adni-scale-variants``, design D2) keeps the rule's membership of
+        both blocks, computes, gates and records the rule's floor per
+        metabolite without applying it, and puts every kept cell on the
+        variant's transform of ``SCALE_VARIANT_RULE`` (``x``,
+        ``log2(x + 1)``, or the generalized log with λ per metabolite its
+        smallest positive value over the exported participants divided by
+        ``lambda_divisor``; a metabolite with no positive cell stops ``glog``
+        naming the block and the count, before anything is written); the
+        feature tables gain an ``offset`` column (empty, 1 or λ), the
+        manifest records ``settings.units`` as the variant's transform,
+        ``settings.scale`` (the constant name and the variant's entry) and
+        ``counts.scale`` (the transform and offset, for ``log2_plus_one`` the
+        kept metabolites whose median lies below the offset per block, for
+        ``glog`` the quantiles of λ over the median per block).
     factors:
         The log2 factor per metabolite of the block (hook ``factors``; from
         ``nist_bridge``); a metabolite without one keeps factor 1.
     reference:
         The primary export as the variant's reference: ``dir``, ``manifest``
         (name and sha256), ``outputs`` (the hashes its manifest records),
-        ``phase_offset``; the variant's unchanged files are compared with
-        ``outputs`` and every difference is a finding.
+        ``phase_offset`` (and, for a scale variant, ``shape`` and
+        ``spectrum``, copied from the primary export manifest's counts); the
+        variant's unchanged files are compared with ``outputs`` and every
+        difference is a finding.
     manifest_extra:
         Top-level keys added to the manifest; its ``findings`` come first in
         the findings, its ``counts`` join the counts and its ``inputs`` the
@@ -1945,8 +1997,9 @@ def _run_export(
     -----
     With ``variant=None`` every byte is the primary's (``run_export``
     documents it). A variant reads no sex, stage or covariate to compute a
-    value: the run comes from ``p180_runs.csv`` and the floors are the
-    rule's, over the exported participants; ``phase`` is read to count the
+    value: the run comes from ``p180_runs.csv``, the floors are the rule's
+    and λ is a metabolite's smallest positive value, both over the exported
+    participants; ``phase`` is read to count the
     participants whose run differs from it (a finding) and, as in the
     primary, to describe the run offset. Its expected counts are
     ``EXPORT_VARIANT_EXPECTED_COUNTS[variant]`` without ``analysis`` and
@@ -1959,6 +2012,9 @@ def _run_export(
         raise FileExistsError(f"{final} exists; pass --force to replace it")
     rule = EXPORT_FEATURE_RULE
     scale = rule["scale"]
+    # hook ``scale`` (change ``adni-scale-variants``): both blocks on the variant's transform, the rule's floors recorded
+    scale_hook = spec is not None and spec["hook"] == "scale"
+    units = SCALE_VARIANT_RULE[variant]["transform"] if scale_hook else scale["transform"]
     extra = dict(manifest_extra or {})
     findings: list[str] = list(extra.pop("findings", []))
     extra_counts = dict(extra.pop("counts", {}))
@@ -2087,6 +2143,8 @@ def _run_export(
         "spectrum": {},
         "phase_offset": {},
     }
+    if scale_hook:
+        counts["scale"] = {"transform": units, "offset": SCALE_VARIANT_RULE[variant]["offset"]}
     for platform in EXPORT_BLOCKS:
         table = blocks[platform]
         name = CLEAN_TABLES[platform]
@@ -2112,6 +2170,12 @@ def _run_export(
         if n_missing:
             raise RuntimeError(f"{platform}/{name}: {n_missing} missing cell(s) among the exported participants")
         Xk = table[kept].to_numpy(dtype=float)
+        offsets = None
+        if scale_hook:
+            # The variant's transform comes first: a column with no positive cell leaves glog's λ undefined and has a
+            # non-positive floor too, and the λ gate names it. The rule's floor is then computed, gated and recorded,
+            # and not applied (design D2).
+            T, offsets = _scale_transform(Xk, variant, platform)
         floor = np.quantile(Xk, scale["floor_quantile"], axis=0, method=scale["floor_method"])
         counts["floors_not_positive"][platform] = n_bad = int((~(floor > 0)).sum())
         if n_bad:
@@ -2119,14 +2183,15 @@ def _run_export(
                 f"{platform}: {n_bad} kept metabolite(s) with a non-positive floor ({scale['floor_quantile']:.0%} "
                 "quantile over the exported participants); the rule needs a proposal, not a patch"
             )
-        T = np.log2(Xk + floor)
+        if not scale_hook:
+            T = np.log2(Xk + floor)
         standardized = spec is not None and spec["hook"] == "standardize_by_run" and platform == spec["block"]
         if standardized:
             T = _standardize_by_run(T, run)
         counts["non_finite"][platform] = n_bad = int((~np.isfinite(T)).sum())
         if n_bad:
             raise RuntimeError(
-                f"{platform}: {n_bad} non-finite cell(s) after {scale['transform']}"
+                f"{platform}: {n_bad} non-finite cell(s) after {units}"
                 + (" and the per-run standardization (a metabolite constant within a run?)" if standardized else "")
             )
         zeros = (X == 0).sum(axis=0)
@@ -2159,8 +2224,18 @@ def _run_export(
                     max_abs_z_transformed=max_abs_z[j],
                     phase_d=d[j],
                 )
+                if offsets is not None:
+                    row["offset"] = offsets[j]
             rows.append(row)
-        feature_tables[platform] = pd.DataFrame(rows, columns=list(_FEATURE_COLUMNS))
+        feature_tables[platform] = pd.DataFrame(rows, columns=[*_FEATURE_COLUMNS, *(("offset",) if scale_hook else ())])
+        if scale_hook:
+            median_kept = np.median(Xk, axis=0)
+            offset_rule = SCALE_VARIANT_RULE[variant]["offset"]
+            if offset_rule == "lambda":
+                ratio = np.quantile(offsets / median_kept, [0.05, 0.25, 0.5, 0.75, 0.95])
+                counts["scale"].setdefault("lambda_over_median", {})[platform] = dict(zip(_SCALE_QUANTILES, map(float, ratio)))
+            elif offset_rule is not None:
+                counts["scale"].setdefault("median_below_offset", {})[platform] = int((median_kept < offset_rule).sum())
         block = pd.DataFrame(T, columns=kept)
         block.insert(0, SAMPLE_COLUMN, rids)
         exported[platform] = block
@@ -2204,7 +2279,12 @@ def _run_export(
             + (f" ({derived_text} derived)" if derived_text else "")
             + (f" (every column, derived ones among them: {kept_text}; hook membership)" if kept_text else "")
             + f"; zero cells {counts['zero_cells'][platform]} in {counts['metabolites_with_zeros'][platform]} metabolite(s); "
-            f"{scale['transform']} with floor at the {scale['floor_quantile']:.0%} quantile"
+            + (
+                f"{units} (SCALE_VARIANT_RULE; the rule's floor at the {scale['floor_quantile']:.0%} quantile recorded, "
+                "not applied)"
+                if scale_hook
+                else f"{scale['transform']} with floor at the {scale['floor_quantile']:.0%} quantile"
+            )
             + ("; standardized within run" if standardized else "")
             + f"; phase |d| > 1 for {offset['abs_d_gt_1']} metabolite(s), median |d| {offset['median_abs_d']:.2f}"
         )
@@ -2250,7 +2330,8 @@ def _run_export(
             "covariates": covariate_codings,
             "covariates_applied": False,
             "motco_transform": scale["motco_transform"],
-            "units": scale["transform"],
+            "units": units,
+            **({"scale": {"constant": "SCALE_VARIANT_RULE", "variant": variant, **SCALE_VARIANT_RULE[variant]}} if scale_hook else {}),
         },
         "counts": counts,
         "expected": expected,
@@ -2280,11 +2361,14 @@ def _run_export(
             for name in names
         }
         if spec is not None:
-            # The files a variant does not change must be the primary's, byte for byte.
+            # The files a variant does not change must be the primary's, byte for byte (a scale variant, block
+            # ``all``, changes both block CSVs).
             recorded = (reference or {}).get("outputs", {})
             unchanged = {
                 name: manifest["outputs"][name]["sha256"] == recorded.get(name, {}).get("sha256")
-                for name in [*(f"{p}.csv" for p in EXPORT_BLOCKS if p != spec["block"]), EXPORT_METADATA, EXPORT_COVARIATES]
+                for name in [
+                    *(f"{p}.csv" for p in EXPORT_BLOCKS if spec["block"] not in (p, "all")), EXPORT_METADATA, EXPORT_COVARIATES
+                ]
             }
             counts["unchanged_equal_primary"] = unchanged
             new = _count_deviations(expected.get("unchanged_equal_primary"), unchanged, "unchanged_equal_primary")
@@ -2799,15 +2883,21 @@ def render_analysis_summary(
     variant" section follows "Latent space" (``_export_variant_lines``: the
     variant's setting, the blocks it keeps, the runs, for ``nist_bridge`` the
     bridge summary and table, for ``nmr_all_columns`` the NMR membership, the
-    rule's columns equal, the block shares and the NMR shape counts, the run
-    offset per block of the primary export beside the variant's), each
-    reading line carries the variant's note, the export context names the
-    variant's run offset and what it changes (``_export_variant_phase_line``),
-    and the variant's rule set (``EXPORT_VARIANT_RULE_SETS``:
+    rule's columns equal, the block shares and the NMR shape counts, for a
+    scale variant the transform, its offset, the offset summary and per block
+    the shape counts and numerical rank of both exports, the run offset per
+    block of the primary export beside the variant's), each reading line
+    carries the variant's note, the export context names the variant's run
+    offset and what it changes (``_export_variant_phase_line``), the
+    feature-rule line of a scale variant (an export manifest with
+    ``settings.scale``, change ``adni-scale-variants``) says that the rule's
+    scale is replaced by ``SCALE_VARIANT_RULE``'s and its floors recorded,
+    not applied, and the variant's rule set (``EXPORT_VARIANT_RULE_SETS``:
     ``EXPORT_VARIANT_READING_RULES`` for the p180 variants,
     ``NMR_MEMBERSHIP_READING_RULES`` for ``nmr_all_columns``, change
-    ``adni-nmr-all-columns``) follows ``READING_RULES`` under its own heading;
-    otherwise every byte is unchanged.
+    ``adni-nmr-all-columns``, ``SCALE_VARIANT_READING_RULES`` for the scale
+    variants) follows ``READING_RULES`` under its own heading; otherwise every
+    byte is unchanged.
 
     And it keys on ``export_manifest.get("stage_arm")`` (change
     ``adni-stage-sensitivity``). With the block (the CN / LMCI / AD arm of
@@ -3021,7 +3111,13 @@ def render_analysis_summary(
             f"primary export's rows): units `{settings.get('units')}`, MOTCO transform `{settings.get('motco_transform')}`; "
             "features: " + ", ".join(f"{p} {features.get(p)}" for p in EXPORT_BLOCKS)
             if stage_arm
-            else f"- feature rule (`EXPORT_FEATURE_RULE`): units `{settings.get('units')}`, MOTCO transform "
+            else "- feature rule (`EXPORT_FEATURE_RULE`"
+            + (
+                f", its scale replaced by the variant's, `{settings['scale'].get('constant')}`; the rule's floors recorded, "
+                "not applied"
+                if settings.get("scale") else ""
+            )
+            + f"): units `{settings.get('units')}`, MOTCO transform "
             f"`{settings.get('motco_transform')}`; kept / cleaned columns: "
             + ", ".join(f"{p} {features.get(p, {}).get('kept')} / {features.get(p, {}).get('cleaned')}" for p in EXPORT_BLOCKS)
         )
@@ -3309,19 +3405,26 @@ def _variant_words(variant: str) -> dict:
     variant's block and hook in ``EXPORT_VARIANTS``: ``kept`` (the blocks it
     keeps), ``changes`` (what it changes, as its rule 2 says it), ``does`` and
     ``whose``. A variant of the p180 run keeps the words its committed
-    outputs print.
+    outputs print. A scale variant (hook ``scale`` on block ``all``, design D3
+    of ``adni-scale-variants``) changes "the scale of both blocks" and keeps
+    "the membership of both blocks", since it keeps no block whole.
     """
     spec, entry = EXPORT_VARIANTS[variant], EXPORT_VARIANT_RULE_SETS[variant]
-    block = _BLOCK_TEXT[spec["block"]]
-    if spec["hook"] == "membership":
-        changes, does, whose = f"the {block} block's membership", f"changes the {block} block's membership", f"{block} block membership"
+    if spec["hook"] == "scale":
+        changes, does, whose = "the scale of both blocks", "changes the scale of both blocks", "scale"
+        kept = "the membership of both blocks"
     else:
-        changes, does, whose = f"the {block} values", f"handles the {block} run", f"{block} run handling"
+        block = _BLOCK_TEXT[spec["block"]]
+        if spec["hook"] == "membership":
+            changes, does, whose = f"the {block} block's membership", f"changes the {block} block's membership", f"{block} block membership"
+        else:
+            changes, does, whose = f"the {block} values", f"handles the {block} run", f"{block} run handling"
+        kept = ", ".join(f"the {_BLOCK_TEXT[p]} block" for p in EXPORT_BLOCKS if p != spec["block"])
     return {
         **entry,
         "rule_tuple": getattr(constants, entry["rules"]),
         "differs": f"differs ({entry['dependence']})",
-        "kept": ", ".join(f"the {_BLOCK_TEXT[p]} block" for p in EXPORT_BLOCKS if p != spec["block"]),
+        "kept": kept,
         "changes": changes,
         "does": does,
         "whose": whose,
@@ -3350,13 +3453,18 @@ def _export_variant_rules_lines(variant: str) -> list[str]:
 
 
 def _export_variant_phase_line(variant: str) -> str:
-    """The ``phase`` line of a variant's export context in ``summary.md`` (design D4 of ``adni-nmr-all-columns``)."""
+    """The ``phase`` line of a variant's export context in ``summary.md`` (design D4 of ``adni-nmr-all-columns``; a scale variant's, design D4 of ``adni-scale-variants``)."""
     spec, words = EXPORT_VARIANTS[variant], _variant_words(variant)
     lead = "- `phase` enters as a covariate of the stage means (above), as in the primary; "
     if spec["hook"] == "membership":
         return (
             lead + f"the variant changes the {_BLOCK_TEXT[spec['block']]} membership only ({words['cite']} 2) and `phase` "
             "carries the run difference, as in the primary"
+        )
+    if spec["hook"] == "scale":
+        return (
+            lead + f"the variant changes {words['changes']} only ({words['cite']} 2) and `phase` carries the run "
+            "difference, as in the primary"
         )
     return lead + f"the variant changes {words['changes']} only ({words['cite']} 2) and `phase` carries what remains of the run difference"
 
@@ -3380,11 +3488,19 @@ def _export_variant_lines(export_manifest: dict) -> list[str]:
     (``nmr_all_columns``, design D4 of ``adni-nmr-all-columns``) the block's
     membership with the derived columns kept, the rule's columns equal to
     the primary's (``counts.rule_columns_equal_primary``), the joint
-    features, the block shares and the block's shape counts, and the run
-    offset per block, the primary's (copied into ``reference.phase_offset``)
-    then the variant's (``counts.phase_offset``). Keys are taken in the
-    constants' orders, never in the manifest's, which is written with sorted
-    keys.
+    features, the block shares and the block's shape counts, for a variant
+    with hook ``scale`` (``raw_scale``, ``log2_plus_one``, ``glog``, design D4
+    of ``adni-scale-variants``) the transform and its offset
+    (``settings.scale``), the rule's floor recorded and not applied, the
+    offset summary (``counts.scale``: for ``log2_plus_one`` the metabolites
+    whose median lies below the offset, for ``glog`` the quantiles of λ over
+    the median) and per block the shape counts and numerical rank of the
+    primary export (copied into ``reference.shape`` and
+    ``reference.spectrum``) then of the variant (``counts.shape``,
+    ``counts.spectrum``), and the run offset per block, the primary's (copied
+    into ``reference.phase_offset``) then the variant's
+    (``counts.phase_offset``). Keys are taken in the constants' orders, never
+    in the manifest's, which is written with sorted keys.
     """
     variant, reference = export_manifest["variant"], export_manifest.get("reference", {})
     counts = export_manifest.get("counts", {})
@@ -3416,6 +3532,55 @@ def _export_variant_lines(export_manifest: dict) -> list[str]:
             f"- {block} block shape on the rule's scale: |skew| > 1 for {shape.get('abs_skew_gt_1')} column(s), largest "
             f"|z| > 8 for {shape.get('max_abs_z_gt_8')}",
         ]
+    if variant["hook"] == "scale":
+        settings = export_manifest.get("settings", {})
+        scale, scale_counts = settings.get("scale", {}), counts.get("scale", {})
+        rule_units = settings.get("EXPORT_FEATURE_RULE", {}).get("scale", {}).get("transform")
+        offset = scale.get("offset")
+        if offset is None:
+            offset_text = "with no offset"
+        elif offset == "lambda":
+            offset_text = (
+                f"λ per metabolite its smallest positive value over the exported participants divided by "
+                f"{scale.get('lambda_divisor')} (the feature tables' `offset`), so a zero cell lands at `log2(λ / 2)`"
+            )
+        else:
+            offset_text = f"offset {offset} in each platform's unit (the feature tables' `offset`)"
+        lines.append(
+            f"- scale (hook `scale`, `{scale.get('constant')}`): every kept cell of both blocks on `{scale.get('transform')}` "
+            f"in place of the rule's `{rule_units}`, {offset_text}; the primary's membership; the rule's floor computed, "
+            "gated and recorded per metabolite (the feature tables' `floor`), not applied"
+        )
+        below = scale_counts.get("median_below_offset")
+        if below is not None:
+            features = counts.get("features", {})
+            lines.append(
+                f"- metabolites whose median lies below the offset {offset} (a nearly linear scale; well above it, nearly "
+                "`log2(x)`): " + ", ".join(f"{p} {below.get(p)} of {features.get(p, {}).get('kept')}" for p in EXPORT_BLOCKS)
+            )
+        ratio = scale_counts.get("lambda_over_median")
+        if ratio is not None:
+            lines.append(
+                "- λ over the metabolite's median, q05 / q25 / q50 / q75 / q95: " + "; ".join(
+                    f"{p} " + " / ".join(_fmt(ratio.get(p, {}).get(q), ".3g") for q in _SCALE_QUANTILES)
+                    for p in EXPORT_BLOCKS
+                )
+            )
+        p_shape, p_spectrum = reference.get("shape", {}), reference.get("spectrum", {})
+        v_shape, v_spectrum = counts.get("shape", {}), counts.get("spectrum", {})
+
+        def shape_text(shape: dict, spectrum: dict) -> str:
+            return (
+                f"|skew| > 1 for {shape.get('abs_skew_gt_1')} metabolite(s), largest |z| > 8 for "
+                f"{shape.get('max_abs_z_gt_8')}, numerical rank {spectrum.get('numerical_rank')} of {spectrum.get('features')}"
+            )
+
+        for p in EXPORT_BLOCKS:
+            lines.append(
+                f"- {p} block shape and numerical rank: primary (`{rule_units}`) "
+                f"{shape_text(p_shape.get(p, {}), p_spectrum.get(p, {}))}; variant (`{scale.get('transform')}`) "
+                f"{shape_text(v_shape.get(p, {}), v_spectrum.get(p, {}))}"
+            )
     bridge = export_manifest.get("bridge")
     if bridge:
         summary, table = bridge["summary"], bridge["table"]
@@ -4652,8 +4817,10 @@ def render_axis_diagnostics(
     (the primary stays primary), the analysis-read section names the variant
     under its rule 7 and the variant's rule set (``EXPORT_VARIANT_RULE_SETS``,
     change ``adni-nmr-all-columns``: ``EXPORT_VARIANT_READING_RULES`` for the
-    p180 variants, ``NMR_MEMBERSHIP_READING_RULES`` for ``nmr_all_columns``)
-    follows ``READING_RULES`` under its own heading. And on
+    p180 variants, ``NMR_MEMBERSHIP_READING_RULES`` for ``nmr_all_columns``,
+    ``SCALE_VARIANT_READING_RULES`` for the scale variants, whose opening
+    paragraph names an export whose scale differs, change
+    ``adni-scale-variants``) follows ``READING_RULES`` under its own heading. And on
     ``analysis.get("stage_arm")`` (change
     ``adni-stage-sensitivity``): for the CN / LMCI / AD arm the opening
     paragraph names the arm, a flagged row is a finding about the arm's
@@ -6811,7 +6978,8 @@ def render_export_sensitivity(
         hash would change on every rerun (the manifest records it).
     variant_export_manifest:
         The variant's export manifest: the variant, the primary export it
-        was read beside, the runs, the bridge and both run offsets.
+        was read beside, the runs, the bridge, a scale variant's scale and
+        both exports' shape counts and spectra, and both run offsets.
     findings:
         Every finding of the variant's export, analysis and comparison.
     n_jobs:
@@ -6828,8 +6996,10 @@ def render_export_sensitivity(
         variant's reading lines (``_statistic_reading_line``, string-equal to
         its ``summary.md``); the latent-space table; the export variant (its
         setting, the runs, the bridge for ``nist_bridge``, the membership,
-        block shares and NMR shape counts for ``nmr_all_columns``, the run
-        offset per block of both exports: ``_export_variant_lines``); the
+        block shares and NMR shape counts for ``nmr_all_columns``, the
+        transform, offset, offset summary and per block the shape counts and
+        numerical rank of both exports for a scale variant, the run offset
+        per block of both exports: ``_export_variant_lines``); the
         findings; ``READING_RULES`` then the variant's rule set
         (``EXPORT_VARIANT_RULE_SETS``), verbatim. No statistic is computed
         here.
@@ -6989,11 +7159,12 @@ def run_export_sensitivity(
     ----------
     variant:
         A name of ``EXPORT_VARIANTS`` (``nist_bridge``,
-        ``per_run_standardized``, ``nmr_all_columns``) or ``all`` (every
-        variant, in registry order, each into its own directory; with the
-        outputs of a variant present it stops at the existing-variant gate
-        unless ``force``). Another name stops the step naming the registered
-        variants, before anything is read.
+        ``per_run_standardized``, ``nmr_all_columns``, ``raw_scale``,
+        ``log2_plus_one``, ``glog``) or ``all`` (every variant, in registry
+        order, each into its own directory; with the outputs of a variant
+        present it stops at the existing-variant gate unless ``force``, so a
+        new variant runs by its name). Another name stops the step naming the
+        registered variants, before anything is read.
     data_root:
         The data root (``--data-root`` → ``ADNI_DATA_ROOT`` → ``data/``); read
         by ``nist_bridge`` only: the two QC archives of ``NIST_BRIDGE_RULE``
@@ -7035,8 +7206,11 @@ def run_export_sensitivity(
     before the floors; ``per_run_standardized``: each p180 metabolite
     standardized within its run on the rule's scale; ``nmr_all_columns``,
     change ``adni-nmr-all-columns``: every cleaned NMR column kept, each on
-    the rule's scale with its own floor, no bridge and no data root) and
-    analyses it through
+    the rule's scale with its own floor, no bridge and no data root;
+    ``raw_scale``, ``log2_plus_one`` and ``glog``, change
+    ``adni-scale-variants``: every kept cell of both blocks on the scale of
+    ``SCALE_VARIANT_RULE``, the rule's floors recorded and not applied, no
+    bridge and no data root) and analyses it through
     ``_run_trajectory_analysis`` at the primary's settings
     (``ANALYSIS_LATENT_ADJUSTMENT``, one ``analyze_trajectories`` call). The
     primary export and analysis are read beside it and never written or
@@ -7069,8 +7243,11 @@ def run_export_sensitivity(
     ``reference`` with its output hashes and run offset, for
     ``nist_bridge`` the QC archives and members with their hashes beside the
     predeclared ones, the bridge table's hash, summary and factor per
-    metabolite, and the predeclared ``EXPORT_VARIANT_EXPECTED_COUNTS``
-    beside the observed counts); ``analysis/`` (the seven files ``analyze``
+    metabolite, for a scale variant ``settings.scale``, ``counts.scale``
+    and the primary's shape counts and spectrum in ``reference``, and the
+    predeclared ``EXPORT_VARIANT_EXPECTED_COUNTS`` beside the observed
+    counts; a scale variant's feature tables carry an ``offset`` column);
+    ``analysis/`` (the seven files ``analyze``
     writes; the manifest records step ``export-sensitivity``, the variant,
     the primary analysis as ``reference`` with its two hashes and the
     variant's ``analysis`` expected counts; ``summary.md`` with the export
@@ -7092,8 +7269,9 @@ def run_export_sensitivity(
     the primary's; a variant rank that differs from the primary's; a
     statistic whose status differs (the variant's dependence label of
     ``EXPORT_VARIANT_RULE_SETS``: run-handling dependence for the p180
-    variants, feature-membership dependence for ``nmr_all_columns``); a
-    primary read with ``n_jobs`` not 1; stale diagnostics. Each finding that
+    variants, feature-membership dependence for ``nmr_all_columns``, scale
+    dependence for the scale variants); a primary read with ``n_jobs`` not 1;
+    stale diagnostics. Each finding that
     reads a rule cites the variant's rule set. No finding names a participant. No
     variant value changes a constant, selects a metabolite or covariate,
     reruns the primary or defines a new variant.
@@ -7205,6 +7383,9 @@ def _run_export_variant(
         "git_revision": p_export.get("git_revision"),
         "created_at": p_export.get("created_at"),
     }
+    if spec["hook"] == "scale":
+        # the primary's shape counts and spectrum, copied as its run offset is (design D2 of adni-scale-variants)
+        ref.update(shape=p_export.get("counts", {}).get("shape"), spectrum=p_export.get("counts", {}).get("spectrum"))
     static_findings: list[str] = []
     if reference["n_jobs"] != REPORTED_N_JOBS:
         static_findings.append(

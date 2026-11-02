@@ -31,6 +31,7 @@ from .constants import (
     RANK_SENSITIVITY_LADDER,
     RANK_SENSITIVITY_RANK_DIR,
     RANK_SENSITIVITY_SUBDIRS,
+    REPORT_EXPORT_VARIANTS,
     REPORT_NAME,
     REPORTED_N_JOBS,
     REPORTS_DIR,
@@ -166,7 +167,8 @@ def build_parser() -> argparse.ArgumentParser:
     written = ", ".join(EXPORT_SENSITIVITY_SUBDIRS[k] for k in ("bridge", "export", "analysis", "comparison"))
     p = sub.add_parser(
         "export-sensitivity",
-        help="Predeclared export variants, of the p180 run handling or the NMR membership (EXPORT_VARIANTS: "
+        help="Predeclared export variants, of the p180 run handling, the NMR membership or the scale of both blocks "
+        "(EXPORT_VARIANTS: "
         + ", ".join(EXPORT_VARIANTS)
         + "): each reruns the export with its one setting, analyses it at the primary's settings and compares it "
         f"with the primary, read beside it and never replacing it -> {EXPORT_SENSITIVITY_DIR}/<variant>/{{{written}}}/",
@@ -276,7 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--export-sensitivity-dir", type=Path, default=None,
-        help=f"Root of export-sensitivity, read per variant ({', '.join(EXPORT_VARIANTS)}) as <variant>/"
+        help=f"Root of export-sensitivity, read per variant of REPORT_EXPORT_VARIANTS ({', '.join(REPORT_EXPORT_VARIANTS)}) as <variant>/"
         f"{'/, <variant>/'.join(EXPORT_SENSITIVITY_SUBDIRS.values())}/ (default: {EXPORT_SENSITIVITY_DIR})",
     )
     p.add_argument(

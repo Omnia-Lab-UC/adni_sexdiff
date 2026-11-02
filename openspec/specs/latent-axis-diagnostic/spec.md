@@ -206,6 +206,10 @@ The diagnostic reads sex and stage. Its outputs SHALL NOT be an input of `export
 - **WHEN** the analysis read is `results/motco_export_sensitivity/nmr_all_columns/analysis/` with its own export directory
 - **THEN** `diagnostics.md` names the export variant `nmr_all_columns` and the NMR block it changes, calls each flagged row a finding about the variant's measurement space under membership rule 7, prints `NMR_MEMBERSHIP_READING_RULES` after `READING_RULES`, and states that the primary analysis stays primary
 
+#### Scenario: Scale variant read
+- **WHEN** the analysis read is `results/motco_export_sensitivity/glog/analysis/` with its own export directory
+- **THEN** `diagnostics.md` names the export variant `glog` as one whose scale differs on both blocks, calls each flagged row a finding about the variant's measurement space under scale rule 7, prints `SCALE_VARIANT_READING_RULES` after `READING_RULES`, expects the rank-independent counts with 165 NMR features, and states that the primary analysis stays primary
+
 ### Requirement: Reading rules of the CN / LMCI / AD arm read
 On the CN / LMCI / AD arm (an analysis manifest that records step `stage-sensitivity`) `diagnostics.md` SHALL name the arm, call each flagged row a finding about the arm's measurement space and print `STAGE_SENSITIVITY_READING_RULES` after `READING_RULES`; the diagnostic's outputs on the primary, the latent arm and the export variants SHALL keep their bytes.
 
