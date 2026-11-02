@@ -1,3 +1,20 @@
+## ADDED Requirements
+
+### Requirement: Report file name
+The report SHALL be named `motco-adni-<date>.md` (`REPORT_NAME`) by the day it is written, or `motco-adni-<date>-<n>.md` (`REPORT_NAME_SAME_DAY`), n an integer of 2 or more, for a later report of the same day. The date and the ordinal SHALL be read from the name, and any other name SHALL stop the step naming the file and both patterns. Without `--out`, write mode SHALL use today's name without an ordinal.
+
+#### Scenario: Second report of a day
+- **WHEN** `report --out reports/motco-adni-2026-11-02-2.md` runs while `reports/motco-adni-2026-11-02.md` exists
+- **THEN** the step writes the new file, leaves the first unchanged, and the new file's title line ends with `2026-11-02, report 2`
+
+#### Scenario: Name outside the patterns
+- **WHEN** `--out` names `reports/motco-adni-2026-11-02-1.md` or `reports/motco-adni-latest.md`
+- **THEN** the step stops naming the file and both patterns, and writes nothing
+
+#### Scenario: Today's report exists
+- **WHEN** `report` runs without `--out` and `--force` while today's report exists
+- **THEN** the step stops naming the file, `--force` and the next free same-day name, and writes nothing
+
 ## MODIFIED Requirements
 
 ### Requirement: Inputs are the kept aggregate outputs only
@@ -259,3 +276,45 @@ After a report's level-2 headings match the current sections and before any inpu
 #### Scenario: Variants out of order
 - **WHEN** a report lists the variants of `REPORT_EXPORT_VARIANTS` in another order
 - **THEN** the check stops naming the report, no absent and no extra variant, that the order differs, and the `git log` command, and writes nothing
+
+### Requirement: Deterministic report body
+The report body SHALL depend only on the input files and the report's file name: the date, with its same-day ordinal when the name carries one, SHALL appear in the file name and the title only, and no revision, host, time or runtime of the report run SHALL be written. Two runs on the same inputs to the same path SHALL be byte-identical.
+
+#### Scenario: Rerun with force
+- **WHEN** `report --force` runs twice to the same `--out` on unchanged inputs
+- **THEN** the two files have equal sha256
+
+#### Scenario: Another date
+- **WHEN** the report is written to a file whose name carries another date
+- **THEN** the two files differ only in the title line
+
+#### Scenario: Same-day name
+- **WHEN** the report is written from the same inputs to `motco-adni-2026-11-02.md` and to `motco-adni-2026-11-02-2.md`
+- **THEN** the two files differ only in the title line
+
+### Requirement: Check selects the report and reruns the gates
+Without `--out`, `--check` SHALL read the newest report under `reports/` by the date in its name, then by its same-day ordinal (a name without one first). Before any other gate, a report whose level-2 headings differ from the current sections SHALL stop the check, naming the report, the sections it lacks or adds, and how to find the revision that committed it. The check SHALL then run every gate of the write mode before comparing, so a broken chain or an unreported run fails the check naming the cause.
+
+#### Scenario: No report
+- **WHEN** `reports/` holds no `motco-adni-*.md` and `--out` is not given
+- **THEN** `report --check` stops naming the directory and the pattern
+
+#### Scenario: Same-day report is the newest
+- **WHEN** `reports/` holds `motco-adni-2026-11-02.md` and `motco-adni-2026-11-02-2.md` and `--out` is not given
+- **THEN** `report --check` reads `motco-adni-2026-11-02-2.md`
+
+#### Scenario: Broken chain at check time
+- **WHEN** the export manifest was regenerated after the primary and `report --check` runs
+- **THEN** the check stops naming `manifest.json`, both hashes and `analyze`, before any cell is compared
+
+#### Scenario: Report of an earlier layout
+- **WHEN** `report --check --out reports/motco-adni-2026-10-30.md` runs after the rank section is added
+- **THEN** the check stops naming the report, the absent section `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-30.md`, compares no cell, writes nothing and exits non-zero
+
+#### Scenario: Report of the eleven-section layout
+- **WHEN** `report --check --out reports/motco-adni-2026-10-29.md` runs
+- **THEN** the check stops naming the report, the absent sections `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-29.md`, compares no cell, writes nothing and exits non-zero
+
+#### Scenario: Report of the first layout
+- **WHEN** `report --check --out reports/motco-adni-2026-10-28.md` runs
+- **THEN** the check stops naming the report, the absent sections `Export sensitivity`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero

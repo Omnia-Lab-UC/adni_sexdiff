@@ -1412,9 +1412,16 @@ not covered by this report"), never in the report, so the newest report
 stays checkable until the report change that adds the variant to the pin
 and re-issues the report. Every registered variant is in the pin, so no
 such line is printed. `--out` must be named `reports/motco-adni-<date>.md`
-(`REPORT_NAME`): the date is read from the name and written in the title
-line only, write mode defaults to today's date and `--check` to the newest
-report under `reports/` by the date in its name.
+(`REPORT_NAME`) by the day it is written or, for a later report of the same
+day, `reports/motco-adni-<date>-<n>.md` with `<n>` 2 or more
+(`REPORT_NAME_SAME_DAY`, change `adni-report-scale-variants`; `-1` and any
+other name stop the step), so no report is written over a committed one:
+the date and the ordinal are read from the name and written in the title
+line only (`… — 2026-11-02, report 2`). Write mode defaults to today's
+name without an ordinal and, when that file exists without `--force`,
+stops naming the next free same-day name to pass with `--out` (it never
+picks one itself); `--check` defaults to the newest report under
+`reports/` by the date in its name, then by its ordinal.
 
 Inputs (`REPORT_INPUT_FILES`, 145 files with 45 manifests, all
 committed): the two `clean_manifest.json`; `stage_counts.csv` and

@@ -177,6 +177,7 @@ from .constants import (
     REPORT_EXPORT_VARIANTS,
     REPORT_INPUT_FILES,
     REPORT_NAME,
+    REPORT_NAME_SAME_DAY,
     REPORT_SECTIONS,
     REPORTED_N_JOBS,
     REPORTS_DIR,
@@ -9361,9 +9362,17 @@ def run_rank_sensitivity(
 
 #: The report's title; the date of the file name follows it (design D2 of ``adni-report``).
 _REPORT_TITLE = "MOTCO case-study report: ADNI serum metabolomics, sex × stage"
-#: ``REPORT_NAME`` as a pattern on the file name, the date captured.
+#: ``REPORT_NAME`` and ``REPORT_NAME_SAME_DAY`` as a pattern on the file name:
+#: the date captured, then the same-day ordinal when the name has one (2 or
+#: more, no leading zero; design D11 of ``adni-report-scale-variants``).
 _REPORT_NAME_RE = re.compile(
-    "^" + re.escape(REPORT_NAME.split("{date}")[0]) + r"(\d{4}-\d{2}-\d{2})" + re.escape(REPORT_NAME.split("{date}")[1]) + "$"
+    "^" + re.escape(REPORT_NAME.split("{date}")[0]) + r"(\d{4}-\d{2}-\d{2})(?:-([2-9]|[1-9]\d+))?"
+    + re.escape(REPORT_NAME.split("{date}")[1]) + "$"
+)
+#: The two name patterns, as the messages name them.
+_REPORT_NAME_PATTERNS = (
+    f"{REPORT_NAME.format(date='<YYYY-MM-DD>')} or, for a later report of the same day, "
+    f"{REPORT_NAME_SAME_DAY.format(date='<YYYY-MM-DD>', n='<n>')} with <n> 2 or more"
 )
 def _variant_role(variant: str, key: str) -> str:
     """The role of ``REPORT_INPUT_FILES`` of a variant's subdirectory, by its key in ``EXPORT_SENSITIVITY_SUBDIRS``."""
@@ -9457,11 +9466,20 @@ _REPORT_NO_NUMERICS = "no block (written before `adni-portable-numerics`)"
 
 
 def _report_date(path: Path) -> str:
-    """The date in a report's file name (``REPORT_NAME``); stops naming the file and the pattern otherwise."""
+    """The date in a report's file name (``REPORT_NAME``), with its same-day ordinal when it has one (``REPORT_NAME_SAME_DAY``: ``2026-11-02, report 2``), as the title line prints it; stops naming the file and both patterns otherwise."""
     m = _REPORT_NAME_RE.match(Path(path).name)
     if m is None:
-        raise ValueError(f"{path}: the report's name must match {REPORT_NAME.format(date='<YYYY-MM-DD>')} (the date is read from it)")
-    return m.group(1)
+        raise ValueError(f"{path}: the report's name must match {_REPORT_NAME_PATTERNS} (the date is read from it); nothing was written")
+    return m.group(1) if m.group(2) is None else f"{m.group(1)}, report {m.group(2)}"
+
+
+def _next_same_day_name(path: Path) -> Path:
+    """The first ``REPORT_NAME_SAME_DAY`` of the date of ``path`` that does not exist beside it (design D11 of ``adni-report-scale-variants``)."""
+    day = _REPORT_NAME_RE.match(path.name).group(1)
+    n = 2
+    while (path.parent / REPORT_NAME_SAME_DAY.format(date=day, n=n)).exists():
+        n += 1
+    return path.parent / REPORT_NAME_SAME_DAY.format(date=day, n=n)
 
 
 def _report_dirs(
@@ -11053,7 +11071,9 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     inputs:
         ``_load_report_inputs``.
     date:
-        The date of the report's file name, written in the title line only.
+        The date of the report's file name, with its same-day ordinal when
+        it has one (``2026-11-02, report 2``; ``_report_date``), written in
+        the title line only.
 
     Returns
     -------
@@ -12088,14 +12108,15 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
 
 
 def _newest_report(reports_dir: Path) -> Path:
-    """The newest ``REPORT_NAME`` under ``reports_dir`` by the date in its name; stops naming the directory and the pattern."""
-    candidates = [(m.group(1), p) for p in reports_dir.glob("*") if (m := _REPORT_NAME_RE.match(p.name)) and p.is_file()]
+    """The newest report under ``reports_dir`` by the date in its name, then by its same-day ordinal (a name without one counts as 1; design D11 of ``adni-report-scale-variants``); stops naming the directory and both patterns."""
+    candidates = [
+        (m.group(1), int(m.group(2) or 1), p) for p in reports_dir.glob("*") if (m := _REPORT_NAME_RE.match(p.name)) and p.is_file()
+    ]
     if not candidates:
         raise FileNotFoundError(
-            f"{reports_dir} holds no report matching {REPORT_NAME.format(date='<YYYY-MM-DD>')}; pass --out or write one with "
-            "`adni-sexdiff report`"
+            f"{reports_dir} holds no report matching {_REPORT_NAME_PATTERNS}; pass --out or write one with `adni-sexdiff report`"
         )
-    return max(candidates)[1]
+    return max(candidates)[2]
 
 
 def run_report(
@@ -12164,9 +12185,15 @@ def run_report(
         files and the top rank's diagnostics' six. The sweep is required.
     out:
         The report path, whose name must match ``constants.REPORT_NAME``
-        (``reports/motco-adni-<date>.md``); the date is read from it. Write
-        mode defaults to today's date; ``check`` to the newest report under
-        ``constants.REPORTS_DIR`` by the date in its name.
+        (``reports/motco-adni-<date>.md``) or, for a later report of the
+        same day, ``constants.REPORT_NAME_SAME_DAY``
+        (``reports/motco-adni-<date>-<n>.md``, n 2 or more; change
+        ``adni-report-scale-variants``); the date and the ordinal are read
+        from it and printed in the title line. Write mode defaults to
+        today's name without an ordinal and, when that file exists without
+        ``force``, stops naming the next free same-day name; ``check``
+        defaults to the newest report under ``constants.REPORTS_DIR`` by the
+        date in its name, then by its ordinal.
     check:
         Instead of writing, read the report at ``out``, run every gate,
         regenerate the report and compare every table cell by cell and every
@@ -12279,7 +12306,10 @@ def run_report(
         out_path = Path(out) if out is not None else reports_dir / REPORT_NAME.format(date=date_type.today().isoformat())
         date = _report_date(out_path)
         if out_path.exists() and not force:
-            raise FileExistsError(f"{out_path} exists; pass --force to replace it; nothing was written")
+            raise FileExistsError(
+                f"{out_path} exists; pass --force to replace it, or --out {_next_same_day_name(out_path)} for a later report "
+                "of the same day; nothing was written"
+            )
     for variant in EXPORT_VARIANTS:
         if variant not in REPORT_EXPORT_VARIANTS:
             # the report's pin (design D6 of adni-nmr-all-columns): named here, never in the body

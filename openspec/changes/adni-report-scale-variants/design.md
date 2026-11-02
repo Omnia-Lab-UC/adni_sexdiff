@@ -40,7 +40,7 @@ See `proposal.md` for the motivation and scope, and `specs/case-study-report/spe
   - `reports/motco-adni-2026-10-29.md`: eleven sections, committed at c94f5e7;
   - `reports/motco-adni-2026-10-28.md`: ten sections, committed at 36c9cc8.
 
-  Today is 2026-11-02, so a report written today would take the name of an existing file.
+  Today is 2026-11-02, so a report written today would take the name of an existing file: `REPORT_NAME` (`_REPORT_NAME_RE`) admits one name per day, and `_newest_report` orders the reports by that date alone.
 
 ## Goals / Non-Goals
 
@@ -144,10 +144,24 @@ See `proposal.md` for the motivation and scope, and `specs/case-study-report/spe
 - **Determinism.** Two `--force` runs are byte-identical. A run to another date differs in the title line only.
 - **Audit.** An audit hook over `run_report` lists 145 files opened under `results/`, equal to `REPORT_INPUT_FILES`, none ignored by git.
 
-**D10. The report written at the apply.** This follows the user's rule for the previous report changes.
-- **Date.** The report is written on the clean tree at the implementing commit, on 2026-11-03 or later, and named by the day it is written: `report` without `--out` uses today's date.
-- **Name.** `reports/motco-adni-2026-11-02.md` is never overwritten, and no `--force` is used on a committed report.
+**D10. The report written at the apply, under a same-day name** (the user's choice on 2026-11-02, after the implementation was committed).
+- **Date.** The report is written on 2026-11-02, the day the change is implemented, on the clean tree at the commit of the naming change (D11).
+- **Name.** `reports/motco-adni-2026-11-02-2.md`, the day's second report, passed with `--out`. This reverses the user's rule of 2026-10-29 against same-day ordinal names. `reports/motco-adni-2026-11-02.md` is never overwritten, and no `--force` is used on a committed report.
 - **Record.** Its counts (sections, tables, cells, links, bytes) go in `tasks.md`.
+- *Alternatives declined by the user:*
+  - wait for 2026-11-03 and name the report by that day, the rule of the previous report changes;
+  - merge without the report and write it the next day as a follow-up commit, leaving `main` overnight with a newest report that `--check` stops on as an earlier layout;
+  - replace the 2026-11-02 report with `--force`. That rewrites a committed report, which the variant gate, the docs and the spec name as an earlier layout that checks at 28e0d48.
+
+**D11. A later report of a day is named with an ordinal.**
+- **Name.** `motco-adni-<date>-<n>.md` (`REPORT_NAME_SAME_DAY`, a convention), n an integer of 2 or more without a leading zero. A name without an ordinal is the day's first report, so every committed name stays valid and checks as before. `-1` is refused: the first report carries no ordinal.
+- **Title.** The title line carries the ordinal: `… — 2026-11-02, report 2`. The date and the ordinal appear in the name and the title only, so the body still depends on the inputs and the name only.
+- **Selection.** `--check` without `--out` reads the newest report by its date, then by its ordinal; a name without one counts as 1.
+- **Write mode.** Without `--out` it still uses today's name without an ordinal. When that file exists and `--force` is not given, it stops naming the next free same-day name to pass with `--out`. No ordinal is chosen automatically, so a rerun never adds a report silently.
+- **Body.** The reproduction sentence "`report --check` reads the newest `reports/motco-adni-<date>.md`" stays as written, so the five changed lines of D7 hold. The rule for a same-day name is stated in `README.md`, `AGENTS.md` and the `--out` help.
+- **Constant.** `REPORT_NAME_SAME_DAY = "motco-adni-{date}-{n}.md"` is tied to `REPORT_NAME` by an import-time assertion. It is a convention, not a scientific constant.
+- **Verification.** Accepted and refused names (`-2` and `-10`; `-1`, `-02`, `-0` and a name without a date); the title of a `-2` render and its byte-equality with the scratch render of task 2.5 apart from line 1; the newest selection among the five committed reports and a `-2` render; the existing-file message (`-2`, then `-3`); the earlier-layout gates of task 3.1 unchanged.
+- *Alternatives:* a letter suffix (`2026-11-02b`), which runs out after `z` and reads as part of the date; a time in the name, which makes the name depend on the run rather than the day.
 
 ## Risks / Trade-offs
 
@@ -161,7 +175,7 @@ See `proposal.md` for the motivation and scope, and `specs/case-study-report/spe
 - **[`n/a` cells in the counts table]** `scale.median_below_offset.*` prints `n/a` for `raw_scale` and `glog`, which have no offset to compare. → Accepted: the table copies the predeclared keys, and the variants' "Export variant" lines say what the offset is. An explanatory sentence would change the paragraph the first two groups share (Non-Goals).
 - **[`_GROUP_PRIMARY_ONLY_RULE` duplicates a rule number]** A renumbered `SCALE_VARIANT_READING_RULES` would leave it stale. → The rules are decided constants that no result changes. The string gate of D9 compares the lead's citation with the rule list.
 - **[Report length]** It grows from 241526 bytes to about 324 KB. → Most of the growth is the three variants' diagnostics tables, the 66 chain links and the 39 inputs. Their `stage_means.csv` and `pls_loadings.csv` stay quoted by hash.
-- **[The apply spans two days]** The report waits for 2026-11-03. → Accepted, as before. The implementation commit and every verification can be done before then.
+- **[Two reports carry the date 2026-11-02]** → The ordinal is in the name and the title line (D11), `--check` reads the `-2` report as the newest, and the 2026-11-02 report stays an earlier layout that checks at 28e0d48.
 - **[The 2026-11-02 report is not checkable by the new code]** → The variant gate says so and names 28e0d48, where it checks (D9).
 
 ## Migration Plan
@@ -169,7 +183,7 @@ See `proposal.md` for the motivation and scope, and `specs/case-study-report/spe
 1. Branch `adni-report-scale-variants` from `main` (bf3f773).
 2. Extend the pin, write the plural primary-only clause, the rank list and the preamble, and verify on the committed tree as D7 and D9 describe.
 3. Update `README.md`, `AGENTS.md` and the docstrings, then commit the implementation.
-4. On 2026-11-03 or later, write `reports/motco-adni-<date>.md` on the clean tree at the implementing commit, run `report --check`, and commit the report alone.
+4. Implement and verify the same-day name (D11), update the docs, and commit. Then write `reports/motco-adni-2026-11-02-2.md` on the clean tree at that commit (D10), run `report --check`, and commit the report alone.
 5. Archive the change on the branch, then push, open the PR and merge.
 
 Rollback: revert the branch. The committed results are untouched, and the five earlier reports stay checkable at their own revisions.

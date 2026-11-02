@@ -198,8 +198,15 @@ DIAGNOSTICS_GEOMETRY_SHARES = "geometry_shares.csv"
 DIAGNOSTICS_COMPONENTS = "components.csv"
 DIAGNOSTICS_SUMMARY = "diagnostics.md"
 DIAGNOSTICS_MANIFEST = "diagnostics_manifest.json"
-#: ``report``: ``<REPORTS_DIR>/motco-adni-<date>.md``.
+#: ``report``: ``<REPORTS_DIR>/motco-adni-<date>.md``, named by the day it is
+#: written; a later report of the same day takes an ordinal, 2 or more
+#: (``REPORT_NAME_SAME_DAY``; change ``adni-report-scale-variants``, design
+#: D11), so no report is written over a committed one.
 REPORT_NAME = "motco-adni-{date}.md"
+REPORT_NAME_SAME_DAY = "motco-adni-{date}-{n}.md"
+assert REPORT_NAME_SAME_DAY == REPORT_NAME.replace("{date}", "{date}-{n}"), (
+    "REPORT_NAME_SAME_DAY must be REPORT_NAME with the ordinal after the date"
+)
 
 # --- Controlled access -----------------------------------------------------
 

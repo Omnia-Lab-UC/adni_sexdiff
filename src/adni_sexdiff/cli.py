@@ -33,6 +33,7 @@ from .constants import (
     RANK_SENSITIVITY_SUBDIRS,
     REPORT_EXPORT_VARIANTS,
     REPORT_NAME,
+    REPORT_NAME_SAME_DAY,
     REPORTED_N_JOBS,
     REPORTS_DIR,
     STAGE_SENSITIVITY_DIR,
@@ -293,8 +294,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--out", type=Path, default=None,
-        help=f"Report path, named {REPORT_NAME.format(date='<date>')}; the date is read from the name (default: "
-        f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there)",
+        help=f"Report path, named {REPORT_NAME.format(date='<date>')}, or {REPORT_NAME_SAME_DAY.format(date='<date>', n='<n>')} "
+        f"(<n> 2 or more) for a later report of the same day; the date and the ordinal are read from the name (default: "
+        f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there by date, then ordinal)",
     )
     p.add_argument(
         "--check", action="store_true",

@@ -7,9 +7,9 @@ This change introduces no scientific constant. While this proposal was written, 
 - `SCALE_VARIANT_READING_RULES` is printed after `NMR_MEMBERSHIP_READING_RULES`, the fifth of seven lists (design D6);
 - the preamble names this change (design D8).
 
-Following the user's rule for the previous reports, the report is written on 2026-11-03 or later, named by the day it is written, and never over the 2026-11-02 file (design D10).
+On 2026-11-02, after the implementation was committed (task 4.1), the user chose a same-day name for this change's report, so it is written the day the change is implemented: `reports/motco-adni-2026-11-02-2.md`, never over the 2026-11-02 file (design D10, D11). This reverses the user's rule of 2026-10-29 against same-day ordinal names; tasks 4.2 to 4.4 add the name.
 
-Every task runs on any machine with the Nix shell and the committed tree. The inputs are the tracked files under `results/`. No data root, data machine or participant-level file is needed, and the step records no numerics. Scratch copies and scratch outputs live in the session scratchpad, never under `results/` or `reports/`, except in task 4.2. No task line records a participant value.
+Every task runs on any machine with the Nix shell and the committed tree. The inputs are the tracked files under `results/`. No data root, data machine or participant-level file is needed, and the step records no numerics. Scratch copies and scratch outputs live in the session scratchpad, never under `results/` or `reports/`, except in task 4.5. No task line records a participant value.
 
 ## 1. The pin
 
@@ -137,15 +137,30 @@ Every task runs on any machine with the Nix shell and the committed tree. The in
 ## 4. The report and commit hygiene
 
 - [x] 4.1 Commit the implementation, the docs and the change's artifacts on the branch `adni-report-scale-variants`, created from `main` (bf3f773). Verify that `git status` is clean and that no file under `results/` or `reports/` changed. (Committed on 2026-11-02 on `adni-report-scale-variants`, from bf3f773 after the proposal commit 80307ed; `git status` clean after it; the commit touches `src/adni_sexdiff/constants.py`, `src/adni_sexdiff/data.py`, `README.md`, `AGENTS.md` and the change's `tasks.md` only, and `git diff --name-only main..HEAD -- results reports` is empty.)
-- [ ] 4.2 Only once `date +%F` is later than 2026-11-02 (design D10), on the clean tree at the implementing commit:
-  - run `uv run adni-sexdiff report` (no `--out`, so it is named by today's date), then `uv run adni-sexdiff report --check`;
+- [x] 4.2 Allow a later report of the same day (design D11): `REPORT_NAME_SAME_DAY = "motco-adni-{date}-{n}.md"` in `constants.py`, tied to `REPORT_NAME` by an import-time assertion; `_REPORT_NAME_RE` with the optional ordinal (n of 2 or more, no leading zero); `_report_date` giving the title's `<date>, report <n>`; `_newest_report` ordering by date, then ordinal (a name without one counts as 1); write mode's existing-file message naming the next free same-day name; the `--out` help of `report`. Verify on the committed tree, in the scratchpad:
+  - `--out` names ending `2026-11-02-2.md` and `2026-11-02-10.md` are accepted; `2026-11-02-1.md`, `2026-11-02-02.md`, `2026-11-02-0.md` and `motco-adni-latest.md` stop the step naming the file and both patterns, exit 1, nothing written;
+  - a render to a scratch `motco-adni-2026-11-02-2.md` has the title line `… — 2026-11-02, report 2` and equals the scratch render of 2.5 (sha256 `57f1d2b4…` under the name 2026-11-03) apart from line 1;
+  - `_newest_report` picks `-10` over `-2` over the name without an ordinal, and a later date over any ordinal;
+  - from a scratch root holding the 175 tracked `results/` files and a `reports/` with copies of the five committed reports and the `-2` render, `report --check` without `--out` reads the `-2` render and passes;
+  - from a scratch root whose `reports/` holds today's report, `report` without `--out` stops naming the file, `--force` and `reports/motco-adni-<today>-2.md`, and with a `-2` file there too, `-3`; nothing is written;
+  - the five committed reports stop at the gates of 3.1 with the same messages.
+
+  Record the outcomes in this line. (Recorded on 2026-11-02 with the scratch script `check_same_day.py`, 0 defects: `-2` and `-10` written, their title lines ending `— 2026-11-02, report 2` and `— 2026-11-02, report 10`; `-1`, `-02`, `-0` and `motco-adni-latest.md` stop with "the report's name must match motco-adni-<YYYY-MM-DD>.md or, for a later report of the same day, motco-adni-<YYYY-MM-DD>-<n>.md with <n> 2 or more", exit 1, nothing written; the `-2` render (sha256 `5018d222551089c9c707a72fa112851baf35d8f7c210e1a4036841defc4e4507`) has 2583 lines and differs from the render of 2.5 in line 1 only; `_newest_report` picks `2026-11-02-10` over `-2`, the name without an ordinal and `2026-11-01-5`, then `2026-11-03` over all of them, and ignores `-1`; from a scratch root with the 175 tracked files and the five committed reports beside the `-2` render, `report --check` without `--out` reads `reports/motco-adni-2026-11-02-2.md` ("date 2026-11-02, report 2 from its name") and compares 106 tables, 7182 cells and 1194 other lines with no mismatch; with today's report present, `report` without `--out` stops with "pass --force to replace it, or --out reports/motco-adni-2026-11-02-2.md for a later report of the same day", and `-3` once `-2` exists, writing nothing; the five committed reports stop with the messages of 3.1, byte-unchanged.)
+- [x] 4.3 Update the docs for the name:
+  - `README.md` and `AGENTS.md` (step 6 and the Layout entry for `constants.py`): the same-day name, the title's ordinal, write mode's default and `--check`'s newest report;
+  - the docstrings of `_report_date`, `_newest_report`, `render_report` (`date`) and `run_report` (`out`), and the comment of `REPORT_NAME_SAME_DAY`.
+
+  Verify with `grep` that no doc still says a report is named `motco-adni-<date>.md` only. (Verified on 2026-11-02: every mention of `motco-adni-<date>.md` in `README.md`, `AGENTS.md` and `src/` goes on to the same-day name `motco-adni-<date>-<n>.md`, and `--check`'s default is "by the date in its name, then by its ordinal" in both files, the `--out` help and the `run_report` docstring; the one exception is the report body's reproduction sentence, which design D11 keeps as written.)
+- [x] 4.4 Commit the naming change, its docs and the revised artifacts on the branch. Verify that `git status` is clean and that no file under `results/` or `reports/` changed. (Committed on 2026-11-02 on `adni-report-scale-variants` after 57dea69; `git status` clean after it; the commit touches `src/adni_sexdiff/constants.py`, `src/adni_sexdiff/data.py`, `src/adni_sexdiff/cli.py`, `README.md`, `AGENTS.md` and the change's four artifacts only, and `git diff --name-only main..HEAD -- results reports` is empty.)
+- [ ] 4.5 On the clean tree at the commit of 4.4 (design D10):
+  - run `uv run adni-sexdiff report --out reports/motco-adni-2026-11-02-2.md`, then `uv run adni-sexdiff report --check` (no `--out`);
   - verify the check passes and reads the new report as the newest;
-  - verify that the new report equals the scratch render of 2.5 apart from its title line;
+  - verify that the new report equals the `-2` render of 4.2;
   - verify that `grep -nE '\bRID\b|\brid\b'` over the new report hits only column-name mentions;
   - verify that the five earlier reports are byte-unchanged.
 
   Commit the new report alone, and record its name, sections, tables, cells, chain links and size in this line.
-- [ ] 4.3 Check commit hygiene. Verify that:
+- [ ] 4.6 Check commit hygiene. Verify that:
   - `git status` is clean;
   - `git ls-files results` lists the same 175 files as `main`;
   - no file under `results/` changed in any commit of the branch;

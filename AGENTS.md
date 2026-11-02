@@ -560,9 +560,15 @@ implemented by its own OpenSpec change, in order.
    8 per rank against the primary export and the primary as `reference`,
    15 for the comparison against the primary, every rank's two files and
    the primary export, 4 for the top rank's diagnostics). Writes
-   `reports/motco-adni-<date>.md` (the date from the file name, in the
-   title line only; an existing file stops it unless `--force`; staged as
-   `<out>.tmp`, parsed back and renamed): the thirteen sections of
+   `reports/motco-adni-<date>.md` by the day it is written, or
+   `reports/motco-adni-<date>-<n>.md` (`<n>` 2 or more,
+   `REPORT_NAME_SAME_DAY`, change `adni-report-scale-variants`) for a later
+   report of the same day (the date and the ordinal from the file name, in
+   the title line only, `… — 2026-11-02, report 2`; any other name stops
+   it; write mode without `--out` uses today's name without an ordinal and
+   never picks one; an existing file stops it unless `--force`, naming the
+   next free same-day name; staged as `<out>.tmp`, parsed back and
+   renamed): the thirteen sections of
    `REPORT_SECTIONS` (summary; provenance, the report's manifest with the
    QC archives and NIST workbooks; cohort; export; primary analysis; axis
    diagnostics of the primary; latent-adjustment sensitivity; export
@@ -615,7 +621,8 @@ implemented by its own OpenSpec change, in order.
    sweep, the primary's status the result in every table;
    the body depends on the inputs and the file name only, so two runs are
    byte-identical. With `--check` (default: the newest report under
-   `reports/` by the date in its name) it first compares the report's
+   `reports/` by the date in its name, then by its same-day ordinal) it
+   first compares the report's
    level-2 headings with `REPORT_SECTIONS`, then the export variants it
    lists (its headings ``Export variant `<name>` `` in "Export
    sensitivity", in order) with `REPORT_EXPORT_VARIANTS` (change
@@ -881,7 +888,10 @@ behavior or defaults change.
   assertion ties its keys to `RANK_SENSITIVITY_SUBDIRS`),
   `REPORT_INPUT_FILES` keyed by directory role with one role per variant
   subdirectory, per arm subdirectory, per rank of the ladder and per sweep
-  subdirectory, `REPORT_SECTIONS` with thirteen titles; no scientific
+  subdirectory, `REPORT_SECTIONS` with thirteen titles, the name of a
+  later report of the same day `REPORT_NAME_SAME_DAY` (tied to
+  `REPORT_NAME` by an import-time assertion, change
+  `adni-report-scale-variants`); no scientific
   constant, changes `adni-report`, `adni-report-variants`,
   `adni-report-stage-arm` and `adni-report-rank-sweep`; the pin
   `REPORT_EXPORT_VARIANTS`, the variants the report covers, a subsequence of
@@ -998,7 +1008,8 @@ behavior or defaults change.
   `results/motco_rank_sensitivity/` holds `rank_02/` … `rank_12/` (each
   laid out as `results/motco_analysis/`), `comparison/` and
   `diagnostics/`.
-- `reports/` – committed case-study reports (`motco-adni-<date>.md`),
+- `reports/` – committed case-study reports (`motco-adni-<date>.md`, a
+  later report of the same day `motco-adni-<date>-<n>.md`),
   generated in full by `report` from the aggregate outputs (every number
   copied, every sentence a constant or a renderer's) and checked by
   `report --check`; aggregate, no participant identifier.
