@@ -32,7 +32,7 @@ The report SHALL quote the decision's verdict, its size sentence, its per-statis
 
 #### Scenario: No sensitivity reread
 - **WHEN** the sensitivity sections of the report are compared with those generated before this change on the same inputs
-- **THEN** their tables and lines are unchanged except for section numbers in cross-references, and no line outside the summary, the operating-characteristics section and the reading-rules section names the measurement
+- **THEN** their tables and lines are unchanged except for section numbers in cross-references, and no line of a sensitivity section names the measurement
 
 ## MODIFIED Requirements
 
