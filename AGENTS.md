@@ -53,9 +53,14 @@ files only and runs on any clone; the reports are committed under
 primary, the latent arm, the six export variants (the two p180 variants
 under `EXPORT_VARIANT_READING_RULES`, `nmr_all_columns` under
 `NMR_MEMBERSHIP_READING_RULES`, the three scale variants under
-`SCALE_VARIANT_READING_RULES`), the CN / LMCI / AD arm and the rank sweep
-(the reports of 2026-10-28, 2026-10-29, 2026-10-30, 2026-10-31 and
-2026-11-02, of earlier layouts, cover fewer). The cluster copy and clone do not exist yet. A data machine is
+`SCALE_VARIANT_READING_RULES`), the CN / LMCI / AD arm and the rank sweep,
+and since `adni-operating-characteristics` it quotes MOTCO's size and power
+at this design in the section "Operating characteristics", read under
+`OPERATING_CHARACTERISTICS_READING_RULES` beside `READING_RULES`, for the
+primary only; the newest is `reports/motco-adni-2026-11-02-3.md`, the
+default of `report --check` (the reports of 2026-10-28, 2026-10-29,
+2026-10-30, 2026-10-31, 2026-11-02 and 2026-11-02-2, of earlier layouts,
+cover fewer). The cluster copy and clone do not exist yet. A data machine is
 any of the user's machines whose
 local participant-level files under `results/` (the export CSVs,
 `cohort.csv`, the primary's `latent_scores.csv` and
@@ -78,7 +83,10 @@ diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 `EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
 `SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES`;
 `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`;
-`RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`); every
+`RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`), and, after
+every run, the measurement constants
+(`OPERATING_CHARACTERISTICS_READING_RULES`,
+`OPERATING_CHARACTERISTICS_SOURCE`); every
 constant the six steps and the four sensitivity steps need is decided (see
 "Flag and ask"). Each step is
 implemented by its own OpenSpec change, in order.

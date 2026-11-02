@@ -145,8 +145,8 @@ Every task runs on any machine with the Nix shell and the committed tree, plus a
 
 ## 5. The report
 
-- [ ] 5.1 Commit the implementation: constants, `data.py`, `cli.py`, the copy, `AGENTS.md`, `README.md` and the change's artifacts with tasks 1.1 to 4.2 recorded. Verify that `git status --short` is empty afterwards and that `git diff --stat main -- results` is empty.
-- [ ] 5.2 On the clean tree at that commit, write the report under the day's next free name:
+- [x] 5.1 Commit the implementation: constants, `data.py`, `cli.py`, the copy, `AGENTS.md`, `README.md` and the change's artifacts with tasks 1.1 to 4.2 recorded. Verify that `git status --short` is empty afterwards and that `git diff --stat main -- results` is empty. (Verified on 2026-11-02: committed as 7a2d212, with the copy as the one added file (MOTCO's synthetic decision, aggregate); `git status --short` empty afterwards and `git diff --stat main -- results` empty.)
+- [x] 5.2 On the clean tree at that commit, write the report under the day's next free name:
   - `uv run adni-sexdiff report --out reports/motco-adni-<date>[-<n>].md`, `motco-adni-2026-11-02-3.md` if on 2026-11-02, never over an existing file (design D8);
   - then `uv run adni-sexdiff report --check` without `--out`, which reads it as the newest report.
 
@@ -155,13 +155,13 @@ Every task runs on any machine with the Nix shell and the committed tree, plus a
   - `grep -nE "\bRID\b|PTID|[0-9]{3}_S_[0-9]{4}"` on the report finds no identifier;
   - the tables, cells and bytes are recorded in this line.
 
-  Commit the report alone.
-- [ ] 5.3 Update the status paragraph of `AGENTS.md` and `README.md`: the change, the report's name, and the newest report as the default of `--check`. Verify:
+  Commit the report alone. (Recorded on 2026-11-02 on the clean tree at 7a2d212: `report --out reports/motco-adni-2026-11-02-3.md` wrote 14 sections, 112 tables, 7501 cells, parsed back equal; `report --check` without `--out` read it as the newest report (`date 2026-11-02, report 3 from its name`) and compared 112 tables, 7501 cells and 1250 other lines, no mismatch, exit 0; the identifier grep finds nothing; 340,094 bytes, sha256 `d8b68ef6a30c2253969dcacb9f332b6fe2bfafb546fd56af5d98dc623ac875dc`, byte-identical to the scratch report of tasks 3.1 to 3.5. Committed alone as 9779964.)
+- [x] 5.3 Update the status paragraph of `AGENTS.md` and `README.md`: the change, the report's name, and the newest report as the default of `--check`. Verify:
   - `git diff --stat main` lists only `src/`, `references/`, `reports/`, `AGENTS.md`, `README.md` and `openspec/`;
   - `.gitignore`, `scripts/sync_results.sh` and `PARTICIPANT_LEVEL_PATTERNS` are unchanged;
   - every task line records its outcome.
 
-  Commit the task records.
+  Commit the task records. (Verified on 2026-11-02: the status paragraphs of `AGENTS.md` and `README.md` name the change, the section "Operating characteristics", `reports/motco-adni-2026-11-02-3.md` as the newest report and the default of `report --check`, the 2026-11-02-2 report among the earlier layouts and the two measurement constants among the decided ones; the README's layout tree gains `references/`. `git diff --stat main` lists only `src/`, `references/`, `reports/`, `AGENTS.md`, `README.md` and `openspec/`; `.gitignore`, `scripts/sync_results.sh`, `PARTICIPANT_LEVEL_PATTERNS` and `AGGREGATE_EXCEPTIONS` are unchanged; every task line records its outcome.)
 
 ## Workflow follow-up
 

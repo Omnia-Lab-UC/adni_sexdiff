@@ -13,8 +13,8 @@ layers (lipidomics, proteomics, methylation) may be added as separate blocks.
 `adni-nist-bridge`, `adni-report`, `adni-report-variants`,
 `adni-stage-sensitivity`, `adni-report-stage-arm`,
 `adni-rank-sensitivity`, `adni-report-rank-sweep`, `adni-nmr-all-columns`,
-`adni-report-nmr-all-columns`, `adni-scale-variants` and
-`adni-report-scale-variants`); every step but `report` runs on a data
+`adni-report-nmr-all-columns`, `adni-scale-variants`,
+`adni-report-scale-variants` and `adni-operating-characteristics`); every step but `report` runs on a data
 machine, `report` on any clone (it reads committed aggregate files only),
 and the reports are committed under `reports/` and checked by
 `report --check`; since `adni-report-scale-variants` a report covers the
@@ -22,9 +22,15 @@ primary, the latent arm, the six export variants (the two p180 variants,
 `nmr_all_columns`, all 245 cleaned NMR columns in the block, and the three
 scale variants `raw_scale`, `log2_plus_one` and `glog`, both blocks on the
 raw scale, `log2(x + 1)` or the generalized log; each group read under its
-own rule set), the CN / LMCI / AD arm and the rank sweep (the reports of
-2026-10-28, 2026-10-29, 2026-10-30, 2026-10-31 and 2026-11-02, of earlier
-layouts, cover fewer).
+own rule set), the CN / LMCI / AD arm and the rank sweep, and since
+`adni-operating-characteristics` it quotes MOTCO's size and power at this
+design (section "Operating characteristics", read under
+`OPERATING_CHARACTERISTICS_READING_RULES` beside `READING_RULES`; a
+non-rejection of `delta`, `angle` or `shape` in the primary is measured as
+uninformative). The newest report is `reports/motco-adni-2026-11-02-3.md`,
+the default of `report --check` (the reports of 2026-10-28, 2026-10-29,
+2026-10-30, 2026-10-31, 2026-11-02 and 2026-11-02-2, of earlier layouts,
+cover fewer).
 The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
 `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis
@@ -37,7 +43,10 @@ diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 `EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
 `SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES`; `STAGE_SENSITIVITY_ARM`,
 `STAGE_SENSITIVITY_READING_RULES`; `RANK_SENSITIVITY_LADDER`,
-`RANK_SENSITIVITY_READING_RULES`); every constant the six steps and the
+`RANK_SENSITIVITY_READING_RULES`), and, decided after every run because
+they read MOTCO's measurement at this design, the measurement constants
+(`OPERATING_CHARACTERISTICS_READING_RULES`,
+`OPERATING_CHARACTERISTICS_SOURCE`); every constant the six steps and the
 four sensitivity steps need is decided.
 `AGENTS.md` holds the conventions and the hard constraints and is the single
 source of truth.
@@ -81,6 +90,7 @@ Project layout:
 ```
 .
 ├── data/            # raw ADNI files, uploaded by hand: LONI archive under Metabolomics/, clinical tables under Clinical/, the names the steps read as symlinks (gitignored)
+├── references/      # committed third-party aggregate files the report cites: motco_adni_design/adni_design_decision.json, MOTCO's operating-characteristics decision copied byte for byte at the pinned commit (no pipeline output; not synced)
 ├── reports/         # committed case-study reports, generated in full by `report` from the aggregate outputs and checked by `report --check`
 ├── results/         # pipeline outputs; only aggregate files are committed (see .gitignore)
 ├── scripts/         # sync_results.sh (aggregate outputs between a machine and the cluster), clean.sbatch and analyze.sbatch (clean and analyze on the cluster), spike_*_inventory.py, spike_nist_bridge.py, spike_stage_arm.py and spike_nmr_all_columns.py (the changes' read-only spikes)
