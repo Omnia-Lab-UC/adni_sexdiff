@@ -152,21 +152,21 @@ Every task runs on any machine with the Nix shell and the committed tree. The in
 
   Verify with `grep` that no doc still says a report is named `motco-adni-<date>.md` only. (Verified on 2026-11-02: every mention of `motco-adni-<date>.md` in `README.md`, `AGENTS.md` and `src/` goes on to the same-day name `motco-adni-<date>-<n>.md`, and `--check`'s default is "by the date in its name, then by its ordinal" in both files, the `--out` help and the `run_report` docstring; the one exception is the report body's reproduction sentence, which design D11 keeps as written.)
 - [x] 4.4 Commit the naming change, its docs and the revised artifacts on the branch. Verify that `git status` is clean and that no file under `results/` or `reports/` changed. (Committed on 2026-11-02 on `adni-report-scale-variants` after 57dea69; `git status` clean after it; the commit touches `src/adni_sexdiff/constants.py`, `src/adni_sexdiff/data.py`, `src/adni_sexdiff/cli.py`, `README.md`, `AGENTS.md` and the change's four artifacts only, and `git diff --name-only main..HEAD -- results reports` is empty.)
-- [ ] 4.5 On the clean tree at the commit of 4.4 (design D10):
+- [x] 4.5 On the clean tree at the commit of 4.4 (design D10):
   - run `uv run adni-sexdiff report --out reports/motco-adni-2026-11-02-2.md`, then `uv run adni-sexdiff report --check` (no `--out`);
   - verify the check passes and reads the new report as the newest;
   - verify that the new report equals the `-2` render of 4.2;
   - verify that `grep -nE '\bRID\b|\brid\b'` over the new report hits only column-name mentions;
   - verify that the five earlier reports are byte-unchanged.
 
-  Commit the new report alone, and record its name, sections, tables, cells, chain links and size in this line.
-- [ ] 4.6 Check commit hygiene. Verify that:
+  Commit the new report alone, and record its name, sections, tables, cells, chain links and size in this line. (Recorded on 2026-11-02 on the clean tree at 92758e3: `report --out reports/motco-adni-2026-11-02-2.md` wrote 13 sections, 106 tables and 7182 cells, parsed back equal, from 145 inputs over 255 chain links, 323819 bytes, sha256 `5018d222551089c9c707a72fa112851baf35d8f7c210e1a4036841defc4e4507`, equal to the `-2` render of 4.2; `report --check` without `--out` read it as the newest ("date 2026-11-02, report 2 from its name") and compared 106 tables, 7182 cells and 1194 other lines with no mismatch, exit 0; the identifier grep hits 31 column-name lines (the export bullet and 30 `--sample-col rid`); the five earlier reports byte-unchanged. Committed alone as 67567e2.)
+- [x] 4.6 Check commit hygiene. Verify that:
   - `git status` is clean;
   - `git ls-files results` lists the same 175 files as `main`;
   - no file under `results/` changed in any commit of the branch;
   - over every file the branch adds or changes, the identifier grep finds only column names (`RID`, `rid`), never a participant value.
 
-  Record the files the branch adds or changes in this line.
+  Record the files the branch adds or changes in this line. (Recorded on 2026-11-02 at 67567e2: `git status` clean; `git ls-files results` lists the same 175 files as `main`; no commit of the branch touches `results/`. The branch changes `AGENTS.md`, `README.md`, `src/adni_sexdiff/cli.py`, `src/adni_sexdiff/constants.py` and `src/adni_sexdiff/data.py`, and adds the change's five files under `openspec/changes/adni-report-scale-variants/` and `reports/motco-adni-2026-11-02-2.md`. Over every one of them the identifier grep finds column and code names only (`RID`, `rid`, `PARTICIPANT_ID_COLUMN`, `--sample-col rid`); of the lines the branch adds outside `reports/`, two mention them, both in this file's records, as column names.)
 
 ## Workflow follow-up
 
