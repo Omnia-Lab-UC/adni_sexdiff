@@ -106,13 +106,14 @@ Scientific constants
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
     report extended to every export variant), ``adni-report-stage-arm``
     (the report extended to the CN / LMCI / AD arm),
-    ``adni-report-rank-sweep`` (the report extended to the rank sweep) and
+    ``adni-report-rank-sweep`` (the report extended to the rank sweep),
     ``adni-report-nmr-all-columns`` (``nmr_all_columns`` added to
-    ``REPORT_EXPORT_VARIANTS``, so the report covers every registered
-    variant) introduce no scientific constant: their conventions
-    ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
-    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 106
-    with the three variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD
+    ``REPORT_EXPORT_VARIANTS``) and ``adni-report-scale-variants``
+    (``raw_scale``, ``log2_plus_one`` and ``glog`` added to it, so the report
+    covers every registered variant) introduce no scientific constant: their
+    conventions ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 145
+    with the six variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD
     arm and the rank sweep) and
     ``REPORT_SECTIONS`` (the report's thirteen section titles, in order) are
     defined below, and the report quotes every setting by constant name from
@@ -197,8 +198,15 @@ DIAGNOSTICS_GEOMETRY_SHARES = "geometry_shares.csv"
 DIAGNOSTICS_COMPONENTS = "components.csv"
 DIAGNOSTICS_SUMMARY = "diagnostics.md"
 DIAGNOSTICS_MANIFEST = "diagnostics_manifest.json"
-#: ``report``: ``<REPORTS_DIR>/motco-adni-<date>.md``.
+#: ``report``: ``<REPORTS_DIR>/motco-adni-<date>.md``, named by the day it is
+#: written; a later report of the same day takes an ordinal, 2 or more
+#: (``REPORT_NAME_SAME_DAY``; change ``adni-report-scale-variants``, design
+#: D11), so no report is written over a committed one.
 REPORT_NAME = "motco-adni-{date}.md"
+REPORT_NAME_SAME_DAY = "motco-adni-{date}-{n}.md"
+assert REPORT_NAME_SAME_DAY == REPORT_NAME.replace("{date}", "{date}-{n}"), (
+    "REPORT_NAME_SAME_DAY must be REPORT_NAME with the ordinal after the date"
+)
 
 # --- Controlled access -----------------------------------------------------
 
@@ -1955,10 +1963,19 @@ assert tuple(REPORT_RANK_SWEEP_FILES) == ("rank", *RANK_SENSITIVITY_SUBDIRS), (
 #: report's body unchanged; ``report`` names it on a progress line. The change
 #: that adds a variant to the report extends this tuple and re-issues the
 #: report: ``nmr_all_columns`` by the change ``adni-report-nmr-all-columns``
-#: (design D1), so every registered variant is covered. ``report --check``
-#: compares it with the variants a report lists (its ``Export variant``
-#: headings), and a report of an earlier pin is an earlier layout.
-REPORT_EXPORT_VARIANTS: tuple[str, ...] = ("nist_bridge", "per_run_standardized", "nmr_all_columns")
+#: (design D1), ``raw_scale``, ``log2_plus_one`` and ``glog`` by the change
+#: ``adni-report-scale-variants`` (design D1), so every registered variant is
+#: covered. ``report --check`` compares it with the variants a report lists
+#: (its ``Export variant`` headings), and a report of an earlier pin is an
+#: earlier layout.
+REPORT_EXPORT_VARIANTS: tuple[str, ...] = (
+    "nist_bridge",
+    "per_run_standardized",
+    "nmr_all_columns",
+    "raw_scale",
+    "log2_plus_one",
+    "glog",
+)
 assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIANTS] == list(REPORT_EXPORT_VARIANTS), (
     "REPORT_EXPORT_VARIANTS must be a subsequence of EXPORT_VARIANTS, in registry order, each name once"
 )
@@ -1971,7 +1988,8 @@ assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIA
 #: the arm's analysis, the comparison and the arm's diagnostics), and, per
 #: variant of ``REPORT_EXPORT_VARIANTS`` in registry order (change
 #: ``adni-report-variants``; the pin, change ``adni-nmr-all-columns``; its
-#: third variant, change ``adni-report-nmr-all-columns``), the
+#: third variant, change ``adni-report-nmr-all-columns``; the three scale
+#: variants, change ``adni-report-scale-variants``), the
 #: roles ``export-sensitivity/<variant>/<subdir>``
 #: of ``--export-sensitivity-dir`` (``EXPORT_SENSITIVITY_SUBDIRS`` in its
 #: order: the bridge table for a variant with hook ``factors``, the variant
@@ -1984,9 +2002,11 @@ assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIA
 #: in ladder order, named by ``RANK_SENSITIVITY_RANK_DIR``) and
 #: ``rank-sensitivity/<subdir>`` of ``--rank-sensitivity-dir`` (change
 #: ``adni-report-rank-sweep``; ``RANK_SENSITIVITY_SUBDIRS`` in its order, the
-#: files of ``REPORT_RANK_SWEEP_FILES``). All 106 are aggregate and committed
+#: files of ``REPORT_RANK_SWEEP_FILES``). All 145 are aggregate and committed
 #: (93 before ``adni-report-nmr-all-columns`` added the 13 of
-#: ``nmr_all_columns``, which has no bridge table);
+#: ``nmr_all_columns``, which has no bridge table, and 106 before
+#: ``adni-report-scale-variants`` added the 13 of each scale variant, which
+#: have none either);
 #: no participant-level file is read, and the hashes the report quotes for
 #: one come from these manifests. No other file is read.
 REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {

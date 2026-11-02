@@ -17,8 +17,12 @@ The step SHALL read only the committed aggregate files of the pipeline, of the l
 - **THEN** the step stops naming the file and the `latent-sensitivity` command, and writes nothing
 
 #### Scenario: Variant inputs
-- **WHEN** the report runs with the three variants of `REPORT_EXPORT_VARIANTS`
-- **THEN** it reads, per variant in that order, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files, and for `nist_bridge` `bridge/nist_bridge.csv`: 40 files (14 for `nist_bridge`, 13 each for `per_run_standardized` and `nmr_all_columns`), beside the 26 of the primary and the arm
+- **WHEN** the report runs with the six variants of `REPORT_EXPORT_VARIANTS`
+- **THEN** it reads, per variant in that order, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files, and for `nist_bridge` `bridge/nist_bridge.csv`: 79 files (14 for `nist_bridge`, 13 each for `per_run_standardized`, `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`), beside the 26 of the primary and the arm
+
+#### Scenario: Scale variant input absent
+- **WHEN** `results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv` does not exist
+- **THEN** the step stops naming the file and the `export-sensitivity` command for `glog`, and writes nothing
 
 #### Scenario: Variant input absent
 - **WHEN** `results/motco_export_sensitivity/per_run_standardized/diagnostics/diagnostics_manifest.json` does not exist
@@ -34,7 +38,7 @@ The step SHALL read only the committed aggregate files of the pipeline, of the l
 
 #### Scenario: Rank sweep inputs
 - **WHEN** the report runs on the committed outputs
-- **THEN** it reads, under `results/motco_rank_sensitivity/`, per rank of `RANK_SENSITIVITY_LADDER` in ladder order the rank's `result.json`, `analysis_manifest.json` and `summary.md`, then the comparison's three files and the diagnostics' six files: 27 files, 106 in all
+- **THEN** it reads, under `results/motco_rank_sensitivity/`, per rank of `RANK_SENSITIVITY_LADDER` in ladder order the rank's `result.json`, `analysis_manifest.json` and `summary.md`, then the comparison's three files and the diagnostics' six files: 27 files, 145 in all
 
 #### Scenario: Rank sweep input absent
 - **WHEN** `results/motco_rank_sensitivity/rank_06/summary.md` does not exist
@@ -141,7 +145,7 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 
 #### Scenario: Export sensitivity section
 - **WHEN** the report is written on the committed outputs
-- **THEN** the export-sensitivity section holds, after a lead that names each group and its rule set, one group per rule set of the variants of `REPORT_EXPORT_VARIANTS`, in registry order: the run-handling group (`nist_bridge`, `per_run_standardized`) and the membership group (`nmr_all_columns`). Each group holds the statistics table with the primary row first and one row per variant of the group in registry order, each with its status; each variant's rank, floor and eigengap beside `angle`; the latent spaces of the primary and the group's variants; the run offset per block of the primary export and of each variant export of the group; each variant export's counts beside its predeclared ones; for `nist_bridge` the bridged metabolites per kit beside the predeclared counts and the unbridged metabolites; for `nmr_all_columns` its membership, the derived columns kept, the rule's columns against the primary's, the joint features, the block shares and the NMR shape counts; each variant's flagged diagnostic rows, components and block PCs; the first component against `phase` of the primary and the group's variants; and each variant analysis' `cli_equivalent`
+- **THEN** the export-sensitivity section holds, after a lead that names each group and its rule set, one group per rule set of the variants of `REPORT_EXPORT_VARIANTS`, in registry order: the run-handling group (`nist_bridge`, `per_run_standardized`), the membership group (`nmr_all_columns`) and the scale group (`raw_scale`, `log2_plus_one`, `glog`). Each group holds the statistics table with the primary row first and one row per variant of the group in registry order, each with its status; each variant's rank, floor and eigengap beside `angle`; the latent spaces of the primary and the group's variants; the run offset per block of the primary export and of each variant export of the group; each variant export's counts beside its predeclared ones; for `nist_bridge` the bridged metabolites per kit beside the predeclared counts and the unbridged metabolites; for `nmr_all_columns` its membership, the derived columns kept, the rule's columns against the primary's, the joint features, the block shares and the NMR shape counts; for each scale variant its transform and offset, the rule's floors recorded and not applied, its offset summary, and per block the shape counts and numerical rank of the primary export and of the variant; each variant's flagged diagnostic rows, components and block PCs; the first component against `phase` of the primary and the group's variants; and each variant analysis' `cli_equivalent`
 
 #### Scenario: Stage-definition sensitivity section
 - **WHEN** the report is written on the committed outputs
@@ -157,11 +161,15 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 
 #### Scenario: Export variant groups kept apart
 - **WHEN** the export-sensitivity section is parsed
-- **THEN** no table holds a variant of the run-handling group together with `nmr_all_columns`, every table of the membership group holds the primary and `nmr_all_columns` only, and the titles of the membership group's tables begin with `nmr_all_columns: `
+- **THEN** no table holds variants of two groups, every table of the membership group holds the primary and `nmr_all_columns` only, every table of the scale group holds the primary and scale variants only, the titles of the membership group's tables begin with `nmr_all_columns: `, and the titles of the scale group's shared tables begin with `raw_scale, log2_plus_one, glog: ` and those of a scale variant's diagnostics with its name
 
 #### Scenario: Variant export counts
 - **WHEN** a variant export's counts are reported beside its predeclared ones
 - **THEN** the table lists every key of its `EXPORT_VARIANT_EXPECTED_COUNTS` entry except `analysis`, the run offset and `diagnostics`, which the steps compare themselves, and holds no row whose every cell is `n/a`
+
+#### Scenario: Scale group counts
+- **WHEN** the scale group's counts table is written on the committed outputs
+- **THEN** it holds one column pair per scale variant (observed, expected) in registry order, the keys of the three entries in registry order, the shape counts and numerical ranks of each variant beside its predeclared ones, and the rows `scale.median_below_offset.*` with values for `log2_plus_one` and `n/a` for `raw_scale` and `glog`
 
 ### Requirement: Every number is pasted from the generated files
 Every number in the report SHALL be read from a record, a manifest or a CSV and formatted with the digits of the summary it belongs to (six significant digits for record values, p-values as recorded, counts as integers, correlations and shares as `diagnostics.md` prints them). The step SHALL compute no statistic, correlation, mean or count of its own.
@@ -189,6 +197,10 @@ Every number in the report SHALL be read from a record, a manifest or a CSV and 
 #### Scenario: Membership variant values equal their sources
 - **WHEN** the membership group's tables are compared with the `nmr_all_columns` `export_sensitivity.csv`, its export manifest, its `result.json` and its diagnostics CSVs
 - **THEN** every value equals its source at the printed digits, every row of its latent-space table equals the corresponding row of the committed `export_sensitivity.md`, every line of its "Export variant" block equals the corresponding line of that document, and no cell is derived by the step
+
+#### Scenario: Scale variant values equal their sources
+- **WHEN** the scale group's tables are compared with each scale variant's `export_sensitivity.csv`, export manifest, `result.json` and diagnostics CSVs
+- **THEN** every value equals its source at the printed digits, the primary's and each variant's column of the latent-space table equal the corresponding columns of that variant's committed `export_sensitivity.md`, every line of each "Export variant" block equals the corresponding line of that document, and no cell is derived by the step
 
 ### Requirement: Interpretive sentences are generated by rule
 Each reading sentence in the report SHALL be produced from the rejection statuses by the same code that writes `summary.md` and the comparison documents of the four sensitivities (`latent_sensitivity.md`, `export_sensitivity.md`, `stage_sensitivity.md`, `rank_sensitivity.md`), so that the sentences are string-equal across the documents. The report SHALL add no other interpretive sentence, and the primary's status SHALL be the result wherever a sensitivity appears.
@@ -237,16 +249,24 @@ Each reading sentence in the report SHALL be produced from the rejection statuse
 - **WHEN** `nmr_all_columns` is reported beside the p180 variants and the other sensitivities
 - **THEN** no status, sentence or table of the report compares `nmr_all_columns` with a p180 variant, the latent arm, the CN / LMCI / AD arm or a forced rank; a sentence or provenance table that lists several sensitivities, each beside the primary, compares none
 
+#### Scenario: Scale status wording
+- **WHEN** the primary and `glog` both leave `delta` unrejected
+- **THEN** the report marks the status `same` and states that the variant's non-rejection is no more informative than the primary's (scale rule 6), in the sentence the `glog` `export_sensitivity.md` prints
+
+#### Scenario: No reading of one scale variant against another
+- **WHEN** the three scale variants are reported in the scale group's shared tables
+- **THEN** the group's lead states that each variant is read against the primary only, never against another variant of the group (scale rule 8); each `angle` paragraph and each status bullet names the primary and one scale variant; and no status or sentence of the report compares two scale variants, or a scale variant with another export variant, the latent arm, the CN / LMCI / AD arm or a forced rank
+
 ### Requirement: Reading rules carried verbatim
-The report SHALL print `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, the rule set of each export variant group in registry order (`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`), `STAGE_SENSITIVITY_READING_RULES` and `RANK_SENSITIVITY_READING_RULES` verbatim in its reading-rules section. Beside every table that quotes a sensitivity it SHALL name that sensitivity's rules, each with `READING_RULES`.
+The report SHALL print `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, the rule set of each export variant group in registry order (`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`, `SCALE_VARIANT_READING_RULES`), `STAGE_SENSITIVITY_READING_RULES` and `RANK_SENSITIVITY_READING_RULES` verbatim in its reading-rules section. Beside every table that quotes a sensitivity it SHALL name that sensitivity's rules, each with `READING_RULES`.
 
 #### Scenario: Rules string-equal
-- **WHEN** the six numbered lists of the reading-rules section are compared with the constants
+- **WHEN** the seven numbered lists of the reading-rules section are compared with the constants
 - **THEN** each item is string-equal to its constant, in order
 
 #### Scenario: Variant tables name their rules
 - **WHEN** the summary and the export-sensitivity section quote a variant
-- **THEN** the text that leads the variant's group names `READING_RULES` and the group's rule set: `EXPORT_VARIANT_READING_RULES` for `nist_bridge` and `per_run_standardized`, `NMR_MEMBERSHIP_READING_RULES` for `nmr_all_columns`
+- **THEN** the text that leads the variant's group names `READING_RULES` and the group's rule set: `EXPORT_VARIANT_READING_RULES` for `nist_bridge` and `per_run_standardized`, `NMR_MEMBERSHIP_READING_RULES` for `nmr_all_columns`, `SCALE_VARIANT_READING_RULES` for `raw_scale`, `log2_plus_one` and `glog`
 
 #### Scenario: CN / LMCI / AD arm tables name their rules
 - **WHEN** the summary and the stage-definition section quote the CN / LMCI / AD arm
@@ -257,7 +277,7 @@ The report SHALL print `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`,
 - **THEN** the text that leads them names `READING_RULES` and `RANK_SENSITIVITY_READING_RULES`
 
 ### Requirement: Deterministic report body
-The report body SHALL depend only on the input files and the report's file name: the date SHALL appear in the file name and the title only, and no revision, host, time or runtime of the report run SHALL be written. Two runs on the same inputs to the same path SHALL be byte-identical.
+The report body SHALL depend only on the input files and the report's file name: the date, with its same-day ordinal when the name carries one, SHALL appear in the file name and the title only, and no revision, host, time or runtime of the report run SHALL be written. Two runs on the same inputs to the same path SHALL be byte-identical.
 
 #### Scenario: Rerun with force
 - **WHEN** `report --force` runs twice to the same `--out` on unchanged inputs
@@ -265,6 +285,10 @@ The report body SHALL depend only on the input files and the report's file name:
 
 #### Scenario: Another date
 - **WHEN** the report is written to a file whose name carries another date
+- **THEN** the two files differ only in the title line
+
+#### Scenario: Same-day name
+- **WHEN** the report is written from the same inputs to `motco-adni-2026-11-02.md` and to `motco-adni-2026-11-02-2.md`
 - **THEN** the two files differ only in the title line
 
 ### Requirement: Check compares cell by cell and names every mismatch
@@ -283,11 +307,15 @@ With `--check`, the step SHALL regenerate the report from the inputs now on disk
 - **THEN** `report --check` names the provenance cell holding that file's hash with both values, and exits non-zero
 
 ### Requirement: Check selects the report and reruns the gates
-Without `--out`, `--check` SHALL read the newest `reports/motco-adni-<date>.md` by date. Before any other gate, a report whose level-2 headings differ from the current sections SHALL stop the check, naming the report, the sections it lacks or adds, and how to find the revision that committed it. The check SHALL then run every gate of the write mode before comparing, so a broken chain or an unreported run fails the check naming the cause.
+Without `--out`, `--check` SHALL read the newest report under `reports/` by the date in its name, then by its same-day ordinal (a name without one first). Before any other gate, a report whose level-2 headings differ from the current sections SHALL stop the check, naming the report, the sections it lacks or adds, and how to find the revision that committed it. The check SHALL then run every gate of the write mode before comparing.
 
 #### Scenario: No report
 - **WHEN** `reports/` holds no `motco-adni-*.md` and `--out` is not given
 - **THEN** `report --check` stops naming the directory and the pattern
+
+#### Scenario: Same-day report is the newest
+- **WHEN** `reports/` holds `motco-adni-2026-11-02.md` and `motco-adni-2026-11-02-2.md` and `--out` is not given
+- **THEN** `report --check` reads `motco-adni-2026-11-02-2.md`
 
 #### Scenario: Broken chain at check time
 - **WHEN** the export manifest was regenerated after the primary and `report --check` runs
@@ -350,6 +378,10 @@ The report's findings section SHALL list every deviation and finding of every in
 - **WHEN** the `nmr_all_columns` analysis manifest and comparison manifest record the finding that its `delta` status differs from the primary's
 - **THEN** the report's findings section lists it under `export-sensitivity`, verbatim, once for each manifest
 
+#### Scenario: Scale variant rank finding carried
+- **WHEN** the `raw_scale` analysis manifest and comparison manifest record the finding that its CV-selected rank 7 differs from the primary's 8
+- **THEN** the report's findings section lists it under `export-sensitivity`, verbatim, once for each manifest, and lists no rank finding for `log2_plus_one`, whose manifests record none
+
 ### Requirement: Export variants are identified before reporting
 The step SHALL stop, naming the directory, the setting and both values, when a variant's export, analysis or comparison manifest names another variant, when its export manifest's variant block differs from its `EXPORT_VARIANTS` entry, when its analysis records a latent adjustment, or when its diagnostics record `is_primary` true or another export variant.
 
@@ -408,11 +440,15 @@ The step SHALL read, check and quote exactly the export variants of `REPORT_EXPO
 
 #### Scenario: Pin covers every registered variant
 - **WHEN** the report runs on the committed outputs
-- **THEN** it reads, checks and quotes `nist_bridge`, `per_run_standardized` and `nmr_all_columns` in registry order, and no progress line names an uncovered variant
+- **THEN** it reads, checks and quotes `nist_bridge`, `per_run_standardized`, `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog` in registry order, and no progress line names an uncovered variant
 
 #### Scenario: A third variant registered
-- **WHEN** `EXPORT_VARIANTS` holds `nist_bridge`, `per_run_standardized` and `nmr_all_columns`, `REPORT_EXPORT_VARIANTS` names the first two only, and the outputs of `nmr_all_columns` are absent
-- **THEN** `report` reads 93 files, no line of the body names `nmr_all_columns`, and a progress line says that it is registered and not covered by this report
+- **WHEN** `REPORT_EXPORT_VARIANTS` names `nist_bridge` and `per_run_standardized` only, and the outputs of the four variants registered after them are absent
+- **THEN** `report` reads 93 files, no line of the body names `nmr_all_columns`, `raw_scale`, `log2_plus_one` or `glog`, and one progress line per uncovered variant says that it is registered and not covered by this report
+
+#### Scenario: Scale variants registered outside the pin
+- **WHEN** `EXPORT_VARIANTS` holds the six variants, `REPORT_EXPORT_VARIANTS` names the first three only, and the outputs of the three scale variants are absent
+- **THEN** `report` reads 106 files, no line of the body names `raw_scale`, `log2_plus_one` or `glog`, and one progress line per scale variant says that it is registered and not covered by this report
 
 #### Scenario: Newest report still checks
 - **WHEN** `report --check` runs on the newest committed report, written under the current pin, on the tree it was written from
@@ -425,14 +461,33 @@ The step SHALL read, check and quote exactly the export variants of `REPORT_EXPO
 ### Requirement: Check stops on a report that lists other export variants
 After a report's level-2 headings match the current sections and before any input gate, `--check` SHALL compare the export variants the report lists, its level-3 headings ``Export variant `<name>` `` in the export-sensitivity section in order, with `REPORT_EXPORT_VARIANTS`. On a difference it SHALL stop, naming the report, the absent and extra variants and how to find the revision that committed it, compare no cell and write nothing.
 
+#### Scenario: Report of the three-variant pin
+- **WHEN** `report --check --out reports/motco-adni-2026-11-02.md` runs after the scale variants are added to `REPORT_EXPORT_VARIANTS`
+- **THEN** the check stops naming the report, the absent variants `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the command `git log -1 --format=%H -- reports/motco-adni-2026-11-02.md`, compares no cell, writes nothing and exits non-zero
+
 #### Scenario: Report of the two-variant pin
-- **WHEN** `report --check --out reports/motco-adni-2026-10-31.md` runs after `nmr_all_columns` is added to `REPORT_EXPORT_VARIANTS`
-- **THEN** the check stops naming the report, the absent variant `nmr_all_columns`, no extra variant and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-31.md`, compares no cell, writes nothing and exits non-zero
+- **WHEN** `report --check --out reports/motco-adni-2026-10-31.md` runs
+- **THEN** the check stops naming the report, the absent variants `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-31.md`, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the current pin
 - **WHEN** `report --check` runs on a report the step just wrote
-- **THEN** the report's variants are `nist_bridge`, `per_run_standardized` and `nmr_all_columns` in that order, and the check goes on to the input gates and the comparison
+- **THEN** the report's variants are `nist_bridge`, `per_run_standardized`, `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog` in that order, and the check goes on to the input gates and the comparison
 
 #### Scenario: Variants out of order
 - **WHEN** a report lists the variants of `REPORT_EXPORT_VARIANTS` in another order
 - **THEN** the check stops naming the report, no absent and no extra variant, that the order differs, and the `git log` command, and writes nothing
+
+### Requirement: Report file name
+The report SHALL be named `motco-adni-<date>.md` (`REPORT_NAME`) by the day it is written, or `motco-adni-<date>-<n>.md` (`REPORT_NAME_SAME_DAY`), n an integer of 2 or more, for a later report of the same day. The date and the ordinal SHALL be read from the name, and any other name SHALL stop the step naming the file and both patterns. Without `--out`, write mode SHALL use today's name without an ordinal.
+
+#### Scenario: Second report of a day
+- **WHEN** `report --out reports/motco-adni-2026-11-02-2.md` runs while `reports/motco-adni-2026-11-02.md` exists
+- **THEN** the step writes the new file, leaves the first unchanged, and the new file's title line ends with `2026-11-02, report 2`
+
+#### Scenario: Name outside the patterns
+- **WHEN** `--out` names `reports/motco-adni-2026-11-02-1.md` or `reports/motco-adni-latest.md`
+- **THEN** the step stops naming the file and both patterns, and writes nothing
+
+#### Scenario: Today's report exists
+- **WHEN** `report` runs without `--out` and `--force` while today's report exists
+- **THEN** the step stops naming the file, `--force` and the next free same-day name, and writes nothing

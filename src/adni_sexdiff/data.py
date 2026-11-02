@@ -177,6 +177,7 @@ from .constants import (
     REPORT_EXPORT_VARIANTS,
     REPORT_INPUT_FILES,
     REPORT_NAME,
+    REPORT_NAME_SAME_DAY,
     REPORT_SECTIONS,
     REPORTED_N_JOBS,
     REPORTS_DIR,
@@ -9361,9 +9362,17 @@ def run_rank_sensitivity(
 
 #: The report's title; the date of the file name follows it (design D2 of ``adni-report``).
 _REPORT_TITLE = "MOTCO case-study report: ADNI serum metabolomics, sex × stage"
-#: ``REPORT_NAME`` as a pattern on the file name, the date captured.
+#: ``REPORT_NAME`` and ``REPORT_NAME_SAME_DAY`` as a pattern on the file name:
+#: the date captured, then the same-day ordinal when the name has one (2 or
+#: more, no leading zero; design D11 of ``adni-report-scale-variants``).
 _REPORT_NAME_RE = re.compile(
-    "^" + re.escape(REPORT_NAME.split("{date}")[0]) + r"(\d{4}-\d{2}-\d{2})" + re.escape(REPORT_NAME.split("{date}")[1]) + "$"
+    "^" + re.escape(REPORT_NAME.split("{date}")[0]) + r"(\d{4}-\d{2}-\d{2})(?:-([2-9]|[1-9]\d+))?"
+    + re.escape(REPORT_NAME.split("{date}")[1]) + "$"
+)
+#: The two name patterns, as the messages name them.
+_REPORT_NAME_PATTERNS = (
+    f"{REPORT_NAME.format(date='<YYYY-MM-DD>')} or, for a later report of the same day, "
+    f"{REPORT_NAME_SAME_DAY.format(date='<YYYY-MM-DD>', n='<n>')} with <n> 2 or more"
 )
 def _variant_role(variant: str, key: str) -> str:
     """The role of ``REPORT_INPUT_FILES`` of a variant's subdirectory, by its key in ``EXPORT_SENSITIVITY_SUBDIRS``."""
@@ -9411,7 +9420,7 @@ _RANK_SWEEP_LABELS: dict[int | str, str] = {
 }
 
 
-#: The 33 manifests the report reads, in pipeline order: (label, role in
+#: The 45 manifests the report reads, in pipeline order: (label, role in
 #: ``REPORT_INPUT_FILES``, file name in that role); the primary's and the
 #: arm's nine, then four per variant of ``REPORT_EXPORT_VARIANTS`` in
 #: registry order, then the CN / LMCI / AD arm's four, then the rank sweep's eight
@@ -9457,11 +9466,20 @@ _REPORT_NO_NUMERICS = "no block (written before `adni-portable-numerics`)"
 
 
 def _report_date(path: Path) -> str:
-    """The date in a report's file name (``REPORT_NAME``); stops naming the file and the pattern otherwise."""
+    """The date in a report's file name (``REPORT_NAME``), with its same-day ordinal when it has one (``REPORT_NAME_SAME_DAY``: ``2026-11-02, report 2``), as the title line prints it; stops naming the file and both patterns otherwise."""
     m = _REPORT_NAME_RE.match(Path(path).name)
     if m is None:
-        raise ValueError(f"{path}: the report's name must match {REPORT_NAME.format(date='<YYYY-MM-DD>')} (the date is read from it)")
-    return m.group(1)
+        raise ValueError(f"{path}: the report's name must match {_REPORT_NAME_PATTERNS} (the date is read from it); nothing was written")
+    return m.group(1) if m.group(2) is None else f"{m.group(1)}, report {m.group(2)}"
+
+
+def _next_same_day_name(path: Path) -> Path:
+    """The first ``REPORT_NAME_SAME_DAY`` of the date of ``path`` that does not exist beside it (design D11 of ``adni-report-scale-variants``)."""
+    day = _REPORT_NAME_RE.match(path.name).group(1)
+    n = 2
+    while (path.parent / REPORT_NAME_SAME_DAY.format(date=day, n=n)).exists():
+        n += 1
+    return path.parent / REPORT_NAME_SAME_DAY.format(date=day, n=n)
 
 
 def _report_dirs(
@@ -10529,12 +10547,13 @@ def _first_component_rows(analyses: list[tuple[str, dict]]) -> list[dict]:
     return rows
 
 
-#: The rule of a rule set that reads its variant against the primary only,
+#: The rule of a rule set that reads its variants against the primary only,
 #: cited in the lead of that rule set's group of "Export sensitivity" (design
-#: D3 of ``adni-report-nmr-all-columns``). ``EXPORT_VARIANT_READING_RULES``
-#: has none: its rule 5 defines how a difference between its two variants is
-#: read.
-_GROUP_PRIMARY_ONLY_RULE: dict[str, int] = {"NMR_MEMBERSHIP_READING_RULES": 8}
+#: D3 of ``adni-report-nmr-all-columns``; scale rule 8, design D3 of
+#: ``adni-report-scale-variants``, which also reads a scale variant never
+#: against another of the group). ``EXPORT_VARIANT_READING_RULES`` has none:
+#: its rule 5 defines how a difference between its two variants is read.
+_GROUP_PRIMARY_ONLY_RULE: dict[str, int] = {"NMR_MEMBERSHIP_READING_RULES": 8, "SCALE_VARIANT_READING_RULES": 8}
 
 
 def _export_variant_groups(variants: Sequence[str]) -> list[list[str]]:
@@ -10555,18 +10574,24 @@ def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list
 
     The variants are grouped by their rule set (``_export_variant_groups``;
     design D2 of ``adni-report-nmr-all-columns``): the run-handling group
-    (``nist_bridge``, ``per_run_standardized``, ``EXPORT_VARIANT_READING_RULES``)
-    and the membership group (``nmr_all_columns``,
-    ``NMR_MEMBERSHIP_READING_RULES``). A section lead names the groups when
+    (``nist_bridge``, ``per_run_standardized``, ``EXPORT_VARIANT_READING_RULES``),
+    the membership group (``nmr_all_columns``,
+    ``NMR_MEMBERSHIP_READING_RULES``) and the scale group (``raw_scale``,
+    ``log2_plus_one``, ``glog``, ``SCALE_VARIANT_READING_RULES``; change
+    ``adni-report-scale-variants``). A section lead names the groups when
     the pin holds more than one. Each group has its lead, then its tables,
     which hold the primary and that group's variants only: the first group's
     under the titles of the report of 2026-10-31, a later group's prefixed
     by its variant names (``nmr_all_columns: Statistics: primary and
-    variant``). Every word that depends on the variant (its rule set,
+    variant``, ``raw_scale, log2_plus_one, glog: Statistics: primary and
+    variants``). Every word that depends on the variant (its rule set,
     citation word, dependence label and what it changes and keeps) comes
     from ``_variant_words``; the lead of a rule set with a rule that reads
-    its variant against the primary only cites it
-    (``_GROUP_PRIMARY_ONLY_RULE``).
+    its variants against the primary only cites it
+    (``_GROUP_PRIMARY_ONLY_RULE``): "the variant is read against the primary
+    only" for a group of one, "each variant is read against the primary
+    only, never against another variant of the group" for a group of
+    several (design D3 of ``adni-report-scale-variants``).
 
     Every value is read from a variant's ``export_sensitivity.csv``, its
     comparison and export manifests, its ``result.json``, ``nist_bridge.csv``
@@ -10614,7 +10639,11 @@ def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list
         p_row = rows[group[0]]["primary"]
         clauses = [f"{a_variant} never replaces it ({cite} 1)", f"a status that differs is {words['dependence']} ({cite} 2)"]
         if words["rules"] in _GROUP_PRIMARY_ONLY_RULE:
-            clauses.append(f"the variant is read against the primary only ({cite} {_GROUP_PRIMARY_ONLY_RULE[words['rules']]})")
+            clauses.append(
+                f"{each} is read against the primary only"
+                + ("" if one else ", never against another variant of the group")
+                + f" ({cite} {_GROUP_PRIMARY_ONLY_RULE[words['rules']]})"
+            )
         b.para(
             (primary_text if len(groups) == 1 else "The primary")
             + f" beside its predeclared export {noun} (`EXPORT_VARIANTS`): "
@@ -11035,14 +11064,16 @@ def _rank_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[s
 
 
 def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
-    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D2 to D5 of ``adni-report-nmr-all-columns``).
+    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D2 to D5 of ``adni-report-nmr-all-columns``; D3, D4 and D8 of ``adni-report-scale-variants``).
 
     Parameters
     ----------
     inputs:
         ``_load_report_inputs``.
     date:
-        The date of the report's file name, written in the title line only.
+        The date of the report's file name, with its same-day ordinal when
+        it has one (``2026-11-02, report 2``; ``_report_date``), written in
+        the title line only.
 
     Returns
     -------
@@ -11075,13 +11106,14 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     verbatim. The export variants of ``REPORT_EXPORT_VARIANTS`` are read in
     one group per rule set (``_export_variant_groups``): the preamble names
     each group's rule set, the summary has one paragraph per group (its
-    variants, changes, what they change, ranks, dependence label and rule
-    set, all from ``_variant_words``) followed by each variant's status
-    lines, "Export sensitivity" one group of tables per rule set
-    (``_export_sensitivity_section``), and the reading-rules section one
-    list per rule set, in group order, after
-    ``LATENT_SENSITIVITY_READING_RULES``: six lists with
-    ``EXPORT_VARIANT_READING_RULES`` and ``NMR_MEMBERSHIP_READING_RULES``.
+    variants, changes, what they change, ranks joined as a list, dependence
+    label and rule set, all from ``_variant_words``) followed by each
+    variant's status lines, "Export sensitivity" one group of tables per
+    rule set (``_export_sensitivity_section``), and the reading-rules
+    section one list per rule set, in group order, after
+    ``LATENT_SENSITIVITY_READING_RULES``: seven lists with
+    ``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES`` and
+    ``SCALE_VARIANT_READING_RULES``.
     No sentence reads one sensitivity against another; a sentence that
     lists several, each beside the primary, compares none. The body
     depends on the inputs and ``date`` only: no revision, host, time or
@@ -11110,7 +11142,8 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.lines.append(f"# {_REPORT_TITLE} — {date}")
     b.para(
         "Generated in full by `adni-sexdiff report` (changes `adni-report`, `adni-report-variants`, "
-        "`adni-report-stage-arm`, `adni-report-rank-sweep` and `adni-report-nmr-all-columns`) from the kept aggregate "
+        "`adni-report-stage-arm`, `adni-report-rank-sweep`, `adni-report-nmr-all-columns` and "
+        "`adni-report-scale-variants`) from the kept aggregate "
         "outputs of the pipeline: every number is copied from a record, a manifest or a CSV and formatted with the digits "
         "of the summary it belongs to, every reading sentence is the one `summary.md`, `latent_sensitivity.md`, "
         "`export_sensitivity.md`, `stage_sensitivity.md` or `rank_sensitivity.md` prints, and the reading rules are the "
@@ -11168,7 +11201,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
             + f" (`EXPORT_VARIANTS`, change{'' if len(changes) == 1 else 's'} " + _and_join([f"`{c}`" for c in changes])
             + f": {'it changes' if one else 'each changes'} {words['changes']} only, every other export and analysis setting "
             f"the primary's; {_section_ref('Export sensitivity')}) selected rank{'' if one else 's'} "
-            + " and ".join(f"{v_records[v]['latent']['selected_lv']} (`{v}`)" for v in group)
+            + _and_join([f"{v_records[v]['latent']['selected_lv']} (`{v}`)" for v in group])
             + ". Status per statistic (`same` when the rejection under `ANALYSIS_REJECTION_RULE` equals the primary's, else "
             f"`{words['differs']}`; the primary's status is the result either way), read under `READING_RULES` "
             f"and `{words['rules']}`:"
@@ -11988,14 +12021,15 @@ _REPORT_VARIANT_HEADING_RE = re.compile(r"^### Export variant `([^`]+)`$")
 
 
 def _check_report_layout(path: Path) -> str:
-    """The report's text, after checking its layout (design D6 of ``adni-report-variants`` and ``adni-report-nmr-all-columns``).
+    """The report's text, after checking its layout (design D6 of ``adni-report-variants`` and ``adni-report-nmr-all-columns``; D9 of ``adni-report-scale-variants``).
 
     Its level-2 headings must be ``REPORT_SECTIONS`` in order; then the
     export variants it lists, its headings ``Export variant `<name>``` in
     "Export sensitivity" in order (``_REPORT_VARIANT_HEADING_RE``), must be
     ``REPORT_EXPORT_VARIANTS``. A report written by an earlier layout of
     ``report`` (the reports of 2026-10-28, 2026-10-29 and 2026-10-30 by
-    their sections, the report of 2026-10-31 by its two export variants)
+    their sections, the report of 2026-10-31 by its two export variants and
+    the report of 2026-11-02 by its three, which checks at 28e0d48)
     stops the check before any input gate and before any comparison,
     naming the report, the sections or variants it lacks and adds (or that
     their order differs), and how to find the revision that committed it,
@@ -12033,7 +12067,10 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
 
     A report whose level-2 headings are not ``REPORT_SECTIONS`` in order, or
     whose export variants are not ``REPORT_EXPORT_VARIANTS``, stops first
-    (``_check_report_layout``).
+    (``_check_report_layout``): the reports of 2026-10-28, 2026-10-29 and
+    2026-10-30 by their sections, the reports of 2026-10-31 and 2026-11-02 by
+    their two and three export variants (change
+    ``adni-report-scale-variants``).
 
     Parameters
     ----------
@@ -12071,14 +12108,15 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
 
 
 def _newest_report(reports_dir: Path) -> Path:
-    """The newest ``REPORT_NAME`` under ``reports_dir`` by the date in its name; stops naming the directory and the pattern."""
-    candidates = [(m.group(1), p) for p in reports_dir.glob("*") if (m := _REPORT_NAME_RE.match(p.name)) and p.is_file()]
+    """The newest report under ``reports_dir`` by the date in its name, then by its same-day ordinal (a name without one counts as 1; design D11 of ``adni-report-scale-variants``); stops naming the directory and both patterns."""
+    candidates = [
+        (m.group(1), int(m.group(2) or 1), p) for p in reports_dir.glob("*") if (m := _REPORT_NAME_RE.match(p.name)) and p.is_file()
+    ]
     if not candidates:
         raise FileNotFoundError(
-            f"{reports_dir} holds no report matching {REPORT_NAME.format(date='<YYYY-MM-DD>')}; pass --out or write one with "
-            "`adni-sexdiff report`"
+            f"{reports_dir} holds no report matching {_REPORT_NAME_PATTERNS}; pass --out or write one with `adni-sexdiff report`"
         )
-    return max(candidates)[1]
+    return max(candidates)[2]
 
 
 def run_report(
@@ -12128,8 +12166,8 @@ def run_report(
         bridge table (hook ``factors``), the variant export's manifest, the
         variant analysis' three aggregate files, the comparison's three files
         and the variant diagnostics' six. Every variant of the pin is
-        required (all three registered variants since change
-        ``adni-report-nmr-all-columns``); a variant registered later and
+        required (all six registered variants since change
+        ``adni-report-scale-variants``); a variant registered later and
         left outside it is not read, and a progress line names it.
     stage_sensitivity_dir:
         The root of ``stage-sensitivity`` (default
@@ -12147,9 +12185,15 @@ def run_report(
         files and the top rank's diagnostics' six. The sweep is required.
     out:
         The report path, whose name must match ``constants.REPORT_NAME``
-        (``reports/motco-adni-<date>.md``); the date is read from it. Write
-        mode defaults to today's date; ``check`` to the newest report under
-        ``constants.REPORTS_DIR`` by the date in its name.
+        (``reports/motco-adni-<date>.md``) or, for a later report of the
+        same day, ``constants.REPORT_NAME_SAME_DAY``
+        (``reports/motco-adni-<date>-<n>.md``, n 2 or more; change
+        ``adni-report-scale-variants``); the date and the ordinal are read
+        from it and printed in the title line. Write mode defaults to
+        today's name without an ordinal and, when that file exists without
+        ``force``, stops naming the next free same-day name; ``check``
+        defaults to the newest report under ``constants.REPORTS_DIR`` by the
+        date in its name, then by its ordinal.
     check:
         Instead of writing, read the report at ``out``, run every gate,
         regenerate the report and compare every table cell by cell and every
@@ -12159,10 +12203,11 @@ def run_report(
         whose level-2 headings are not ``REPORT_SECTIONS`` or whose export
         variants (its ``Export variant `<name>``` headings) are not
         ``REPORT_EXPORT_VARIANTS`` (change ``adni-report-nmr-all-columns``:
-        the report of 2026-10-31, which checks at 13ce7c8), stops before any
-        gate, naming its absent and extra sections or variants and how to
-        find the revision that committed it, where it checks. Nothing is
-        written.
+        the report of 2026-10-31, which checks at 13ce7c8; change
+        ``adni-report-scale-variants``: the report of 2026-11-02, which
+        checks at 28e0d48), stops before any gate, naming its absent and
+        extra sections or variants and how to find the revision that
+        committed it, where it checks. Nothing is written.
     force:
         Replace an existing report at ``out`` (write mode).
 
@@ -12175,7 +12220,7 @@ def run_report(
 
     Notes
     -----
-    Inputs are the 106 kept aggregate files of ``REPORT_INPUT_FILES`` (33
+    Inputs are the 145 kept aggregate files of ``REPORT_INPUT_FILES`` (45
     manifests) and nothing else: no participant-level file is opened or
     required, and the hashes the report quotes for one are the values the
     manifests record. So the step runs on any clone with the committed
@@ -12196,9 +12241,10 @@ def run_report(
     analysis and every rank are reported runs (``n_jobs =
     REPORTED_N_JOBS``), every ``numerics`` block present is pinned and
     every manifest records the same MOTCO, scikit-learn and metabo_adni
-    versions; the chain holds link by link (189 links on the committed
-    tree: 31, then 23, 22 and 22 for the three variants, 24 for the CN /
-    LMCI / AD arm, then 67 for the rank sweep) from the clean manifests to the arm's, every variant's, the CN /
+    versions; the chain holds link by link (255 links on the committed
+    tree: 31, then 23, 22 and 22 for the first three variants and 22 for
+    each scale variant, 24 for the CN / LMCI / AD arm, then 67 for the rank
+    sweep) from the clean manifests to the arm's, every variant's, the CN /
     LMCI / AD arm's and the rank sweep's diagnostics, the primary feature
     tables the arm export names as the source of its floors included.
     Write mode also stops on an existing ``out`` without ``force``.
@@ -12222,10 +12268,11 @@ def run_report(
     definition tables by ``_stage_arm_lines`` and ``_stage_arm_tables``, the
     sweep's anchor and nesting bullets and nesting table by
     ``_rank_anchor_lines`` and ``_rank_nesting_table``, every word that
-    depends on an export variant from ``_variant_words``, six rule lists
+    depends on an export variant from ``_variant_words``, seven rule lists
     verbatim: ``READING_RULES``, then ``LATENT_SENSITIVITY_READING_RULES``,
     then one per rule set of the pinned variants in group order
-    (``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES``),
+    (``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES``,
+    ``SCALE_VARIANT_READING_RULES``),
     then ``STAGE_SENSITIVITY_READING_RULES``, then
     ``RANK_SENSITIVITY_READING_RULES``, the arm's, each variant group's,
     the CN / LMCI / AD arm's and the sweep's constants named beside every
@@ -12259,7 +12306,10 @@ def run_report(
         out_path = Path(out) if out is not None else reports_dir / REPORT_NAME.format(date=date_type.today().isoformat())
         date = _report_date(out_path)
         if out_path.exists() and not force:
-            raise FileExistsError(f"{out_path} exists; pass --force to replace it; nothing was written")
+            raise FileExistsError(
+                f"{out_path} exists; pass --force to replace it, or --out {_next_same_day_name(out_path)} for a later report "
+                "of the same day; nothing was written"
+            )
     for variant in EXPORT_VARIANTS:
         if variant not in REPORT_EXPORT_VARIANTS:
             # the report's pin (design D6 of adni-nmr-all-columns): named here, never in the body
