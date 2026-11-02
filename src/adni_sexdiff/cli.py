@@ -26,6 +26,9 @@ from .constants import (
     LATENT_SENSITIVITY_SUBDIRS,
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
+    OPERATING_CHARACTERISTICS_DECISION,
+    OPERATING_CHARACTERISTICS_DIR,
+    OPERATING_CHARACTERISTICS_SOURCE,
     PLATFORMS,
     RANK_SENSITIVITY_DIR,
     RANK_SENSITIVITY_LADDER,
@@ -265,8 +268,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "report",
-        help="Write the case-study report from the kept aggregate outputs (no participant-level file is read), or check "
-        f"one against them cell by cell -> {REPORTS_DIR}/{REPORT_NAME.format(date='<date>')}",
+        help="Write the case-study report from the kept aggregate outputs and the committed copy of the cited MOTCO "
+        "decision (no participant-level file is read), or check one against them cell by cell -> "
+        f"{REPORTS_DIR}/{REPORT_NAME.format(date='<date>')}",
     )
     p.add_argument("--cleaned-dir", type=Path, default=None, help=f"Output root of clean; the clean manifests are read (default: {CLEANED_DIR})")
     p.add_argument("--cohort-dir", type=Path, default=None, help=f"Output directory of cohort (default: {COHORT_DIR})")
@@ -291,6 +295,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--rank-sensitivity-dir", type=Path, default=None,
         help=f"Root of rank-sensitivity (the rank sweep), read as one {rank_dirs}/ per rank ({ranks}), then "
         f"{'/, '.join(RANK_SENSITIVITY_SUBDIRS.values())}/ (default: {RANK_SENSITIVITY_DIR})",
+    )
+    p.add_argument(
+        "--operating-characteristics-dir", type=Path, default=None,
+        help=f"Directory of the committed copy of the cited MOTCO decision, {OPERATING_CHARACTERISTICS_DECISION}, checked "
+        f"against OPERATING_CHARACTERISTICS_SOURCE (MOTCO commit {str(OPERATING_CHARACTERISTICS_SOURCE['commit'])[:7]}); never "
+        f"read from a MOTCO clone (default: {OPERATING_CHARACTERISTICS_DIR})",
     )
     p.add_argument(
         "--out", type=Path, default=None,
@@ -387,6 +397,7 @@ def main(argv: list[str] | None = None) -> int:
             export_sensitivity_dir=args.export_sensitivity_dir,
             stage_sensitivity_dir=args.stage_sensitivity_dir,
             rank_sensitivity_dir=args.rank_sensitivity_dir,
+            operating_characteristics_dir=args.operating_characteristics_dir,
             out=args.out,
             check=args.check,
             force=args.force,

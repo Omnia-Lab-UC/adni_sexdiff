@@ -6,10 +6,10 @@ Defines the `report` step: the case-study report of the ADNI sex × stage trajec
 ## Requirements
 
 ### Requirement: Inputs are the kept aggregate outputs only
-The step SHALL read only the committed aggregate files of the pipeline, of the latent arm, of every export variant of `REPORT_EXPORT_VARIANTS`, of the CN / LMCI / AD arm and of the rank sweep: manifests, records, summaries, count and comparison tables, diagnostics files and the `nist_bridge` bridge table. It SHALL open no participant-level file and SHALL NOT require one to be present.
+The step SHALL read only the committed aggregate files of the pipeline, of the latent arm, of every export variant of `REPORT_EXPORT_VARIANTS`, of the CN / LMCI / AD arm and of the rank sweep: manifests, records, summaries, count and comparison tables, diagnostics files and the `nist_bridge` bridge table; and the committed copy of the cited MOTCO decision file. It SHALL open no participant-level file and SHALL NOT require one to be present.
 
 #### Scenario: Clone without participant-level files
-- **WHEN** `report` runs on a clone that holds the tracked files under `results/` and none of `cohort.csv`, the export CSVs of the primary, of a variant or of the CN / LMCI / AD arm, `latent_scores.csv` or `analysis_metadata.csv`
+- **WHEN** `report` runs on a clone that holds the tracked files under `results/` and `references/` and none of `cohort.csv`, the export CSVs of the primary, of a variant or of the CN / LMCI / AD arm, `latent_scores.csv` or `analysis_metadata.csv`
 - **THEN** it writes the report, and every hash it quotes for a participant-level file is the value a manifest records
 
 #### Scenario: Input absent
@@ -38,11 +38,19 @@ The step SHALL read only the committed aggregate files of the pipeline, of the l
 
 #### Scenario: Rank sweep inputs
 - **WHEN** the report runs on the committed outputs
-- **THEN** it reads, under `results/motco_rank_sensitivity/`, per rank of `RANK_SENSITIVITY_LADDER` in ladder order the rank's `result.json`, `analysis_manifest.json` and `summary.md`, then the comparison's three files and the diagnostics' six files: 27 files, 145 in all
+- **THEN** it reads, under `results/motco_rank_sensitivity/`, per rank of `RANK_SENSITIVITY_LADDER` in ladder order the rank's `result.json`, `analysis_manifest.json` and `summary.md`, then the comparison's three files and the diagnostics' six files: 27 files
 
 #### Scenario: Rank sweep input absent
 - **WHEN** `results/motco_rank_sensitivity/rank_06/summary.md` does not exist
 - **THEN** the step stops naming the file and the `rank-sensitivity` command, and writes nothing
+
+#### Scenario: Operating-characteristics input
+- **WHEN** the report runs on the committed outputs
+- **THEN** it reads `references/motco_adni_design/adni_design_decision.json`: 146 files in all, 45 of them manifests
+
+#### Scenario: Operating-characteristics input absent
+- **WHEN** `references/motco_adni_design/adni_design_decision.json` does not exist
+- **THEN** the step stops naming the file and the `git show` command that copies it from the pinned MOTCO commit, and writes nothing
 
 ### Requirement: Aggregate inputs are checked against their manifests
 The step SHALL compare the sha256 of every aggregate file it reads with the value the file's own manifest records under `outputs`, and for the bridge table under `bridge.table` of its variant's export manifest, and SHALL stop before writing anything on a mismatch, naming the file, both hashes and the step to rerun.
@@ -129,7 +137,7 @@ The step SHALL stop when the primary records a latent adjustment or its diagnost
 - **THEN** the step stops naming the directory and the setting, and writes nothing
 
 ### Requirement: Report content contract
-The report SHALL be one Markdown file with these sections in order: summary; provenance; cohort; export; primary analysis; axis diagnostics of the primary; latent-adjustment sensitivity; export sensitivity; stage-definition sensitivity; rank sensitivity; findings; reading rules; reproduction. The primary's statistics SHALL be given in full, each sensitivity beside the primary with a status per statistic, and every value SHALL be aggregate.
+The report SHALL be one Markdown file with these sections in order: summary; provenance; cohort; export; primary analysis; axis diagnostics of the primary; operating characteristics; latent-adjustment sensitivity; export sensitivity; stage-definition sensitivity; rank sensitivity; findings; reading rules; reproduction. The primary's statistics SHALL be given in full, each sensitivity beside the primary with a status per statistic, and every value SHALL be aggregate.
 
 #### Scenario: Primary statistics
 - **WHEN** the report is written
@@ -137,7 +145,11 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 
 #### Scenario: Sections present
 - **WHEN** the report is written
-- **THEN** its level-2 headings are the thirteen sections in the order above, and the latent-adjustment section holds the comparison table with the primary row first, the arm's `latent_adjustment` block, the covariate roles and the arm's flagged diagnostic rows
+- **THEN** its level-2 headings are the fourteen sections in the order above, and the latent-adjustment section holds the comparison table with the primary row first, the arm's `latent_adjustment` block, the covariate roles and the arm's flagged diagnostic rows
+
+#### Scenario: Operating characteristics section
+- **WHEN** the report is written on the committed outputs
+- **THEN** the operating-characteristics section holds the cited source (MOTCO change, pull request, commit, path, report and sha256 of `OPERATING_CHARACTERISTICS_SOURCE`, the copy's path, the run's units and failures and its settings hash), MOTCO's decision rule, the six size readings with their bound and the size sentence, the power rate per target statistic and effect with its standard error and CV-selected ranks, the three statements, and the construction beside this design with, per reference value, the committed source it was checked against
 
 #### Scenario: Diagnostics quoted
 - **WHEN** the report is written on the committed outputs
@@ -172,7 +184,7 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 - **THEN** it holds one column pair per scale variant (observed, expected) in registry order, the keys of the three entries in registry order, the shape counts and numerical ranks of each variant beside its predeclared ones, and the rows `scale.median_below_offset.*` with values for `log2_plus_one` and `n/a` for `raw_scale` and `glog`
 
 ### Requirement: Every number is pasted from the generated files
-Every number in the report SHALL be read from a record, a manifest or a CSV and formatted with the digits of the summary it belongs to (six significant digits for record values, p-values as recorded, counts as integers, correlations and shares as `diagnostics.md` prints them). The step SHALL compute no statistic, correlation, mean or count of its own.
+Every number in the report SHALL be read from a record, a manifest, a CSV or the cited decision file and formatted with the digits of the summary it belongs to (six significant digits for record values, p-values as recorded, counts as integers, correlations and shares as `diagnostics.md` prints them, the decision's rates and standard errors at three decimals and its bound at four). The step SHALL compute no statistic, correlation, mean or count of its own.
 
 #### Scenario: Statistics equal the record
 - **WHEN** the report's statistics table is compared with `result.json`
@@ -202,12 +214,20 @@ Every number in the report SHALL be read from a record, a manifest or a CSV and 
 - **WHEN** the scale group's tables are compared with each scale variant's `export_sensitivity.csv`, export manifest, `result.json` and diagnostics CSVs
 - **THEN** every value equals its source at the printed digits, the primary's and each variant's column of the latent-space table equal the corresponding columns of that variant's committed `export_sensitivity.md`, every line of each "Export variant" block equals the corresponding line of that document, and no cell is derived by the step
 
+#### Scenario: Measured values equal the decision file
+- **WHEN** the operating-characteristics tables are compared with the decision file
+- **THEN** every rejection count, replicate count, rate, standard error, bound, effect, CV-selected rank and construction value equals the file's value at the printed digits, every reference value is printed as the file records it, and no cell is derived by the step
+
 ### Requirement: Interpretive sentences are generated by rule
-Each reading sentence in the report SHALL be produced from the rejection statuses by the same code that writes `summary.md` and the comparison documents of the four sensitivities (`latent_sensitivity.md`, `export_sensitivity.md`, `stage_sensitivity.md`, `rank_sensitivity.md`), so that the sentences are string-equal across the documents. The report SHALL add no other interpretive sentence, and the primary's status SHALL be the result wherever a sensitivity appears.
+Each reading sentence in the report SHALL be produced from the rejection statuses by the code that writes `summary.md` and the four sensitivities' comparison documents (`latent_sensitivity.md`, `export_sensitivity.md`, `stage_sensitivity.md`, `rank_sensitivity.md`), string-equal across the documents. Besides the cited measurement's sentences, quoted verbatim, the report SHALL add no interpretive sentence, and the primary's status SHALL be the result wherever a sensitivity appears.
 
 #### Scenario: Non-rejection wording
 - **WHEN** `angle` is not rejected in the primary
 - **THEN** the report states that the result is uninformative about orientation, in the sentence `summary.md` prints
+
+#### Scenario: Reading sentences unchanged by the measurement
+- **WHEN** the primary's reading bullets of the report are compared with the committed `results/motco_analysis/summary.md`
+- **THEN** each bullet is string-equal to its line there, including the clause that no power statement exists at this design, which measurement rule 2 reads
 
 #### Scenario: Arm status wording
 - **WHEN** the primary and the arm both leave `delta` unrejected
@@ -258,11 +278,15 @@ Each reading sentence in the report SHALL be produced from the rejection statuse
 - **THEN** the group's lead states that each variant is read against the primary only, never against another variant of the group (scale rule 8); each `angle` paragraph and each status bullet names the primary and one scale variant; and no status or sentence of the report compares two scale variants, or a scale variant with another export variant, the latent arm, the CN / LMCI / AD arm or a forced rank
 
 ### Requirement: Reading rules carried verbatim
-The report SHALL print `READING_RULES`, then `LATENT_SENSITIVITY_READING_RULES`, the rule set of each export variant group in registry order (`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`, `SCALE_VARIANT_READING_RULES`), `STAGE_SENSITIVITY_READING_RULES` and `RANK_SENSITIVITY_READING_RULES` verbatim in its reading-rules section. Beside every table that quotes a sensitivity it SHALL name that sensitivity's rules, each with `READING_RULES`.
+The report SHALL print verbatim in its reading-rules section, in order: `READING_RULES`, `OPERATING_CHARACTERISTICS_READING_RULES`, `LATENT_SENSITIVITY_READING_RULES`, each export variant group's rule set in registry order (`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`, `SCALE_VARIANT_READING_RULES`), `STAGE_SENSITIVITY_READING_RULES` and `RANK_SENSITIVITY_READING_RULES`. Beside every table that quotes a sensitivity it SHALL name that sensitivity's rules with `READING_RULES`.
 
 #### Scenario: Rules string-equal
-- **WHEN** the seven numbered lists of the reading-rules section are compared with the constants
+- **WHEN** the eight numbered lists of the reading-rules section are compared with the constants
 - **THEN** each item is string-equal to its constant, in order
+
+#### Scenario: Measurement rules after the reading rules
+- **WHEN** the reading-rules section is written
+- **THEN** `OPERATING_CHARACTERISTICS_READING_RULES` follows `READING_RULES` under its own heading, led by a line that names the change `adni-operating-characteristics` and states that the list was decided after every run and changes no constant, record or status
 
 #### Scenario: Variant tables name their rules
 - **WHEN** the summary and the export-sensitivity section quote a variant
@@ -321,17 +345,21 @@ Without `--out`, `--check` SHALL read the newest report under `reports/` by the 
 - **WHEN** the export manifest was regenerated after the primary and `report --check` runs
 - **THEN** the check stops naming `manifest.json`, both hashes and `analyze`, before any cell is compared
 
+#### Scenario: Report of the thirteen-section layout
+- **WHEN** `report --check --out reports/motco-adni-2026-11-02-2.md` runs after the operating-characteristics section is added
+- **THEN** the check stops naming the report, the absent section `Operating characteristics` and the command `git log -1 --format=%H -- reports/motco-adni-2026-11-02-2.md`, compares no cell, writes nothing and exits non-zero
+
 #### Scenario: Report of an earlier layout
-- **WHEN** `report --check --out reports/motco-adni-2026-10-30.md` runs after the rank section is added
-- **THEN** the check stops naming the report, the absent section `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-30.md`, compares no cell, writes nothing and exits non-zero
+- **WHEN** `report --check --out reports/motco-adni-2026-10-30.md` runs
+- **THEN** the check stops naming the report, the absent sections `Operating characteristics` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-30.md`, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the eleven-section layout
 - **WHEN** `report --check --out reports/motco-adni-2026-10-29.md` runs
-- **THEN** the check stops naming the report, the absent sections `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-29.md`, compares no cell, writes nothing and exits non-zero
+- **THEN** the check stops naming the report, the absent sections `Operating characteristics`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-29.md`, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the first layout
 - **WHEN** `report --check --out reports/motco-adni-2026-10-28.md` runs
-- **THEN** the check stops naming the report, the absent sections `Export sensitivity`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero
+- **THEN** the check stops naming the report, the absent sections `Operating characteristics`, `Export sensitivity`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero
 
 ### Requirement: Output discipline
 The report SHALL be written to a temporary file and renamed when complete; an existing file at `--out` SHALL stop the step unless `--force`. After writing, the step SHALL parse the file through the check parser and verify that the parsed tables equal the generated ones.
@@ -444,15 +472,15 @@ The step SHALL read, check and quote exactly the export variants of `REPORT_EXPO
 
 #### Scenario: A third variant registered
 - **WHEN** `REPORT_EXPORT_VARIANTS` names `nist_bridge` and `per_run_standardized` only, and the outputs of the four variants registered after them are absent
-- **THEN** `report` reads 93 files, no line of the body names `nmr_all_columns`, `raw_scale`, `log2_plus_one` or `glog`, and one progress line per uncovered variant says that it is registered and not covered by this report
+- **THEN** `report` reads 94 files, no line of the body names `nmr_all_columns`, `raw_scale`, `log2_plus_one` or `glog`, and one progress line per uncovered variant says that it is registered and not covered by this report
 
 #### Scenario: Scale variants registered outside the pin
 - **WHEN** `EXPORT_VARIANTS` holds the six variants, `REPORT_EXPORT_VARIANTS` names the first three only, and the outputs of the three scale variants are absent
-- **THEN** `report` reads 106 files, no line of the body names `raw_scale`, `log2_plus_one` or `glog`, and one progress line per scale variant says that it is registered and not covered by this report
+- **THEN** `report` reads 107 files, no line of the body names `raw_scale`, `log2_plus_one` or `glog`, and one progress line per scale variant says that it is registered and not covered by this report
 
 #### Scenario: Newest report still checks
-- **WHEN** `report --check` runs on the newest committed report, written under the current pin, on the tree it was written from
-- **THEN** it compares every table and line with no mismatch and exits 0; a report written under an earlier pin stops at the variant gate instead
+- **WHEN** `report --check` runs on the newest committed report, written under the current layout and pin, on the tree it was written from
+- **THEN** it compares every table and line with no mismatch and exits 0; a report of an earlier layout or pin stops at the section or variant gate instead
 
 #### Scenario: Pin out of order
 - **WHEN** `REPORT_EXPORT_VARIANTS` names a variant that is not in `EXPORT_VARIANTS`, or lists two variants out of registry order
@@ -462,12 +490,16 @@ The step SHALL read, check and quote exactly the export variants of `REPORT_EXPO
 After a report's level-2 headings match the current sections and before any input gate, `--check` SHALL compare the export variants the report lists, its level-3 headings ``Export variant `<name>` `` in the export-sensitivity section in order, with `REPORT_EXPORT_VARIANTS`. On a difference it SHALL stop, naming the report, the absent and extra variants and how to find the revision that committed it, compare no cell and write nothing.
 
 #### Scenario: Report of the three-variant pin
-- **WHEN** `report --check --out reports/motco-adni-2026-11-02.md` runs after the scale variants are added to `REPORT_EXPORT_VARIANTS`
-- **THEN** the check stops naming the report, the absent variants `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the command `git log -1 --format=%H -- reports/motco-adni-2026-11-02.md`, compares no cell, writes nothing and exits non-zero
+- **WHEN** `report --check` runs on a report with the fourteen current sections whose export-sensitivity section lists `nist_bridge`, `per_run_standardized` and `nmr_all_columns` only
+- **THEN** the check stops naming the report, the absent variants `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the `git log -1 --format=%H -- <report>` command, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the two-variant pin
-- **WHEN** `report --check --out reports/motco-adni-2026-10-31.md` runs
-- **THEN** the check stops naming the report, the absent variants `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-31.md`, compares no cell, writes nothing and exits non-zero
+- **WHEN** `report --check` runs on a report with the fourteen current sections whose export-sensitivity section lists `nist_bridge` and `per_run_standardized` only
+- **THEN** the check stops naming the report, the absent variants `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the `git log -1 --format=%H -- <report>` command, compares no cell, writes nothing and exits non-zero
+
+#### Scenario: Committed reports of earlier pins
+- **WHEN** `report --check --out reports/motco-adni-2026-11-02.md` or `--out reports/motco-adni-2026-10-31.md` runs
+- **THEN** the check stops at the section gate, naming the absent section `Operating characteristics`, before the variant gate, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the current pin
 - **WHEN** `report --check` runs on a report the step just wrote
@@ -491,3 +523,37 @@ The report SHALL be named `motco-adni-<date>.md` (`REPORT_NAME`) by the day it i
 #### Scenario: Today's report exists
 - **WHEN** `report` runs without `--out` and `--force` while today's report exists
 - **THEN** the step stops naming the file, `--force` and the next free same-day name, and writes nothing
+
+### Requirement: The cited measurement is pinned and checked
+The step SHALL read the cited MOTCO operating-characteristics decision only from its committed copy, never from a MOTCO clone. Before anything is written it SHALL stop when the copy is absent, when its sha256 differs from `OPERATING_CHARACTERISTICS_SOURCE`, when its verdict differs from the constant's or it is marked indicative, or when a value of its `adni_reference` differs from the committed value it describes at the decision's digits.
+
+#### Scenario: Reference holds on the committed outputs
+- **WHEN** the report runs on the committed outputs and `references/motco_adni_design/adni_design_decision.json`
+- **THEN** every key of `adni_reference` equals its committed source at the decision's digits: the primary record's rank, `cv_mean_auroc`, p-values, pooled relative eigengap, `angle` null q95, design columns and `phase[ADNI2GO]` reference value; the export manifest's phase offset and kept features per block; the primary diagnostics' `pls_0` correlation with `phase`; and the lowest and highest `cv_mean_auroc` of the nine CV-selected analyses
+
+#### Scenario: Edited copy
+- **WHEN** one byte of the copy differs from the file at the pinned MOTCO commit
+- **THEN** the step stops naming the copy, both sha256 values and the command that restores it from the pinned commit, and writes nothing
+
+#### Scenario: Primary regenerated with another rank
+- **WHEN** the committed primary record selects a rank other than the 8 that `adni_reference.selected_lv` records
+- **THEN** the step stops naming `adni_reference.selected_lv`, both values and that the measurement was calibrated against another analysis, so citing a measurement for this one is a new change, and writes nothing
+
+#### Scenario: No MOTCO clone
+- **WHEN** the report runs on a clone with no MOTCO repository beside it
+- **THEN** it reads the copy only and writes the report
+
+### Requirement: The cited measurement is quoted verbatim
+The report SHALL quote the decision's verdict, its size sentence, its per-statistic statements and its decision rule verbatim, and SHALL print `OPERATING_CHARACTERISTICS_READING_RULES` as the reading of the measurement. It SHALL add no other sentence about the measurement, and SHALL NOT reread any sensitivity's status from the measured size or power.
+
+#### Scenario: Statements string-equal
+- **WHEN** the operating-characteristics section and the summary are compared with the decision file
+- **THEN** the verdict, the size sentence and the three statements for `delta`, `angle` and `shape` are string-equal to the file's `verdict`, `size.sentence` and `statements`
+
+#### Scenario: Summary carries the measurement
+- **WHEN** the report is written on the committed outputs
+- **THEN** the summary, after the primary's reading bullets, names the verdict `non_rejections_uninformative`, cites `OPERATING_CHARACTERISTICS_READING_RULES` and the operating-characteristics section, and lists the three statements
+
+#### Scenario: No sensitivity reread
+- **WHEN** the sensitivity sections of the report are compared with those generated before this change on the same inputs
+- **THEN** their tables and lines are unchanged except for section numbers in cross-references, and no line of a sensitivity section names the measurement
