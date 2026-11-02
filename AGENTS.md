@@ -489,7 +489,7 @@ implemented by its own OpenSpec change, in order.
      ladder included), selects a rank, reruns the primary or defines an
      arm.
 6. `report` – from the kept aggregate outputs only (`REPORT_INPUT_FILES`,
-   145 committed files with 45 manifests: the two `clean_manifest.json`;
+   146 committed files with 45 manifests: the two `clean_manifest.json`;
    `stage_counts.csv` and `cohort_manifest.json`; the export
    `manifest.json`; the primary's `result.json`, `analysis_manifest.json`
    and `summary.md`; the primary diagnostics' six files; under
@@ -513,18 +513,26 @@ implemented by its own OpenSpec change, in order.
    `adni-report-rank-sweep`), per rank of `RANK_SENSITIVITY_LADDER` in
    ladder order, `rank_<kk>/` `result.json`, `analysis_manifest.json` and
    `summary.md`, then the comparison's three files and the top rank's
-   diagnostics' six files, the sweep required), nothing else: no
+   diagnostics' six files, the sweep required; under `references/`
+   (change `adni-operating-characteristics`) the committed copy of the
+   cited MOTCO decision, `motco_adni_design/adni_design_decision.json`,
+   never read from a MOTCO clone), nothing else: no
    participant-level file is opened or required (their hashes are quoted
    from the manifests; every rank's `stage_means.csv` and
    `pls_loadings.csv` too), no data root, no MOTCO call, no pinned
-   numerics, so it runs on any clone. Twelve flags: the nine directories
+   numerics, so it runs on any clone. Thirteen flags: the ten directories
    (`--export-sensitivity-dir` the root of the variants,
    `--stage-sensitivity-dir` the root of the CN / LMCI / AD arm,
-   `--rank-sensitivity-dir` the root of the rank sweep), `--out`,
-   `--check`, `--force`. Gates before anything is written, each
+   `--rank-sensitivity-dir` the root of the rank sweep,
+   `--operating-characteristics-dir` the directory of the decision's
+   copy), `--out`, `--check`, `--force`. Gates before anything is written, each
    naming the file or setting, both values and the step to rerun: every
-   input present; every aggregate file hashes to the value its own manifest
-   records; the primary is the primary, the arm is
+   input present (the copy's hint the `git show` command that restores it
+   from the pinned MOTCO commit); every aggregate file hashes to the value
+   its own manifest records, and the copy to the sha256
+   `OPERATING_CHARACTERISTICS_SOURCE` pins (before the bridge table; it
+   counts neither among the 99 manifest-checked files nor among the
+   chain's links); the primary is the primary, the arm is
    `LATENT_SENSITIVITY_ARM` (`is_primary` in the two diagnostics manifests)
    and each variant directory of `REPORT_EXPORT_VARIANTS` holds its variant (its export, analysis and
    comparison manifests name it, its export manifest's `variant` block
@@ -559,7 +567,18 @@ implemented by its own OpenSpec change, in order.
    manifest names as the source of its floors, and 67 for the rank sweep:
    8 per rank against the primary export and the primary as `reference`,
    15 for the comparison against the primary, every rank's two files and
-   the primary export, 4 for the top rank's diagnostics). Writes
+   the primary export, 4 for the top rank's diagnostics); then the cited
+   measurement (gate 6): the copy's `verdict` the constant's and
+   `indicative` false, the key set of its `adni_reference` exactly the
+   map `_OPERATING_CHARACTERISTICS_REFERENCE`, and each of its 19 values
+   equal to the committed value it describes at the decision's digits (the
+   primary record's rank, `cv_mean_auroc`, eigengap, `angle` null q95,
+   design columns, `phase[ADNI2GO]` reference value and p-values; the
+   export manifest's run offset and kept features per block; the primary
+   diagnostics' |ρ| of `pls_0` with `phase`; the lowest and highest
+   `cv_mean_auroc` of the nine CV-selected analyses), a difference naming
+   the key, both values and its source, and that citing a measurement for
+   this analysis is a new change. Writes
    `reports/motco-adni-<date>.md` by the day it is written, or
    `reports/motco-adni-<date>-<n>.md` (`<n>` 2 or more,
    `REPORT_NAME_SAME_DAY`, change `adni-report-scale-variants`) for a later
@@ -568,10 +587,18 @@ implemented by its own OpenSpec change, in order.
    it; write mode without `--out` uses today's name without an ordinal and
    never picks one; an existing file stops it unless `--force`, naming the
    next free same-day name; staged as `<out>.tmp`, parsed back and
-   renamed): the thirteen sections of
-   `REPORT_SECTIONS` (summary; provenance, the report's manifest with the
-   QC archives and NIST workbooks; cohort; export; primary analysis; axis
-   diagnostics of the primary; latent-adjustment sensitivity; export
+   renamed): the fourteen sections of
+   `REPORT_SECTIONS` (summary, with the measured verdict and MOTCO's three
+   statements after the primary's reading; provenance, the report's
+   manifest with the QC archives, NIST workbooks and the decision's copy;
+   cohort; export; primary analysis; axis diagnostics of the primary;
+   operating characteristics (change `adni-operating-characteristics`,
+   `_operating_characteristics_section`): MOTCO's measurement at this
+   design quoted from the decision's copy, the citation, the decision rule,
+   the six size readings with the size sentence, the power per target
+   statistic and effect, the floor per statistic, the three statements and
+   the construction beside this design with the committed source of each
+   reference value; latent-adjustment sensitivity; export
    sensitivity, one group of tables per rule set of the pinned variants
    (`_export_variant_groups`, change `adni-report-nmr-all-columns`): the
    run-handling group (`nist_bridge`, `per_run_standardized`) under the
@@ -595,9 +622,10 @@ implemented by its own OpenSpec change, in order.
    rules; reproduction), every reference to
    another section numbered from `REPORT_SECTIONS`, every table titled by
    a level-3 heading and keyed by its first column, every number copied
-   from a record, a manifest or a CSV at the digits of the summary it
-   belongs to (no statistic, correlation, mean or count of its own, no
-   value across ranks), every reading sentence from
+   from a record, a manifest, a CSV or the cited decision file at the
+   digits of the summary it belongs to (no statistic, correlation, mean or
+   count of its own, no value across ranks), the decision's verdict, size
+   sentence and statements quoted verbatim, every reading sentence from
    `_statistic_reading_line`, `_arm_status_line`,
    `_export_variant_status_line`, `_stage_arm_status_line` and
    `_rank_status_line`, the variant lines from `_export_variant_lines`, the
@@ -609,7 +637,10 @@ implemented by its own OpenSpec change, in order.
    the documents; no sentence reads one sensitivity against another, and no
    forced rank is read against another sensitivity's CV-selected rank),
    the flagged components of every diagnostics run in its
-   `components.csv` order, seven rule lists verbatim: `READING_RULES`, then
+   `components.csv` order, eight rule lists verbatim: `READING_RULES`, then
+   `OPERATING_CHARACTERISTICS_READING_RULES` (led by a line naming
+   `adni-operating-characteristics` and that it was decided after every
+   run), then
    `LATENT_SENSITIVITY_READING_RULES`, then one list per rule set of the
    pinned variants in group order (`EXPORT_VARIANT_READING_RULES`, then
    `NMR_MEMBERSHIP_READING_RULES`, then `SCALE_VARIANT_READING_RULES`),
@@ -630,12 +661,16 @@ implemented by its own OpenSpec change, in order.
    (`reports/motco-adni-2026-10-28.md`, ten sections,
    `reports/motco-adni-2026-10-29.md`, eleven sections,
    `reports/motco-adni-2026-10-30.md`, twelve sections,
-   `reports/motco-adni-2026-10-31.md`, two export variants, and
-   `reports/motco-adni-2026-11-02.md`, three export variants) stops before
+   `reports/motco-adni-2026-10-31.md`, thirteen sections and two export
+   variants, `reports/motco-adni-2026-11-02.md`, thirteen sections and
+   three export variants, and `reports/motco-adni-2026-11-02-2.md`,
+   thirteen sections; since change `adni-operating-characteristics` each
+   stops at the section gate, absent "Operating characteristics", and no
+   committed report reaches the variant gate) stops before
    any gate, naming its absent and extra sections or variants (or that
    their order differs) and `git log -1 --format=%H -- <report>`, the
-   revision where it checks (36c9cc8, c94f5e7, 2e4a3e1, 13ce7c8 and 28e0d48
-   for those reports); otherwise it reruns the gates, regenerates
+   revision where it checks (36c9cc8, c94f5e7, 2e4a3e1, 13ce7c8, 28e0d48
+   and 67567e2 for those reports); otherwise it reruns the gates, regenerates
    the report and compares every table cell by cell and every other line
    line by line, printing each mismatch (section, table, row key, column,
    both values; or the line with both texts), exits 1 on any and writes
@@ -671,6 +706,12 @@ behavior or defaults change.
   (`stage_sensitivity.csv`, `stage_sensitivity.md`, its manifest), the
   rank-sensitivity comparison (`rank_sensitivity.csv`,
   `rank_sensitivity.md`, its manifest) and the reports under `reports/`.
+  Besides the outputs, the copy of MOTCO's operating-characteristics
+  decision file `references/motco_adni_design/adni_design_decision.json`
+  (change `adni-operating-characteristics`) is committed: it comes from
+  MOTCO's synthetic run, its `adni_reference` block holds aggregate values
+  already in the committed outputs, and it holds no participant value or
+  identifier.
   An arm's, a variant's or a forced rank's analysis directory follows the
   primary's rule:
   its `latent_scores.csv` and `analysis_metadata.csv` are
@@ -769,7 +810,12 @@ behavior or defaults change.
   `EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
   `SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES`,
   `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`,
-  `RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`;
+  `RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`, and
+  `OPERATING_CHARACTERISTICS_READING_RULES` with
+  `OPERATING_CHARACTERISTICS_SOURCE` (the one exception to "before any
+  run": they read a measurement MOTCO made at this design after every run
+  here, were stated before any report quoted it, change no constant,
+  record or status, and only the report prints them);
   `constants.py` reserves the others' names in its docstring and defines
   none of them.
 - Never set, change or default one of them in code, a flag or a script
@@ -812,10 +858,12 @@ behavior or defaults change.
   `os.environ` on import, before any module imports numpy.
 - `src/adni_sexdiff/cli.py` – argparse CLI (`build_parser`, `main`); thin
   layer that calls into `data.py` and prints `[command]`-prefixed progress
-  messages; `report` takes twelve flags (the nine directories, among them
-  `--export-sensitivity-dir`, `--stage-sensitivity-dir` and
-  `--rank-sensitivity-dir`, `--out`, `--check`, `--force`) and `main`
-  returns 1 on a `--check` mismatch;
+  messages; `report` takes thirteen flags (the ten directories, among
+  them `--export-sensitivity-dir`, `--stage-sensitivity-dir`,
+  `--rank-sensitivity-dir` and `--operating-characteristics-dir`, the
+  directory of the cited decision's copy, change
+  `adni-operating-characteristics`; `--out`, `--check`, `--force`) and
+  `main` returns 1 on a `--check` mismatch;
   `export-sensitivity` takes `--variant` (a name of `EXPORT_VARIANTS` or
   `all`; the variants and the rule are never flags) and the directories,
   `--n-jobs` and `--force`; `stage-sensitivity` takes `--input-dir`,
@@ -887,7 +935,13 @@ behavior or defaults change.
   `comparison`, `diagnostics`) and the conventions `RANK_SENSITIVITY_DIR`,
   `RANK_SENSITIVITY_RANK_DIR`, `RANK_SENSITIVITY_SUBDIRS`,
   `RANK_SENSITIVITY_TABLE`, `RANK_SENSITIVITY_SUMMARY` and
-  `RANK_SENSITIVITY_MANIFEST`, change `adni-rank-sensitivity`); the
+  `RANK_SENSITIVITY_MANIFEST`, change `adni-rank-sensitivity`;
+  `OPERATING_CHARACTERISTICS_READING_RULES` and
+  `OPERATING_CHARACTERISTICS_SOURCE` defined after every run, two
+  import-time assertions tying rule 1 to the source's commit and verdict,
+  with the conventions `OPERATING_CHARACTERISTICS_DIR` and
+  `OPERATING_CHARACTERISTICS_DECISION`, change
+  `adni-operating-characteristics`); the
   report's conventions (`DIAGNOSTICS_FILES`,
   `REPORT_VARIANT_FILES`, `REPORT_STAGE_ARM_FILES` keyed by the
   subdirectories of the CN / LMCI / AD arm, `REPORT_RANK_SWEEP_FILES`
@@ -895,7 +949,7 @@ behavior or defaults change.
   assertion ties its keys to `RANK_SENSITIVITY_SUBDIRS`),
   `REPORT_INPUT_FILES` keyed by directory role with one role per variant
   subdirectory, per arm subdirectory, per rank of the ladder and per sweep
-  subdirectory, `REPORT_SECTIONS` with thirteen titles, the name of a
+  subdirectory, `REPORT_SECTIONS` with fourteen titles, the name of a
   later report of the same day `REPORT_NAME_SAME_DAY` (tied to
   `REPORT_NAME` by an import-time assertion, change
   `adni-report-scale-variants`); no scientific
@@ -1020,6 +1074,13 @@ behavior or defaults change.
   generated in full by `report` from the aggregate outputs (every number
   copied, every sentence a constant or a renderer's) and checked by
   `report --check`; aggregate, no participant identifier.
+- `references/` – committed third-party aggregate files the report cites
+  (change `adni-operating-characteristics`):
+  `motco_adni_design/adni_design_decision.json`, MOTCO's
+  operating-characteristics decision copied byte for byte at the commit
+  `OPERATING_CHARACTERISTICS_SOURCE` pins. It is no pipeline output: no
+  step writes it, no manifest records it and `scripts/sync_results.sh` does
+  not move it (it is in every clone).
 - `openspec/` – OpenSpec change proposals/specs (see below).
 
 ## Environment & commands
@@ -1179,6 +1240,13 @@ behavior or defaults change.
   The blocks enter MOTCO 0.10.0 unweighted: p180 holds 133 / 298 of the
   joint features; the export manifest records the shares and
   `components.csv` the loading share of each block per component.
+- Reading rule 3 is measured at this design for the primary's construction
+  only (change `adni-operating-characteristics`,
+  `OPERATING_CHARACTERISTICS_READING_RULES`): MOTCO's verdict
+  `non_rejections_uninformative` makes a non-rejection of `delta`, `angle`
+  or `shape` in the primary uninformative, while the sensitivities were not
+  measured and their rules stand as written; the report quotes the
+  measurement in its section "Operating characteristics".
 - Flag and ask before changing, and never set without a proposal
   (constraint 5); decided so far: `CLEAN_OPTIONS`, `COHORT_RULE`,
   `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`,
@@ -1193,7 +1261,9 @@ behavior or defaults change.
   `STAGE_SENSITIVITY_READING_RULES` (with the predeclared
   `STAGE_SENSITIVITY_EXPECTED_COUNTS`), `RANK_SENSITIVITY_LADDER`,
   `RANK_SENSITIVITY_READING_RULES` (with the predeclared
-  `RANK_SENSITIVITY_EXPECTED_COUNTS`); every constant the six steps and
+  `RANK_SENSITIVITY_EXPECTED_COUNTS`), and, after every run,
+  `OPERATING_CHARACTERISTICS_READING_RULES` and
+  `OPERATING_CHARACTERISTICS_SOURCE`; every constant the six steps and
   the four sensitivity steps need is decided:
   - `CLEAN_OPTIONS` – metabo_adni's cutoffs, merge and transforms per
     platform. Decided by `adni-metabolomics-clean`: `mmc` 0.2, `mpc` 0.2,
@@ -1610,6 +1680,46 @@ behavior or defaults change.
     no latent adjustment, `n_jobs` 1) and rows 96 / 48 / 48 / 12. No
     rank's statistic or status is predeclared. No sweep value selects a
     rank, changes a constant or defines another arm.
+  - `OPERATING_CHARACTERISTICS_READING_RULES`,
+    `OPERATING_CHARACTERISTICS_SOURCE` – decided by
+    `adni-operating-characteristics` (2026-11-02, after every run here and
+    before any report quoted the measurement; the user chose to confirm the
+    predeclared rules beside them rather than rewrite them, and to extend
+    reading rule 3 to `delta`). Read beside `READING_RULES`, never in place
+    of it. The source: MOTCO's size and power at this design, MOTCO change
+    `adni-design-operating-characteristics` (pull request 71, commit
+    `0d726922173188c4d74ce4b2f87f6a26e5fc548f`),
+    `results/adni-design-2026-11-02/run/adni_design_decision.json`, sha256
+    `4cb482e7e16b19278467d6929f6905d71a8aef332ae55fc07ac86a3c1eec3ea1`,
+    verdict `non_rejections_uninformative`, not indicative; its committed
+    copy under `references/motco_adni_design/`. The nine measurement rules,
+    printed verbatim by the report only, after `READING_RULES`, cited as
+    "measurement rule N", in short:
+    1. The measurement changes no constant, record or status; every
+       predeclared rule and reading sentence stands.
+    2. Reading rule 3 is confirmed by a measurement; the clause "no power
+       statement exists at this design" records what was known when it was
+       written.
+    3. `angle` and `shape` non-rejections are uninformative (at most 0.076
+       and 0.062, R = 500).
+    4. Rule 3 extends to `delta` (at most 0.530 at the magnitude
+       construction's maximum, below the 0.80 floor), so the primary's
+       `delta` non-rejection is uninformative.
+    5. Size held at both controls (0.034 to 0.068 against 0.0695), at six
+       design columns and n = 1501.
+    6. A structural analogue: InterSIM blocks, 999 permutations; it matched
+       the AUROC, the phase-following first component and the run offset,
+       not the latent geometry (CV rank 19 against 8, eigengap 0.330
+       against 0.744, `angle` null q95 51.0° against 35.4°).
+    7. The primary's construction only: the sensitivities were not measured
+       and their rules stand as written.
+    8. No sensitivity's status is reread from the measured size.
+    9. MOTCO 0.13.0's code without residual correction leaves the 0.10.0
+       path unchanged; the pin stays v0.10.0.
+
+    `report` gates the copy by sha256, verdict and its `adni_reference`
+    against the committed records. Nothing is chosen from the measurement,
+    and citing another measurement is a new change.
 - Deviations from predeclared counts go to a manifest's `findings`, never
   silently.
 - Statistical choices are scientific decisions. Don't change them silently;

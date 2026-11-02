@@ -161,6 +161,10 @@ from .constants import (
     NIST_BRIDGE_RULE,
     NIST_BRIDGE_WORKBOOK_SHA256,
     NUMERIC_SETTINGS,
+    OPERATING_CHARACTERISTICS_DECISION,
+    OPERATING_CHARACTERISTICS_DIR,
+    OPERATING_CHARACTERISTICS_READING_RULES,
+    OPERATING_CHARACTERISTICS_SOURCE,
     PARTICIPANT_ID_COLUMN,
     PLATFORMS,
     RANK_SENSITIVITY_DIR,
@@ -9463,6 +9467,35 @@ _REPORT_VERSION_PACKAGES: tuple[str, ...] = (
     "pingouin", "openpyxl",
 )
 _REPORT_NO_NUMERICS = "no block (written before `adni-portable-numerics`)"
+#: The keys of the cited decision's ``adni_reference`` and the committed value
+#: each describes (design D4 of ``adni-operating-characteristics``): the role
+#: of ``REPORT_INPUT_FILES`` and the file it is read from (role ``None``: every
+#: CV-selected analysis' record), where in it, and the decimals MOTCO's script
+#: writes it at (``None``: compared by equality, an integer or a list). Gate 6
+#: compares the key set exactly and each value at its decimals; the lowest and
+#: highest ``cv_mean_auroc`` of the CV-selected analyses are computed for the
+#: gate only and never printed.
+_OPERATING_CHARACTERISTICS_REFERENCE: dict[str, tuple[str | None, str, str, int | None]] = {
+    "selected_lv": ("analysis", ANALYSIS_RESULT, "latent.selected_lv", None),
+    "cv_mean_auroc": ("analysis", ANALYSIS_RESULT, "latent.cv_mean_auroc", 4),
+    "cv_mean_auroc_range_cv_selected": (None, ANALYSIS_RESULT, "latent.cv_mean_auroc", 3),
+    "first_component_spearman_phase": ("diagnostics", DIAGNOSTICS_AXIS_CORRELATIONS, "spearman", 3),
+    "pooled_relative_eigengap": ("analysis", ANALYSIS_RESULT, "config_spectrum.pooled.relative_eigengap", 3),
+    "angle_null_q95": ("analysis", ANALYSIS_RESULT, "null_summary.angle.q95", 2),
+    **{
+        f"phase_offset.{block}.{key}": ("export", EXPORT_MANIFEST, f"{field}.{block}.{sub}", decimals)
+        for block in EXPORT_BLOCKS
+        for key, field, sub, decimals in (
+            ("median_abs_d", "counts.phase_offset", "median_abs_d", 2),
+            ("abs_d_gt_1", "counts.phase_offset", "abs_d_gt_1", None),
+            ("abs_corr_pc1_phase", "counts.phase_offset", "abs_corr_pc1_phase", 2),
+            ("n_features", "counts.features", "kept", None),
+        )
+    },
+    "design_columns": ("analysis", ANALYSIS_RESULT, "covariates.design_columns", None),
+    "phase_pooled_share": ("analysis", ANALYSIS_RESULT, "covariates.reference_row.phase[ADNI2GO]", 4),
+    **{f"p_values.{s}": ("analysis", ANALYSIS_RESULT, f"p_values.{s}", 4) for s in ANALYSIS_STATISTICS},
+}
 
 
 def _report_date(path: Path) -> str:
@@ -9484,9 +9517,9 @@ def _next_same_day_name(path: Path) -> Path:
 
 def _report_dirs(
     cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir,
-    stage_sensitivity_dir, rank_sensitivity_dir,
+    stage_sensitivity_dir, rank_sensitivity_dir, operating_characteristics_dir,
 ) -> dict[str, Path]:
-    """The directory of every role of ``REPORT_INPUT_FILES`` from the nine directory flags (design D7)."""
+    """The directory of every role of ``REPORT_INPUT_FILES`` from the ten directory flags (design D7; the tenth, design D4 of ``adni-operating-characteristics``)."""
     sensitivity = Path(sensitivity_dir) if sensitivity_dir is not None else Path(LATENT_SENSITIVITY_DIR)
     variants = Path(export_sensitivity_dir) if export_sensitivity_dir is not None else Path(EXPORT_SENSITIVITY_DIR)
     stage = Path(stage_sensitivity_dir) if stage_sensitivity_dir is not None else Path(STAGE_SENSITIVITY_DIR)
@@ -9509,7 +9542,19 @@ def _report_dirs(
         dirs[_rank_sweep_role(rank)] = sweep / _rank_dir_name(rank)
     for key, sub in RANK_SENSITIVITY_SUBDIRS.items():
         dirs[_rank_sweep_role(key)] = sweep / sub
+    dirs["operating-characteristics"] = (
+        Path(operating_characteristics_dir) if operating_characteristics_dir is not None else Path(OPERATING_CHARACTERISTICS_DIR)
+    )
     return dirs
+
+
+def _decision_copy_command(dirs: dict[str, Path]) -> str:
+    """The command that restores the cited decision's copy from a MOTCO clone at the pinned commit (``OPERATING_CHARACTERISTICS_SOURCE``)."""
+    source = OPERATING_CHARACTERISTICS_SOURCE
+    return (
+        f"git -C <MOTCO clone> show {source['commit']}:{source['path']} > "
+        f"{dirs['operating-characteristics'] / OPERATING_CHARACTERISTICS_DECISION}"
+    )
 
 
 def _report_rerun(role: str, name: str, dirs: dict[str, Path]) -> str:
@@ -9551,6 +9596,8 @@ def _report_rerun(role: str, name: str, dirs: dict[str, Path]) -> str:
                 f"{dirs[_rank_sweep_role(int(RANK_SENSITIVITY_LADDER['diagnosed_rank']))]} --out-dir {dirs[role]}`"
             )
         return "`adni-sexdiff rank-sensitivity --force`, then the sweep's `axis-diagnostics`"
+    if role == "operating-characteristics":
+        return f"`{_decision_copy_command(dirs)}` (the copy of `OPERATING_CHARACTERISTICS_SOURCE`, change adni-operating-characteristics)"
     return "`adni-sexdiff latent-sensitivity`"
 
 
@@ -9579,14 +9626,16 @@ def _load_report_inputs(
     export_sensitivity_dir=None,
     stage_sensitivity_dir=None,
     rank_sensitivity_dir=None,
+    operating_characteristics_dir=None,
     log: str = "[report]",
 ) -> dict:
-    """Read and gate every input of ``report`` (design D3 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``), before anything is written.
+    """Read and gate every input of ``report`` (design D3 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D4 of ``adni-operating-characteristics``), before anything is written.
 
     Parameters
     ----------
-    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir, stage_sensitivity_dir, rank_sensitivity_dir:
-        The nine directories (``_report_dirs``); ``None`` is the pipeline's.
+    cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir, stage_sensitivity_dir, rank_sensitivity_dir, operating_characteristics_dir:
+        The ten directories (``_report_dirs``); ``None`` is the pipeline's
+        (for the tenth, ``OPERATING_CHARACTERISTICS_DIR``).
     log:
         The progress prefix.
 
@@ -9607,9 +9656,14 @@ def _load_report_inputs(
         ``diagnostics``; each CSV read as text), ``provenance`` (one row
         per input file: path, sha256, bytes, where it is recorded),
         ``chain`` (one row per link: the manifest key, the upstream value,
-        the hash, ``ok``, the step to rerun), ``versions`` (the consistent
-        versions of ``_REPORT_PINNED_PACKAGES``) and ``findings`` (design
-        D8: dirty revisions, manifests without ``numerics``).
+        the hash, ``ok``, the step to rerun), ``decision`` (the parsed
+        copy of the cited MOTCO decision) and ``decision_reference`` (one
+        row per key of its ``adni_reference``, in the order of
+        ``_OPERATING_CHARACTERISTICS_REFERENCE``: ``key``, the ``recorded``
+        value, the ``decimals`` compared and the committed ``source``),
+        ``versions`` (the consistent versions of
+        ``_REPORT_PINNED_PACKAGES``) and ``findings`` (design D8: dirty
+        revisions, manifests without ``numerics``).
 
     Notes
     -----
@@ -9618,7 +9672,11 @@ def _load_report_inputs(
     step to rerun, never a participant: (1) every file of
     ``REPORT_INPUT_FILES`` present; (2) every aggregate file hashes to the
     value its own manifest records under ``outputs`` (manifests are hashed
-    for the chain, not checked against themselves); (3) the primary is the
+    for the chain, not checked against themselves), and the copy of the
+    cited decision to the sha256 ``OPERATING_CHARACTERISTICS_SOURCE`` pins
+    (handled before the bridge-table branch, since no manifest records it;
+    an absent or edited copy names the ``git show`` command that restores
+    it from the pinned MOTCO commit); (3) the primary is the
     primary (no latent adjustment recorded or in the record, ``is_primary``
     in its diagnostics), the arm is ``LATENT_SENSITIVITY_ARM`` (its
     conditioning and name, ``is_primary`` false in its diagnostics) and each
@@ -9650,7 +9708,17 @@ def _load_report_inputs(
     version; (5) the chain, link by link from the clean manifests to the
     arm's, every variant's, the CN / LMCI / AD arm's and the rank sweep's
     diagnostics, the primary feature tables the arm export names as the
-    source of its floors included. The identity and reported-run gates read
+    source of its floors included; (6) the cited measurement: the copy's
+    ``verdict`` the constant's and ``indicative`` false, the key set of its
+    ``adni_reference`` exactly ``_OPERATING_CHARACTERISTICS_REFERENCE`` and
+    each value equal to the committed value it describes at the decision's
+    digits (``round(committed, d) == round(recorded, d)``, integers and
+    lists by equality; the AUROC range against the lowest and highest
+    ``cv_mean_auroc`` of the CV-selected analyses, |``spearman``| of
+    ``pls_0`` against ``phase`` from the primary diagnostics); it runs after
+    the chain, so every committed value it reads has passed gates 2 to 5,
+    and a difference says that citing a measurement for this analysis is a
+    new change. The identity and reported-run gates read
     a manifest's own content, so they run before the chain: an arm given as
     the primary, swapped variant or rank directories, a crossed CN / LMCI /
     AD arm or rank, an unanchored sweep, an unreported run or an unpinned
@@ -9662,7 +9730,7 @@ def _load_report_inputs(
     """
     dirs = _report_dirs(
         cleaned_dir, cohort_dir, input_dir, analysis_dir, diagnostics_dir, sensitivity_dir, export_sensitivity_dir,
-        stage_sensitivity_dir, rank_sensitivity_dir,
+        stage_sensitivity_dir, rank_sensitivity_dir, operating_characteristics_dir,
     )
 
     # (1) every input present
@@ -9696,12 +9764,26 @@ def _load_report_inputs(
     # (2) every aggregate file against its own manifest
     provenance: list[dict] = []
     checked = 0
+    source = OPERATING_CHARACTERISTICS_SOURCE
     for role, names in REPORT_INPUT_FILES.items():
         role_manifests = manifest_of_role.get(role, {})
         for name in names:
             entry = files[role][name]
             if name in role_manifests:
                 provenance.append({**entry, "role": role, "name": name, "recorded_in": "hashed for the chain (recorded by the manifests downstream)"})
+                continue
+            if role == "operating-characteristics":
+                # the cited decision's copy: recorded by the constant, not by a manifest (design D4 of adni-operating-characteristics)
+                if entry["sha256"] != source["sha256"]:
+                    raise RuntimeError(
+                        f"{entry['path']}: sha256 {entry['sha256']} differs from the hash OPERATING_CHARACTERISTICS_SOURCE "
+                        f"pins ({source['sha256']}, MOTCO commit {str(source['commit'])[:7]}): the copy is not the cited "
+                        f"measurement; restore it with {_report_rerun(role, name, dirs)}; nothing was written"
+                    )
+                provenance.append({
+                    **entry, "role": role, "name": name,
+                    "recorded_in": f"`OPERATING_CHARACTERISTICS_SOURCE`: sha256 (MOTCO {str(source['commit'])[:7]})",
+                })
                 continue
             if not role_manifests:
                 # a bridge table: recorded by its variant's export manifest, checked once that manifest is identified (gate 3)
@@ -9725,6 +9807,11 @@ def _load_report_inputs(
     print(
         f"{log} {checked} aggregate files hash to the values their manifests record under outputs; {len(manifests)} "
         "manifests hashed for the chain"
+    )
+    print(
+        f"{log} cited measurement: {files['operating-characteristics'][OPERATING_CHARACTERISTICS_DECISION]['path']} hashes to "
+        f"the sha256 OPERATING_CHARACTERISTICS_SOURCE pins (MOTCO change {source['change']}, pull request "
+        f"{source['pull_request']}, commit {str(source['commit'])[:7]})"
     )
 
     a_role = "analysis"
@@ -10178,6 +10265,86 @@ def _load_report_inputs(
         "arm's and the rank sweep's diagnostics"
     )
 
+    # (6) the cited measurement describes the committed analysis (design D4 of adni-operating-characteristics)
+    oc_role = "operating-characteristics"
+    oc_path = files[oc_role][OPERATING_CHARACTERISTICS_DECISION]["path"]
+    decision = json.loads(oc_path.read_text())
+    new_change = (
+        "the measurement was calibrated against another analysis than the one committed here, so citing a measurement "
+        "for this analysis is a new change (OPERATING_CHARACTERISTICS_SOURCE); nothing was written"
+    )
+    if decision.get("verdict") != source["verdict"]:
+        raise RuntimeError(
+            f"{oc_path} records verdict {decision.get('verdict')!r}, but OPERATING_CHARACTERISTICS_SOURCE cites "
+            f"{source['verdict']!r}; citing another measurement is a new change; nothing was written"
+        )
+    if decision.get("indicative") is not False:
+        raise RuntimeError(
+            f"{oc_path} records indicative {decision.get('indicative')!r} (reasons {decision.get('indicative_reasons')!r}): "
+            "an indicative measurement is not cited; citing another measurement is a new change; nothing was written"
+        )
+    recorded_reference = _flatten(decision.get("adni_reference") or {})
+    absent = [k for k in _OPERATING_CHARACTERISTICS_REFERENCE if k not in recorded_reference]
+    extra = [k for k in recorded_reference if k not in _OPERATING_CHARACTERISTICS_REFERENCE]
+    if absent or extra:
+        raise RuntimeError(
+            f"{oc_path}: the keys of adni_reference are not the report's map (`_OPERATING_CHARACTERISTICS_REFERENCE`): "
+            f"absent {', '.join(repr(k) for k in absent) or 'none'}; extra {', '.join(repr(k) for k in extra) or 'none'}; "
+            + new_change
+        )
+    cv_records = [r for r in (primary, arm, *variant_records.values(), st_record) if r["latent"]["component_selection"] == "cv"]
+    axis_path = files["diagnostics"][DIAGNOSTICS_AXIS_CORRELATIONS]["path"]
+    axis = pd.read_csv(axis_path, dtype=object, keep_default_na=False)
+    first = axis[(axis["component"] == "pls_0") & (axis["variable"] == "phase")]
+    if len(first) != 1:
+        raise RuntimeError(
+            f"{axis_path} holds {len(first)} rows `pls_0` · `phase` (one expected); rerun "
+            f"{_report_rerun('diagnostics', DIAGNOSTICS_AXIS_CORRELATIONS, dirs)}; nothing was written"
+        )
+    reference_rows: list[dict] = []
+    for key, (role, name, field, decimals) in _OPERATING_CHARACTERISTICS_REFERENCE.items():
+        if role is None:
+            committed = [min(r["latent"]["cv_mean_auroc"] for r in cv_records), max(r["latent"]["cv_mean_auroc"] for r in cv_records)]
+            where = (
+                f"lowest and highest `{field}` of the {len(cv_records)} CV-selected analyses' `{name}` (the primary, the "
+                "latent arm, every export variant, the CN / LMCI / AD arm)"
+            )
+        elif role == "diagnostics":
+            committed = abs(float(first.iloc[0][field]))
+            where = f"|`{field}`| of row `pls_0` · `phase` of `{axis_path}`"
+        else:
+            node = primary if role == "analysis" else manifests["export"]
+            for part in field.split("."):
+                if not isinstance(node, dict) or part not in node:
+                    raise RuntimeError(
+                        f"{dirs[role] / name} has no key {field!r}, which adni_reference.{key} of {oc_path} describes; "
+                        + new_change
+                    )
+                node = node[part]
+            committed = node
+            where = f"`{field}` of `{dirs[role] / name}`"
+        recorded = recorded_reference[key]
+        if decimals is None:
+            same = committed == recorded
+            shown = committed
+        elif isinstance(recorded, list):
+            same = len(recorded) == len(committed) and all(round(float(c), decimals) == round(float(r), decimals) for c, r in zip(committed, recorded))
+            shown = [round(float(c), decimals) for c in committed]
+        else:
+            same = round(float(committed), decimals) == round(float(recorded), decimals)
+            shown = round(float(committed), decimals)
+        if not same:
+            raise RuntimeError(
+                f"{oc_path}: adni_reference.{key} records {recorded!r}, but the committed value is {shown!r} ({where}"
+                + ("" if decimals is None else f", at {decimals} decimals") + f"): {new_change}"
+            )
+        reference_rows.append({"key": key, "recorded": recorded, "decimals": decimals, "source": where})
+    print(
+        f"{log} cited measurement: verdict `{decision['verdict']}`, not indicative; adni_reference: {len(reference_rows)} "
+        f"values, each equal to its committed source at the decision's digits (the AUROC range over "
+        f"{len(cv_records)} CV-selected analyses)"
+    )
+
     # findings of the report itself (design D8)
     findings: list[str] = []
     for label, manifest in manifests.items():
@@ -10233,6 +10400,8 @@ def _load_report_inputs(
         },
         "provenance": provenance,
         "chain": chain,
+        "decision": decision,
+        "decision_reference": reference_rows,
         "versions": versions,
         "numerics_absent": numerics_absent,
         "findings": findings,
@@ -11063,8 +11232,132 @@ def _rank_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[s
     b.code(*(_text(c.get("command")) for c in commands.values()))
 
 
+def _recorded(value) -> str:
+    """A value of the cited decision as the file records it: a list joined with commas, anything else as JSON writes it."""
+    if isinstance(value, list):
+        return ", ".join(v if isinstance(v, str) else json.dumps(v) for v in value)
+    return value if isinstance(value, str) else json.dumps(value)
+
+
+def _rank_counts(counts: dict) -> str:
+    """CV-selected ranks as ``rank: count`` pairs in rank order."""
+    return ", ".join(f"{k}: {v}" for k, v in sorted(counts.items(), key=lambda kv: int(kv[0])))
+
+
+def _operating_characteristics_section(b: _ReportBuilder, inputs: dict) -> None:
+    """The "Operating characteristics" section: MOTCO's size and power at this design, quoted from the decision's copy (design D5 of ``adni-operating-characteristics``).
+
+    The lead is the section's one sentence of its own; every other sentence is
+    the decision file's, verbatim (``size.sentence`` and ``statements``), and
+    every value is the file's: rates and standard errors at three decimals,
+    the bound at four, construction values at six significant digits
+    (``_fmt``), the decision rule and the reference values as recorded. The
+    construction table puts each ``calibration_realized`` quantity beside the
+    ``adni_reference`` value it was calibrated against, then the reference
+    keys without a counterpart, each with the committed source gate 6 checked
+    it against. The measurement's limits are measurement rules 6 to 9, in
+    "Reading rules".
+    """
+    source, decision = OPERATING_CHARACTERISTICS_SOURCE, inputs["decision"]
+    copy = inputs["files"]["operating-characteristics"][OPERATING_CHARACTERISTICS_DECISION]
+    b.para(
+        f"MOTCO measured the size and power of the primary's construction at this design in MOTCO change "
+        f"`{source['change']}` (pull request {source['pull_request']}, commit `{str(source['commit'])[:7]}`). The tables "
+        f"quote its decision file from the committed copy `{copy['path']}`, pinned by `OPERATING_CHARACTERISTICS_SOURCE` "
+        "and checked against the committed records before anything was written (the last table). The measurement changes "
+        "no constant, record or status. This section is read under `READING_RULES` and "
+        f"`OPERATING_CHARACTERISTICS_READING_RULES` ({_section_ref('Reading rules')})."
+    )
+    units = decision["units"]
+    b.table("Cited measurement", [
+        {"field": field, "value": value}
+        for field, value in (
+            ("repository", source["repository"]),
+            ("change", source["change"]),
+            ("pull request", _text(source["pull_request"])),
+            ("commit", source["commit"]),
+            ("path at the commit", source["path"]),
+            ("report at the commit", source["report"]),
+            ("sha256 pinned by `OPERATING_CHARACTERISTICS_SOURCE`", source["sha256"]),
+            ("copy", str(copy["path"])),
+            ("sha256 of the copy", copy["sha256"]),
+            ("verdict", decision["verdict"]),
+            ("indicative", _text(decision["indicative"])),
+            ("units recorded / expected / failures", f"{units['recorded']} / {units['expected']} / {units['failures']}"),
+            ("settings hash", decision["settings_hash"]),
+        )
+    ], ["field", "value"])
+    b.table("Decision rule", [{"item": k, "text": _recorded(v)} for k, v in decision["rule"].items()], ["item", "text"])
+    size = decision["size"]
+    b.table("Size at this design", [
+        {
+            "reading": f"{r['mode']} {r['statistic']}", "effect": _fmt(r["effect"]),
+            "rejections / replicates": f"{r['rejections']} / {r['replicates']}", "rate": _fmt(r["rate"], ".3f"),
+            "bound": _fmt(r["bound"], ".4f"), "verdict": r["verdict"],
+        }
+        for r in size["readings"]
+    ], ["reading", "effect", "rejections / replicates", "rate", "bound", "verdict"], align="lrrrrl")
+    b.para(size["sentence"])
+    power = decision["power"]
+    b.table("Power at this design", [
+        {
+            "row": f"{statistic} e = {_fmt(e['effect'])}", "construction": p["mode"],
+            "rejections / replicates": f"{e['rejections']} / {e['replicates']}", "rate": _fmt(e["rate"], ".3f"),
+            "Monte Carlo SE": _fmt(e["monte_carlo_se"], ".3f"), "CV-selected rank median": _fmt(e["selected_rank_median"]),
+            "CV-selected ranks": _rank_counts(e["selected_rank"]),
+        }
+        for statistic, p in power.items() for e in p["effects"]
+    ], ["row", "construction", "rejections / replicates", "rate", "Monte Carlo SE", "CV-selected rank median", "CV-selected ranks"],
+        align="llrrrrl")
+    b.table("Power floor per statistic", [
+        {
+            "statistic": statistic, "floor": _fmt(p["floor"]), "maximum rate": _fmt(p["max_rate"], ".3f"),
+            "effect at the maximum": _fmt(p["effect_at_max"]), "construction maximum": _fmt(p["construction_maximum"]),
+            "informative from": "none" if p["informative_from"] is None else _fmt(p["informative_from"]),
+        }
+        for statistic, p in power.items()
+    ], ["statistic", "floor", "maximum rate", "effect at the maximum", "construction maximum", "informative from"], align="lrrrrl")
+    b.heading("Statements per statistic")
+    b.bullets([decision["statements"][s] for s in ANALYSIS_STATISTICS])
+    cal = decision["calibration_realized"]
+    auroc, offset = cal["adjusted_auroc"], cal["phase_offset"]
+    reference = {r["key"]: r for r in inputs["decision_reference"]}
+    beside = (
+        ("held-out stage AUROC", _fmt(auroc["mean"]), "adjusted_auroc.mean", "cv_mean_auroc"),
+        ("held-out stage AUROC spread", f"{_fmt(auroc['quantiles']['q05'])} to {_fmt(auroc['quantiles']['q95'])}",
+         "adjusted_auroc.quantiles.q05, q95", "cv_mean_auroc_range_cv_selected"),
+        ("first component |rho| with phase", _fmt(cal["adjusted_rho_phase"]["median_abs"]), "adjusted_rho_phase.median_abs",
+         "first_component_spearman_phase"),
+        ("CV-selected rank", _rank_counts(cal["selected_rank"]), "selected_rank", "selected_lv"),
+        ("pooled relative eigengap", _fmt(cal["pooled_relative_eigengap_median"]), "pooled_relative_eigengap_median",
+         "pooled_relative_eigengap"),
+        ("`angle` null q95", _fmt(cal["angle_null_q95_median"]), "angle_null_q95_median", "angle_null_q95"),
+        ("run offset, the block that carries it: median |d|", _fmt(offset["median_abs_d"]), "phase_offset.median_abs_d",
+         "phase_offset.p180.median_abs_d"),
+        ("run offset, the block that carries it: |corr(PC1, phase)|", _fmt(offset["abs_corr_pc1_phase"]),
+         "phase_offset.abs_corr_pc1_phase", "phase_offset.p180.abs_corr_pc1_phase"),
+        ("run offset, the other block: median |d|", _fmt(offset["other_block_median_abs_d"]),
+         "phase_offset.other_block_median_abs_d", "phase_offset.nmr.median_abs_d"),
+        ("run offset, the other block: |corr(PC1, phase)|", _fmt(offset["other_block_abs_corr_pc1_phase"]),
+         "phase_offset.other_block_abs_corr_pc1_phase", "phase_offset.nmr.abs_corr_pc1_phase"),
+    )
+    paired = {key for *_, key in beside}
+    rows = [(quantity, value, f"calibration_realized.{field}", key) for quantity, value, field, key in beside]
+    rows += [(key, "n/a", "n/a", key) for key in reference if key not in paired]
+    b.table("Construction beside this design", [
+        {
+            "quantity": quantity, "construction": value, "construction key": field,
+            "this design": _recorded(reference[key]["recorded"]), "adni_reference key": key,
+            "compared at": "equality" if reference[key]["decimals"] is None else f"{reference[key]['decimals']} decimals",
+            "checked against": reference[key]["source"],
+        }
+        for quantity, value, field, key in rows
+    ], ["quantity", "construction", "construction key", "this design", "adni_reference key", "compared at", "checked against"],
+        align="lrlrlll")
+
+
 def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
-    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D2 to D5 of ``adni-report-nmr-all-columns``; D3, D4 and D8 of ``adni-report-scale-variants``).
+    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D2 to D5 of ``adni-report-nmr-all-columns``; D3, D4 and D8 of ``adni-report-scale-variants``; D5 and D6 of ``adni-operating-characteristics``).
 
     Parameters
     ----------
@@ -11083,15 +11376,26 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
 
     Notes
     -----
-    The thirteen sections of ``REPORT_SECTIONS``, in order, each table titled
+    The fourteen sections of ``REPORT_SECTIONS``, in order, each table titled
     by a level-3 heading and keyed by its first column; every reference to
     another section is numbered from ``REPORT_SECTIONS`` (``_section_ref``).
-    Every number is read from a record, a manifest or a CSV and formatted
-    with the digits of the summary it belongs to (``_fmt`` with six
-    significant digits for record values, p-values as recorded, counts as
-    integers, correlations and shares as ``diagnostics.md`` prints them); no
-    statistic, correlation, mean or count is computed here, and no value
-    across the ranks of the sweep. The reading sentences are
+    Every number is read from a record, a manifest, a CSV or the cited
+    decision file and formatted with the digits of the summary it belongs to
+    (``_fmt`` with six significant digits for record values, p-values as
+    recorded, counts as integers, correlations and shares as
+    ``diagnostics.md`` prints them, the decision's rates and standard errors
+    at three decimals and its bound at four); no statistic, correlation,
+    mean or count is computed here, and no value across the ranks of the
+    sweep. "Operating characteristics", the seventh section
+    (``_operating_characteristics_section``), quotes MOTCO's measurement at
+    this design from the decision's copy: the citation, the decision rule,
+    the size readings with ``size.sentence``, the power per target statistic
+    and effect, the floor per statistic, the three ``statements`` and the
+    construction beside this design with the committed source of each
+    reference value; the summary names the verdict and lists the three
+    statements after the primary's reading bullets. Besides the lead of that
+    section, the decision's sentences are its own, verbatim, and no
+    sensitivity's status is reread from them. The reading sentences are
     ``_statistic_reading_line``, ``_arm_status_line``,
     ``_export_variant_status_line``, ``_stage_arm_status_line`` and
     ``_rank_status_line``, the ones ``summary.md``,
@@ -11111,9 +11415,14 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     variant's status lines, "Export sensitivity" one group of tables per
     rule set (``_export_sensitivity_section``), and the reading-rules
     section one list per rule set, in group order, after
-    ``LATENT_SENSITIVITY_READING_RULES``: seven lists with
-    ``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES`` and
-    ``SCALE_VARIANT_READING_RULES``.
+    ``LATENT_SENSITIVITY_READING_RULES``: eight lists, ``READING_RULES``,
+    ``OPERATING_CHARACTERISTICS_READING_RULES`` (led by the line that names
+    ``adni-operating-characteristics`` and that it was decided after every
+    run), ``LATENT_SENSITIVITY_READING_RULES``,
+    ``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES``,
+    ``SCALE_VARIANT_READING_RULES``, ``STAGE_SENSITIVITY_READING_RULES`` and
+    ``RANK_SENSITIVITY_READING_RULES``. "Reproduction" ends with the
+    ``git show`` command that restores the decision's copy.
     No sentence reads one sensitivity against another; a sentence that
     lists several, each beside the primary, compares none. The body
     depends on the inputs and ``date`` only: no revision, host, time or
@@ -11142,12 +11451,15 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.lines.append(f"# {_REPORT_TITLE} — {date}")
     b.para(
         "Generated in full by `adni-sexdiff report` (changes `adni-report`, `adni-report-variants`, "
-        "`adni-report-stage-arm`, `adni-report-rank-sweep`, `adni-report-nmr-all-columns` and "
-        "`adni-report-scale-variants`) from the kept aggregate "
-        "outputs of the pipeline: every number is copied from a record, a manifest or a CSV and formatted with the digits "
+        "`adni-report-stage-arm`, `adni-report-rank-sweep`, `adni-report-nmr-all-columns`, "
+        "`adni-report-scale-variants` and `adni-operating-characteristics`) from the kept aggregate "
+        "outputs of the pipeline and the committed copy of MOTCO's operating-characteristics decision: every number is "
+        "copied from a record, a manifest, a CSV or the decision file and formatted with the digits "
         "of the summary it belongs to, every reading sentence is the one `summary.md`, `latent_sensitivity.md`, "
-        "`export_sensitivity.md`, `stage_sensitivity.md` or `rank_sensitivity.md` prints, and the reading rules are the "
-        "constants, verbatim. The primary analysis stays primary in every table; the arm is read beside it under "
+        "`export_sensitivity.md`, `stage_sensitivity.md` or `rank_sensitivity.md` prints or MOTCO's own, quoted verbatim "
+        "from the decision file, and the reading rules are the constants, verbatim. The primary analysis stays primary "
+        "in every table; the operating characteristics MOTCO measured at this design are read under `READING_RULES` and "
+        "`OPERATING_CHARACTERISTICS_READING_RULES`, the arm beside the primary under "
         "`READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`, "
         + ", ".join(
             f"the export variant{'' if len(group) == 1 else 's'} " + _and_join([f"`{v}`" for v in group])
@@ -11180,6 +11492,13 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     )
     b.para(f"Reading, under `READING_RULES` ({_section_ref('Reading rules')}):")
     b.bullets([_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS])
+    decision = inputs["decision"]
+    b.para(
+        f"MOTCO's operating characteristics at this design (`OPERATING_CHARACTERISTICS_SOURCE`, "
+        f"{_section_ref('Operating characteristics')}), read under `OPERATING_CHARACTERISTICS_READING_RULES` "
+        f"({_section_ref('Reading rules')}): verdict `{decision['verdict']}`. Its statements, verbatim:"
+    )
+    b.bullets([decision["statements"][s] for s in ANALYSIS_STATISTICS])
     b.para(
         f"The predeclared sensitivity arm `{arm_name}` (`LATENT_SENSITIVITY_ARM`: `{LATENT_SENSITIVITY_ARM['setting']}` = "
         f"`{LATENT_SENSITIVITY_ARM['conditioning']}`, the same five covariates, every other setting the primary's; "
@@ -11628,7 +11947,11 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ], ["variable", "source", "derivation"])
     _diagnostics_section(b, inputs["tables"]["diagnostics"], d_manifest)
 
-    # 7. Latent-adjustment sensitivity ----------------------------------------------------
+    # 7. Operating characteristics -------------------------------------------------------
+    b.section(next(sections))
+    _operating_characteristics_section(b, inputs)
+
+    # 8. Latent-adjustment sensitivity ----------------------------------------------------
     b.section(next(sections))
     cmp_ref, cmp_arm = cmp_manifest.get("reference", {}), cmp_manifest.get("arm", {})
     adjustment = arm["latent_adjustment"]
@@ -11712,19 +12035,19 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para("The `motco analyze` command that reproduces the arm's directory (`cli_equivalent`; " + _text(a_settings.get("cli_equivalent", {}).get("note")) + "):")
     b.code(_text(a_settings.get("cli_equivalent", {}).get("command")))
 
-    # 8. Export sensitivity ----------------------------------------------------------------
+    # 9. Export sensitivity ----------------------------------------------------------------
     b.section(next(sections))
     _export_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 9. Stage-definition sensitivity ------------------------------------------------------
+    # 10. Stage-definition sensitivity ------------------------------------------------------
     b.section(next(sections))
     _stage_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 10. Rank sensitivity -----------------------------------------------------------------
+    # 11. Rank sensitivity -----------------------------------------------------------------
     b.section(next(sections))
     _rank_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 11. Findings -------------------------------------------------------------------------
+    # 12. Findings -------------------------------------------------------------------------
     b.section(next(sections))
     b.para("Every deviation from the predeclared counts and every finding of every input manifest, verbatim, under its step; then the report's own.")
     for label, m in manifests.items():
@@ -11740,11 +12063,18 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     else:
         b.para("None.")
 
-    # 12. Reading rules --------------------------------------------------------------------
+    # 13. Reading rules --------------------------------------------------------------------
     b.section(next(sections))
     b.heading("READING_RULES")
     b.para("Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):")
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(READING_RULES, 1)))
+    b.heading("OPERATING_CHARACTERISTICS_READING_RULES")
+    b.para(
+        "Binding for every reader of the result after MOTCO's measurement at this design "
+        "(`OPERATING_CHARACTERISTICS_READING_RULES`, decided by `adni-operating-characteristics` after every run here; it "
+        'changes no constant, record or status), after `READING_RULES`, cited as "measurement rule N":'
+    )
+    b.para(*(f"{i}. {rule}" for i, rule in enumerate(OPERATING_CHARACTERISTICS_READING_RULES, 1)))
     b.heading("LATENT_SENSITIVITY_READING_RULES")
     b.para(
         f"Binding for every reader of the arm (`LATENT_SENSITIVITY_READING_RULES`, decided by "
@@ -11763,7 +12093,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para(_rank_sweep_rules_heading()[-1])
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(RANK_SENSITIVITY_READING_RULES, 1)))
 
-    # 13. Reproduction ---------------------------------------------------------------------
+    # 14. Reproduction ---------------------------------------------------------------------
     b.section(next(sections))
     sens_dir = dirs[s_role].parent
     reads_root = [v for v in variants if manifests[v_labels[v]["export"]].get("variant", {}).get("reads_data_root")]
@@ -11823,6 +12153,14 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "analysis manifests):"
     )
     b.code(*commands)
+    oc_source = OPERATING_CHARACTERISTICS_SOURCE
+    b.para(
+        f"The cited measurement ({_section_ref('Operating characteristics')}) is not rerun here: `report` reads the "
+        f"committed copy `{files['operating-characteristics'][OPERATING_CHARACTERISTICS_DECISION]['path']}`, which this "
+        f"command restores from a MOTCO clone at the commit `OPERATING_CHARACTERISTICS_SOURCE` pins; the run itself is "
+        f"MOTCO's, described in `{oc_source['report']}` at that commit:"
+    )
+    b.code(_decision_copy_command(dirs))
     return b.text(), b.tables
 
 
@@ -12021,19 +12359,23 @@ _REPORT_VARIANT_HEADING_RE = re.compile(r"^### Export variant `([^`]+)`$")
 
 
 def _check_report_layout(path: Path) -> str:
-    """The report's text, after checking its layout (design D6 of ``adni-report-variants`` and ``adni-report-nmr-all-columns``; D9 of ``adni-report-scale-variants``).
+    """The report's text, after checking its layout (design D6 of ``adni-report-variants`` and ``adni-report-nmr-all-columns``; D9 of ``adni-report-scale-variants``; D7 of ``adni-operating-characteristics``).
 
     Its level-2 headings must be ``REPORT_SECTIONS`` in order; then the
     export variants it lists, its headings ``Export variant `<name>``` in
     "Export sensitivity" in order (``_REPORT_VARIANT_HEADING_RE``), must be
     ``REPORT_EXPORT_VARIANTS``. A report written by an earlier layout of
-    ``report`` (the reports of 2026-10-28, 2026-10-29 and 2026-10-30 by
-    their sections, the report of 2026-10-31 by its two export variants and
-    the report of 2026-11-02 by its three, which checks at 28e0d48)
-    stops the check before any input gate and before any comparison,
-    naming the report, the sections or variants it lacks and adds (or that
-    their order differs), and how to find the revision that committed it,
-    where it checks; nothing is written.
+    ``report`` stops the check before any input gate and before any
+    comparison: since "Operating characteristics" was added (change
+    ``adni-operating-characteristics``) every committed report stops at the
+    section gate, the report of 2026-11-02-2 by its thirteen sections (it
+    checks at 67567e2), those of 2026-11-02 (28e0d48) and 2026-10-31
+    (13ce7c8) likewise, and those of 2026-10-30 (2e4a3e1), 2026-10-29
+    (c94f5e7) and 2026-10-28 (36c9cc8) with their older absences too; the
+    variant gate is reached only by a report with the current sections. The
+    check stops naming the report, the sections or variants it lacks and
+    adds (or that their order differs), and how to find the revision that
+    committed it, where it checks; nothing is written.
     """
     text = path.read_text()
     parsed = parse_report(text)
@@ -12067,10 +12409,9 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
 
     A report whose level-2 headings are not ``REPORT_SECTIONS`` in order, or
     whose export variants are not ``REPORT_EXPORT_VARIANTS``, stops first
-    (``_check_report_layout``): the reports of 2026-10-28, 2026-10-29 and
-    2026-10-30 by their sections, the reports of 2026-10-31 and 2026-11-02 by
-    their two and three export variants (change
-    ``adni-report-scale-variants``).
+    (``_check_report_layout``): every report committed before change
+    ``adni-operating-characteristics``, by its sections (the report of
+    2026-11-02-2 lacks "Operating characteristics" alone).
 
     Parameters
     ----------
@@ -12130,6 +12471,7 @@ def run_report(
     export_sensitivity_dir: str | Path | None = None,
     stage_sensitivity_dir: str | Path | None = None,
     rank_sensitivity_dir: str | Path | None = None,
+    operating_characteristics_dir: str | Path | None = None,
     out: str | Path | None = None,
     check: bool = False,
     force: bool = False,
@@ -12183,6 +12525,13 @@ def run_report(
         then through ``RANK_SENSITIVITY_SUBDIRS`` (``REPORT_RANK_SWEEP_FILES``):
         each rank's three aggregate analysis files, the comparison's three
         files and the top rank's diagnostics' six. The sweep is required.
+    operating_characteristics_dir:
+        The directory of the committed copy of the cited MOTCO decision
+        (default ``constants.OPERATING_CHARACTERISTICS_DIR``, change
+        ``adni-operating-characteristics``), read as
+        ``OPERATING_CHARACTERISTICS_DECISION`` and checked against
+        ``OPERATING_CHARACTERISTICS_SOURCE``; never a MOTCO clone. The copy
+        is required.
     out:
         The report path, whose name must match ``constants.REPORT_NAME``
         (``reports/motco-adni-<date>.md``) or, for a later report of the
@@ -12205,9 +12554,11 @@ def run_report(
         ``REPORT_EXPORT_VARIANTS`` (change ``adni-report-nmr-all-columns``:
         the report of 2026-10-31, which checks at 13ce7c8; change
         ``adni-report-scale-variants``: the report of 2026-11-02, which
-        checks at 28e0d48), stops before any gate, naming its absent and
-        extra sections or variants and how to find the revision that
-        committed it, where it checks. Nothing is written.
+        checks at 28e0d48; change ``adni-operating-characteristics``: the
+        report of 2026-11-02-2, which checks at 67567e2, and since then every
+        earlier report by its sections), stops before any gate, naming its
+        absent and extra sections or variants and how to find the revision
+        that committed it, where it checks. Nothing is written.
     force:
         Replace an existing report at ``out`` (write mode).
 
@@ -12220,8 +12571,9 @@ def run_report(
 
     Notes
     -----
-    Inputs are the 145 kept aggregate files of ``REPORT_INPUT_FILES`` (45
-    manifests) and nothing else: no participant-level file is opened or
+    Inputs are the 146 kept aggregate files of ``REPORT_INPUT_FILES`` (45
+    manifests, and the committed copy of the cited MOTCO decision) and
+    nothing else: no participant-level file is opened or
     required, and the hashes the report quotes for one are the values the
     manifests record. So the step runs on any clone with the committed
     tree, needs no data root, no MOTCO call and no pinned numeric
@@ -12229,7 +12581,8 @@ def run_report(
     before anything is written and each naming the file or setting, both
     values and the step to rerun: every input present; every aggregate file
     hashes to the value its own manifest records (the bridge table to its
-    variant export manifest's ``bridge.table.sha256``); the primary is the
+    variant export manifest's ``bridge.table.sha256``, the decision's copy
+    to the sha256 ``OPERATING_CHARACTERISTICS_SOURCE`` pins); the primary is the
     primary, the arm is ``LATENT_SENSITIVITY_ARM``, each variant directory
     of ``REPORT_EXPORT_VARIANTS`` holds its ``EXPORT_VARIANTS`` entry, the CN / LMCI / AD arm is
     ``STAGE_SENSITIVITY_ARM`` (not crossed with an export variant or the
@@ -12246,19 +12599,28 @@ def run_report(
     each scale variant, 24 for the CN / LMCI / AD arm, then 67 for the rank
     sweep) from the clean manifests to the arm's, every variant's, the CN /
     LMCI / AD arm's and the rank sweep's diagnostics, the primary feature
-    tables the arm export names as the source of its floors included.
+    tables the arm export names as the source of its floors included; the
+    cited measurement's verdict is the constant's, it is not indicative, and
+    each of the 19 values of its ``adni_reference`` equals the committed
+    value it describes at the decision's digits
+    (``_OPERATING_CHARACTERISTICS_REFERENCE``; change
+    ``adni-operating-characteristics``).
     Write mode also stops on an existing ``out`` without ``force``.
 
     Output contract (``render_report``): one Markdown file with the
-    thirteen sections of ``REPORT_SECTIONS`` in order (summary; provenance;
+    fourteen sections of ``REPORT_SECTIONS`` in order (summary; provenance;
     cohort; export; primary analysis; axis diagnostics of the primary;
+    operating characteristics, MOTCO's measurement at this design quoted from
+    the decision's copy, change ``adni-operating-characteristics``;
     latent-adjustment sensitivity; export sensitivity, one group of tables
     per rule set of the pinned variants, each holding the primary and its
     group's variants only; stage-definition sensitivity; rank sensitivity;
     findings; reading rules; reproduction),
     every table titled by a level-3 heading and keyed by its first column,
-    every number copied from a record, a manifest or a CSV at the digits of
-    the summary it belongs to, every reading sentence produced by
+    every number copied from a record, a manifest, a CSV or the cited
+    decision file at the digits of the summary it belongs to, the decision's
+    verdict, size sentence and statements quoted verbatim, every reading
+    sentence produced by
     ``_statistic_reading_line``, ``_arm_status_line``,
     ``_export_variant_status_line``, ``_stage_arm_status_line`` and
     ``_rank_status_line`` (the code of ``summary.md``,
@@ -12268,8 +12630,10 @@ def run_report(
     definition tables by ``_stage_arm_lines`` and ``_stage_arm_tables``, the
     sweep's anchor and nesting bullets and nesting table by
     ``_rank_anchor_lines`` and ``_rank_nesting_table``, every word that
-    depends on an export variant from ``_variant_words``, seven rule lists
-    verbatim: ``READING_RULES``, then ``LATENT_SENSITIVITY_READING_RULES``,
+    depends on an export variant from ``_variant_words``, eight rule lists
+    verbatim: ``READING_RULES``, then
+    ``OPERATING_CHARACTERISTICS_READING_RULES``, then
+    ``LATENT_SENSITIVITY_READING_RULES``,
     then one per rule set of the pinned variants in group order
     (``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES``,
     ``SCALE_VARIANT_READING_RULES``),
@@ -12320,7 +12684,8 @@ def run_report(
     inputs = _load_report_inputs(
         cleaned_dir=cleaned_dir, cohort_dir=cohort_dir, input_dir=input_dir, analysis_dir=analysis_dir,
         diagnostics_dir=diagnostics_dir, sensitivity_dir=sensitivity_dir, export_sensitivity_dir=export_sensitivity_dir,
-        stage_sensitivity_dir=stage_sensitivity_dir, rank_sensitivity_dir=rank_sensitivity_dir, log=log,
+        stage_sensitivity_dir=stage_sensitivity_dir, rank_sensitivity_dir=rank_sensitivity_dir,
+        operating_characteristics_dir=operating_characteristics_dir, log=log,
     )
     if check:
         return check_report(out_path, inputs, log=log)

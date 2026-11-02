@@ -100,9 +100,19 @@ Scientific constants
     ``adni-scale-variants``, with the predeclared
     ``EXPORT_VARIANT_EXPECTED_COUNTS`` of the three (``analysis`` among their
     keys, no ``diagnostics``) and their shared ``EXPORT_VARIANT_RULE_SETS``
-    entry. Every scientific constant the six steps and the four sensitivity
-    steps need is decided; a later variant or arm introduces its own by
-    proposal. The changes
+    entry; ``OPERATING_CHARACTERISTICS_READING_RULES`` (the nine "measurement
+    rules": reading rule 3 confirmed by MOTCO's measurement at this design
+    and extended to ``delta``, with the measurement's limits) and
+    ``OPERATING_CHARACTERISTICS_SOURCE`` (the cited measurement, pinned by
+    MOTCO commit and sha256; two import-time assertions tie rule 1 to it), by
+    the change ``adni-operating-characteristics``, decided after every run
+    here, unlike every other constant: they read a measurement made
+    elsewhere, change no constant, record or status, and only the report
+    prints them; with the conventions ``OPERATING_CHARACTERISTICS_DIR`` and
+    ``OPERATING_CHARACTERISTICS_DECISION`` (the committed copy under
+    ``references/``). Every scientific constant the six steps and the four
+    sensitivity steps need is decided; a later variant or arm introduces its
+    own by proposal. The changes
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
     report extended to every export variant), ``adni-report-stage-arm``
     (the report extended to the CN / LMCI / AD arm),
@@ -112,10 +122,11 @@ Scientific constants
     (``raw_scale``, ``log2_plus_one`` and ``glog`` added to it, so the report
     covers every registered variant) introduce no scientific constant: their
     conventions ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
-    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 145
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 146
     with the six variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD
-    arm and the rank sweep) and
-    ``REPORT_SECTIONS`` (the report's thirteen section titles, in order) are
+    arm, the rank sweep and, since ``adni-operating-characteristics``, the
+    copy of the cited MOTCO decision) and
+    ``REPORT_SECTIONS`` (the report's fourteen section titles, in order) are
     defined below, and the report quotes every setting by constant name from
     the manifests and every number from the records.
 """
@@ -1900,6 +1911,101 @@ RANK_SENSITIVITY_EXPECTED_COUNTS: dict[str, dict] = {
 }
 
 
+# --- operating characteristics: scientific constants ---------------------------
+
+#: Decided by the change ``adni-operating-characteristics`` (2026-11-02), after
+#: every analysis here had run. Every other rule list of this module was
+#: decided before any run; this one reads a measurement made elsewhere (MOTCO's
+#: size and power at this design, ``OPERATING_CHARACTERISTICS_SOURCE``), so it
+#: could only follow it. It changes no constant, record or status and selects
+#: nothing: ``READING_RULES``, every sensitivity's rules and every reading
+#: sentence stand as written, and only the report prints this list, after
+#: ``READING_RULES``, cited as "measurement rule N". It confirms reading rule 3,
+#: extends it to ``delta`` (the user's choice) and carries the measurement's
+#: limits. The assertions below tie rule 1 to the source's commit and verdict.
+OPERATING_CHARACTERISTICS_READING_RULES: tuple[str, ...] = (
+    "MOTCO measured size and power at this design after every analysis here had run (MOTCO change "
+    "`adni-design-operating-characteristics`, PR #71, commit 0d72692, 2026-11-02; `adni_design_decision.json`, verdict "
+    "`non_rejections_uninformative`, not indicative). The measurement changes no constant, no record and no status: "
+    "`READING_RULES`, every sensitivity's rules and every reading sentence of the generated documents stand as written "
+    "before any run, and this list states what the measurement adds to them.",
+    "Reading rule 3 is confirmed by a measurement, no longer by the absence of one. Where a rule or a reading sentence "
+    "says that no power statement exists at this design, it records what was known when it was written; for the "
+    "primary's construction a power statement now exists, and it is this list.",
+    "`angle` and `shape` non-rejections are uninformative, as reading rule 3 states. At this design the orientation and "
+    "shape constructions, up to their maximum (e = 1), left `angle` at most 0.076 and `shape` at most 0.062 (R = 500), "
+    "near the null rate and far below the 0.80 power floor.",
+    "Reading rule 3 extends to `delta`: a `delta` non-rejection is uninformative too, not evidence that the sexes' "
+    "trajectories agree. `delta` reached at most 0.530 (R = 500), below the 0.80 floor, at the magnitude "
+    "construction's maximum: one sex's stage effect twice the other's, which raised the held-out stage AUROC to 0.683 "
+    "against this design's 0.600. The primary's `delta` non-rejection is read so. Reading rule 4 on a `delta` "
+    "rejection is unchanged.",
+    "Size held at both controls. The six rejection rates of the anchor and of the translation control lie at 0.034 to "
+    "0.068 against the one-sided bound 0.0695 (R = 500), and `delta` was conservative (0.034 at both). The Type I "
+    "control that reading rules 3 and 5 cite from the validated designs (three design columns, n = 80) is now "
+    "measured at this design too: six design columns, a phase-like binary nuisance that the covariate-blind basis "
+    "follows, n = 1501.",
+    "The measurement is a structural analogue, not a replication of this analysis, and no statement about a metabolite "
+    "follows from it. Its blocks are InterSIM methylation and expression (367 and 131 features, 74 % / 26 %) in place "
+    "of NMR and p180 (165 and 133, 55 % / 45 %), and it ran 999 permutations against 9999 here. It matched this "
+    "design's held-out stage AUROC (0.606 against 0.600), a first component that follows phase (median |ρ| 0.578 "
+    "against 0.542) and the size of the p180 run offset (median |d| 1.126 against 1.12). It did not match the latent "
+    "geometry. The offset is the injected block's whole first axis (PC1 |r| 0.994 against 0.73). The cross-validation "
+    "selected the cap of 19 components in 494 of 500 anchor units, against this design's 8. The stage means were less "
+    "one-dimensional (eigengap 0.330 against 0.744), and the `angle` null was wider (q95 51.0° against 35.4°). The "
+    "`angle` and `shape` rates are those of that geometry.",
+    "The measurement covers the primary's construction only: one table (n = 1501), the CV-selected rank, no latent "
+    "adjustment, the rule's export. The latent arm, the export variants, the CN / LMCI / AD arm (n = 1130) and the "
+    "forced ranks were not measured, so their size and power stay inferred. Their rules' statements that no power "
+    "statement, or no Type I or power check, exists at this design hold for them as written. A sensitivity's "
+    "non-rejection stays no more informative than the primary's, which is now measured as uninformative.",
+    "The measured size of the primary's construction is not the size of any sensitivity, and no sensitivity's status "
+    "is reread from it. A `delta` rejection in a sensitivity stays the dependence its own rules name, read against the "
+    "primary only.",
+    "The measurement ran MOTCO 0.13.0's code without residual correction, as the primary ran: MOTCO 0.11.0 to 0.13.0 "
+    "add design-guidance tools and the opt-in `residual_correction`, which, unset, leaves the 0.10.0 analysis path "
+    "unchanged. The pin stays v0.10.0, and a pin move or a residual correction is its own change. The measurement is "
+    "cited for the analysis it was calibrated against, its `adni_reference`, which `report` checks against the "
+    "committed records.",
+)
+
+#: Decided by the change ``adni-operating-characteristics``: the cited
+#: measurement, pinned by commit and sha256. The report reads it from the
+#: committed copy (``OPERATING_CHARACTERISTICS_DIR``), never from a MOTCO
+#: clone, and stops when the copy's sha256 or verdict differs or its
+#: ``adni_reference`` no longer describes the committed records. Citing another
+#: measurement is a new change.
+OPERATING_CHARACTERISTICS_SOURCE: dict[str, object] = {
+    "repository": "https://github.com/Omnia-Lab-UC/MOTCO",
+    "change": "adni-design-operating-characteristics",
+    "pull_request": 71,
+    "commit": "0d726922173188c4d74ce4b2f87f6a26e5fc548f",
+    "path": "results/adni-design-2026-11-02/run/adni_design_decision.json",
+    "report": "docs/reports/adni-design-2026-11-02.md",
+    "sha256": "4cb482e7e16b19278467d6929f6905d71a8aef332ae55fc07ac86a3c1eec3ea1",
+    "verdict": "non_rejections_uninformative",
+}
+assert str(OPERATING_CHARACTERISTICS_SOURCE["commit"])[:7] in OPERATING_CHARACTERISTICS_READING_RULES[0], (
+    "OPERATING_CHARACTERISTICS_READING_RULES rule 1 must name the commit of OPERATING_CHARACTERISTICS_SOURCE "
+    f"({str(OPERATING_CHARACTERISTICS_SOURCE['commit'])[:7]})"
+)
+assert f"`{OPERATING_CHARACTERISTICS_SOURCE['verdict']}`" in OPERATING_CHARACTERISTICS_READING_RULES[0], (
+    "OPERATING_CHARACTERISTICS_READING_RULES rule 1 must name the verdict of OPERATING_CHARACTERISTICS_SOURCE "
+    f"({OPERATING_CHARACTERISTICS_SOURCE['verdict']!r})"
+)
+
+# --- operating characteristics: conventions -----------------------------------
+
+#: The committed copy of the cited decision file (change
+#: ``adni-operating-characteristics``, design D3): ``references/`` holds the
+#: third-party aggregate files the report cites. It is no pipeline output, so
+#: it is not under ``RESULTS_DIR``, no step writes it and
+#: ``scripts/sync_results.sh`` does not move it; ``OPERATING_CHARACTERISTICS_SOURCE``
+#: records it, and it is copied byte for byte from MOTCO at the pinned commit.
+OPERATING_CHARACTERISTICS_DIR = "references/motco_adni_design"
+OPERATING_CHARACTERISTICS_DECISION = "adni_design_decision.json"
+
+
 # --- report: conventions ------------------------------------------------------
 
 #: The six files ``axis-diagnostics`` writes, all aggregate; the report reads
@@ -2002,11 +2108,16 @@ assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIA
 #: in ladder order, named by ``RANK_SENSITIVITY_RANK_DIR``) and
 #: ``rank-sensitivity/<subdir>`` of ``--rank-sensitivity-dir`` (change
 #: ``adni-report-rank-sweep``; ``RANK_SENSITIVITY_SUBDIRS`` in its order, the
-#: files of ``REPORT_RANK_SWEEP_FILES``). All 145 are aggregate and committed
+#: files of ``REPORT_RANK_SWEEP_FILES``), and the role
+#: ``operating-characteristics`` of ``--operating-characteristics-dir``
+#: (change ``adni-operating-characteristics``): the committed copy of the
+#: cited MOTCO decision file, recorded by ``OPERATING_CHARACTERISTICS_SOURCE``
+#: rather than by a manifest. All 146 are aggregate and committed
 #: (93 before ``adni-report-nmr-all-columns`` added the 13 of
-#: ``nmr_all_columns``, which has no bridge table, and 106 before
+#: ``nmr_all_columns``, which has no bridge table, 106 before
 #: ``adni-report-scale-variants`` added the 13 of each scale variant, which
-#: have none either);
+#: have none either, and 145 before ``adni-operating-characteristics`` added
+#: the copy);
 #: no participant-level file is read, and the hashes the report quotes for
 #: one come from these manifests. No other file is read.
 REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
@@ -2034,11 +2145,14 @@ REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
         for rank in RANK_SENSITIVITY_LADDER["ranks"]
     },
     **{f"rank-sensitivity/{sub}": REPORT_RANK_SWEEP_FILES[key] for key, sub in RANK_SENSITIVITY_SUBDIRS.items()},
+    "operating-characteristics": (OPERATING_CHARACTERISTICS_DECISION,),
 }
 #: The report's level-2 sections, in order (design D4 of ``adni-report``;
 #: "Export sensitivity" added by ``adni-report-variants``, "Stage-definition
 #: sensitivity" by ``adni-report-stage-arm``, "Rank sensitivity" by
-#: ``adni-report-rank-sweep``).
+#: ``adni-report-rank-sweep``, "Operating characteristics" by
+#: ``adni-operating-characteristics``, after the primary's sections since it
+#: measures the primary's construction and before the sensitivities).
 #: ``report --check`` names a mismatch by section, table, row and column.
 REPORT_SECTIONS: tuple[str, ...] = (
     "Summary",
@@ -2047,6 +2161,7 @@ REPORT_SECTIONS: tuple[str, ...] = (
     "Export",
     "Primary analysis",
     "Axis diagnostics of the primary",
+    "Operating characteristics",
     "Latent-adjustment sensitivity",
     "Export sensitivity",
     "Stage-definition sensitivity",
