@@ -6,19 +6,27 @@ Defines the `report` step: the case-study report of the ADNI sex × stage trajec
 ## Requirements
 
 ### Requirement: Inputs are the kept aggregate outputs only
-The step SHALL read only the committed aggregate files of the pipeline, of the latent arm, of every export variant of `REPORT_EXPORT_VARIANTS`, of the CN / LMCI / AD arm and of the rank sweep: manifests, records, summaries, count and comparison tables, diagnostics files and the `nist_bridge` bridge table; and the committed copy of the cited MOTCO decision file. It SHALL open no participant-level file and SHALL NOT require one to be present.
+The step SHALL read only the committed aggregate files of the pipeline, of the latent arm, of every export variant of `REPORT_EXPORT_VARIANTS`, of the CN / LMCI / AD arm and of the rank sweep: manifests, records, summaries, the primary's stage means, count and comparison tables, diagnostics files and the `nist_bridge` bridge table; and the committed copy of the cited MOTCO decision file. It SHALL open no participant-level file and SHALL NOT require one to be present.
 
 #### Scenario: Clone without participant-level files
 - **WHEN** `report` runs on a clone that holds the tracked files under `results/` and `references/` and none of `cohort.csv`, the export CSVs of the primary, of a variant or of the CN / LMCI / AD arm, `latent_scores.csv` or `analysis_metadata.csv`
-- **THEN** it writes the report, and every hash it quotes for a participant-level file is the value a manifest records
+- **THEN** it writes the report and its figures, and every hash it quotes for a participant-level file is the value a manifest records
 
 #### Scenario: Input absent
 - **WHEN** `results/motco_latent_sensitivity/comparison/latent_sensitivity.csv` does not exist
 - **THEN** the step stops naming the file and the `latent-sensitivity` command, and writes nothing
 
+#### Scenario: Stage means input
+- **WHEN** the report runs on the committed outputs
+- **THEN** it reads the primary's `result.json`, `analysis_manifest.json`, `summary.md` and `stage_means.csv`, and checks `stage_means.csv` against the sha256 that `analysis_manifest.json` records for it
+
+#### Scenario: Stage means absent
+- **WHEN** `results/motco_analysis/stage_means.csv` does not exist
+- **THEN** the step stops naming the file and the `analyze` command, and writes nothing
+
 #### Scenario: Variant inputs
 - **WHEN** the report runs with the six variants of `REPORT_EXPORT_VARIANTS`
-- **THEN** it reads, per variant in that order, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files, and for `nist_bridge` `bridge/nist_bridge.csv`: 79 files (14 for `nist_bridge`, 13 each for `per_run_standardized`, `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`), beside the 26 of the primary and the arm
+- **THEN** it reads, per variant in that order, `motco_input/manifest.json`, the analysis' `result.json`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six files, and for `nist_bridge` `bridge/nist_bridge.csv`: 79 files (14 for `nist_bridge`, 13 each for `per_run_standardized`, `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`), beside the 27 of the primary and the arm
 
 #### Scenario: Scale variant input absent
 - **WHEN** `results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv` does not exist
@@ -46,7 +54,7 @@ The step SHALL read only the committed aggregate files of the pipeline, of the l
 
 #### Scenario: Operating-characteristics input
 - **WHEN** the report runs on the committed outputs
-- **THEN** it reads `references/motco_adni_design/adni_design_decision.json`: 146 files in all, 45 of them manifests
+- **THEN** it reads `references/motco_adni_design/adni_design_decision.json`: 147 files in all, 45 of them manifests
 
 #### Scenario: Operating-characteristics input absent
 - **WHEN** `references/motco_adni_design/adni_design_decision.json` does not exist
@@ -137,7 +145,7 @@ The step SHALL stop when the primary records a latent adjustment or its diagnost
 - **THEN** the step stops naming the directory and the setting, and writes nothing
 
 ### Requirement: Report content contract
-The report SHALL be one Markdown file with these sections in order: summary; provenance; cohort; export; primary analysis; axis diagnostics of the primary; operating characteristics; latent-adjustment sensitivity; export sensitivity; stage-definition sensitivity; rank sensitivity; findings; reading rules; reproduction. The primary's statistics SHALL be given in full, each sensitivity beside the primary with a status per statistic, and every value SHALL be aggregate.
+The report SHALL be one Markdown file with these sections in order: summary; figures; provenance; cohort; export; primary analysis; axis diagnostics of the primary; operating characteristics; latent-adjustment sensitivity; export sensitivity; stage-definition sensitivity; rank sensitivity; findings; reading rules; reproduction. The primary's statistics SHALL be given in full, each sensitivity beside the primary with a status per statistic, and every value SHALL be aggregate.
 
 #### Scenario: Primary statistics
 - **WHEN** the report is written
@@ -145,7 +153,11 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 
 #### Scenario: Sections present
 - **WHEN** the report is written
-- **THEN** its level-2 headings are the fourteen sections in the order above, and the latent-adjustment section holds the comparison table with the primary row first, the arm's `latent_adjustment` block, the covariate roles and the arm's flagged diagnostic rows
+- **THEN** its level-2 headings are the fifteen sections in the order above, and the latent-adjustment section holds the comparison table with the primary row first, the arm's `latent_adjustment` block, the covariate roles and the arm's flagged diagnostic rows
+
+#### Scenario: Figures section
+- **WHEN** the report is written on the committed outputs
+- **THEN** the figures section holds a lead naming the figures directory, the matplotlib version and how `--check` compares the figures; the table "Figure files" with one row per figure of `REPORT_FIGURES` in order (title, SVG and its sha256, data CSV and its sha256, input files); and per figure a level-3 heading, the image and its three-part caption
 
 #### Scenario: Operating characteristics section
 - **WHEN** the report is written on the committed outputs
@@ -184,7 +196,7 @@ The report SHALL be one Markdown file with these sections in order: summary; pro
 - **THEN** it holds one column pair per scale variant (observed, expected) in registry order, the keys of the three entries in registry order, the shape counts and numerical ranks of each variant beside its predeclared ones, and the rows `scale.median_below_offset.*` with values for `log2_plus_one` and `n/a` for `raw_scale` and `glog`
 
 ### Requirement: Every number is pasted from the generated files
-Every number in the report SHALL be read from a record, a manifest, a CSV or the cited decision file and formatted with the digits of the summary it belongs to (six significant digits for record values, p-values as recorded, counts as integers, correlations and shares as `diagnostics.md` prints them, the decision's rates and standard errors at three decimals and its bound at four). The step SHALL compute no statistic, correlation, mean or count of its own.
+Every number in the report and in its figures SHALL be read from a record, a manifest, a CSV or the cited decision file and formatted with the digits of the summary it belongs to (six significant digits for record values, p-values as recorded, counts as integers, correlations and shares as `diagnostics.md` prints them, the decision's rates and standard errors at three decimals and its bound at four). The step SHALL compute no statistic, correlation, mean or count of its own.
 
 #### Scenario: Statistics equal the record
 - **WHEN** the report's statistics table is compared with `result.json`
@@ -218,8 +230,20 @@ Every number in the report SHALL be read from a record, a manifest, a CSV or the
 - **WHEN** the operating-characteristics tables are compared with the decision file
 - **THEN** every rejection count, replicate count, rate, standard error, bound, effect, CV-selected rank and construction value equals the file's value at the printed digits, every reference value is printed as the file records it, and no cell is derived by the step
 
+#### Scenario: Figure values equal their sources
+- **WHEN** each row of a figure's data CSV is compared with the file and field, or the constant, it names
+- **THEN** its value is the source's value as read (a JSON number by its shortest round-trip form, a CSV cell unchanged; for a reference line such as α or the correlation flag, the named constant of `constants.py`), and every number printed inside the figure is that value at the digits the report prints for it
+
+#### Scenario: Legend counts copied
+- **WHEN** `f7_nist_bridge` labels the bridged metabolites per kit and the unbridged ones
+- **THEN** the counts are the `nist_bridge` export manifest's bridge summary, not a tally of `nist_bridge.csv`
+
+#### Scenario: Cell without a row
+- **WHEN** `stage_counts.csv` holds no intersection row for a sex, `DX.bl` and p180 run, such as SMC in ADNI-1
+- **THEN** `f1_cohort_design` draws the cell empty and labelled `none`, and its data CSV records the value `absent`, not 0
+
 ### Requirement: Interpretive sentences are generated by rule
-Each reading sentence in the report SHALL be produced from the rejection statuses by the code that writes `summary.md` and the four sensitivities' comparison documents (`latent_sensitivity.md`, `export_sensitivity.md`, `stage_sensitivity.md`, `rank_sensitivity.md`), string-equal across the documents. Besides the cited measurement's sentences, quoted verbatim, the report SHALL add no interpretive sentence, and the primary's status SHALL be the result wherever a sensitivity appears.
+Each reading sentence in the report SHALL be produced from the rejection statuses by the code that writes `summary.md` and the four sensitivities' comparison documents, string-equal across the documents. Besides the cited measurement's sentences, quoted verbatim, and the figures' fixed reading texts (`REPORT_FIGURES`), the report SHALL add no interpretive sentence, and the primary's status SHALL be the result wherever a sensitivity appears.
 
 #### Scenario: Non-rejection wording
 - **WHEN** `angle` is not rejected in the primary
@@ -277,6 +301,14 @@ Each reading sentence in the report SHALL be produced from the rejection statuse
 - **WHEN** the three scale variants are reported in the scale group's shared tables
 - **THEN** the group's lead states that each variant is read against the primary only, never against another variant of the group (scale rule 8); each `angle` paragraph and each status bullet names the primary and one scale variant; and no status or sentence of the report compares two scale variants, or a scale variant with another export variant, the latent arm, the CN / LMCI / AD arm or a forced rank
 
+#### Scenario: Figure caption sentences
+- **WHEN** the figures section is compared with the documents the report already quotes
+- **THEN** every generated caption line is string-equal to the line that prints it elsewhere in the report, each fixed reading text describes how its figure encodes values, and no title, subtitle, reading text or text inside a figure states a result
+
+#### Scenario: Sensitivity figure reads each row against the primary
+- **WHEN** `f8_sensitivities` labels the forced rank 6 `delta` row, whose status differs from the primary's
+- **THEN** the label is the status `differs (rank dependence)` from the rank's comparison, the caption prints that status's sentence from `rank_sensitivity.md`, and nothing in the figure or the caption compares two sensitivities, combines ranks or marks a row by its p-value alone
+
 ### Requirement: Reading rules carried verbatim
 The report SHALL print verbatim in its reading-rules section, in order: `READING_RULES`, `OPERATING_CHARACTERISTICS_READING_RULES`, `LATENT_SENSITIVITY_READING_RULES`, each export variant group's rule set in registry order (`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`, `SCALE_VARIANT_READING_RULES`), `STAGE_SENSITIVITY_READING_RULES` and `RANK_SENSITIVITY_READING_RULES`. Beside every table that quotes a sensitivity it SHALL name that sensitivity's rules with `READING_RULES`.
 
@@ -301,26 +333,30 @@ The report SHALL print verbatim in its reading-rules section, in order: `READING
 - **THEN** the text that leads them names `READING_RULES` and `RANK_SENSITIVITY_READING_RULES`
 
 ### Requirement: Deterministic report body
-The report body SHALL depend only on the input files and the report's file name: the date, with its same-day ordinal when the name carries one, SHALL appear in the file name and the title only, and no revision, host, time or runtime of the report run SHALL be written. Two runs on the same inputs to the same path SHALL be byte-identical.
+The report body and its figures SHALL depend only on the input files, the report's file name and the pinned drawing library: the date, with its same-day ordinal when the name carries one, SHALL appear in the file name, the title and the figures directory only, and no revision, host, time or runtime of the report run SHALL be written. Two runs on the same inputs to the same path SHALL write byte-identical files.
 
 #### Scenario: Rerun with force
 - **WHEN** `report --force` runs twice to the same `--out` on unchanged inputs
-- **THEN** the two files have equal sha256
+- **THEN** the two reports have equal sha256, and so has each of the eighteen figure files
 
 #### Scenario: Another date
 - **WHEN** the report is written to a file whose name carries another date
-- **THEN** the two files differ only in the title line
+- **THEN** the two reports differ only in the title line and in the figures directory their figures section names, and their figure files are byte-identical
 
 #### Scenario: Same-day name
 - **WHEN** the report is written from the same inputs to `motco-adni-2026-11-02.md` and to `motco-adni-2026-11-02-2.md`
-- **THEN** the two files differ only in the title line
+- **THEN** the two reports differ only in the title line and in the figures directory their figures section names, and their figure files are byte-identical
+
+#### Scenario: Another machine
+- **WHEN** the report is written on two machines from the same committed tree under the same lock
+- **THEN** the reports and every figure file are byte-identical
 
 ### Requirement: Check compares cell by cell and names every mismatch
-With `--check`, the step SHALL regenerate the report from the inputs now on disk, with the date taken from the checked file's name, and compare the file with it: every table cell by cell and every other line line by line. Each mismatch SHALL be named (section, table, row key, column, the report's value and the generated one, or the line), the step SHALL exit non-zero on any mismatch and SHALL write nothing.
+With `--check`, the step SHALL regenerate the report and its figures from the inputs now on disk, with the date taken from the checked file's name, and compare: the report's tables cell by cell and its other lines line by line, then each figure's data CSV cell by cell, then each figure's SVG by its bytes. Each mismatch SHALL be named (section, table, row key, column and both values, or the line), and the step SHALL exit non-zero on any mismatch and SHALL write nothing.
 
 #### Scenario: Fresh report passes
 - **WHEN** `report --check` runs on a report the step just wrote from unchanged inputs
-- **THEN** it reports no mismatch and exits zero
+- **THEN** it reports no mismatch in the report or its figures and exits zero
 
 #### Scenario: Edited digit
 - **WHEN** one p-value in the report's statistics table is changed by hand
@@ -328,7 +364,19 @@ With `--check`, the step SHALL regenerate the report from the inputs now on disk
 
 #### Scenario: Regenerated input
 - **WHEN** a results file the report quotes by hash was regenerated after the report was written
-- **THEN** `report --check` names the provenance cell holding that file's hash with both values, and exits non-zero
+- **THEN** `report --check` names the provenance cell holding that file's hash with both values, and every figure that reads the file, and exits non-zero
+
+#### Scenario: Edited figure data
+- **WHEN** one value of `f8_sensitivities.csv` is changed by hand
+- **THEN** `report --check` names the file, the row key, the column, both values and the row's source, and exits non-zero
+
+#### Scenario: Drawing changed, data equal
+- **WHEN** an SVG's bytes differ from the regenerated drawing while its data CSV equals the regenerated data
+- **THEN** `report --check` names the SVG and both sha256, says that its data are equal so the drawing moved and not a result, and exits non-zero
+
+#### Scenario: Figure file missing or extra
+- **WHEN** the figures directory lacks a file the report names, or holds a file the report does not name
+- **THEN** `report --check` names the directory and each missing or extra file, and exits non-zero
 
 ### Requirement: Check selects the report and reruns the gates
 Without `--out`, `--check` SHALL read the newest report under `reports/` by the date in its name, then by its same-day ordinal (a name without one first). Before any other gate, a report whose level-2 headings differ from the current sections SHALL stop the check, naming the report, the sections it lacks or adds, and how to find the revision that committed it. The check SHALL then run every gate of the write mode before comparing.
@@ -345,39 +393,55 @@ Without `--out`, `--check` SHALL read the newest report under `reports/` by the 
 - **WHEN** the export manifest was regenerated after the primary and `report --check` runs
 - **THEN** the check stops naming `manifest.json`, both hashes and `analyze`, before any cell is compared
 
+#### Scenario: Report of the fourteen-section layout
+- **WHEN** `report --check --out reports/motco-adni-2026-11-02-3.md` runs after the figures section is added
+- **THEN** the check stops naming the report, the absent section `Figures` and the command `git log -1 --format=%H -- reports/motco-adni-2026-11-02-3.md`, compares no cell, writes nothing and exits non-zero
+
 #### Scenario: Report of the thirteen-section layout
-- **WHEN** `report --check --out reports/motco-adni-2026-11-02-2.md` runs after the operating-characteristics section is added
-- **THEN** the check stops naming the report, the absent section `Operating characteristics` and the command `git log -1 --format=%H -- reports/motco-adni-2026-11-02-2.md`, compares no cell, writes nothing and exits non-zero
+- **WHEN** `report --check --out reports/motco-adni-2026-11-02-2.md` runs
+- **THEN** the check stops naming the report, the absent sections `Figures` and `Operating characteristics` and the command `git log -1 --format=%H -- reports/motco-adni-2026-11-02-2.md`, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of an earlier layout
 - **WHEN** `report --check --out reports/motco-adni-2026-10-30.md` runs
-- **THEN** the check stops naming the report, the absent sections `Operating characteristics` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-30.md`, compares no cell, writes nothing and exits non-zero
+- **THEN** the check stops naming the report, the absent sections `Figures`, `Operating characteristics` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-30.md`, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the eleven-section layout
 - **WHEN** `report --check --out reports/motco-adni-2026-10-29.md` runs
-- **THEN** the check stops naming the report, the absent sections `Operating characteristics`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-29.md`, compares no cell, writes nothing and exits non-zero
+- **THEN** the check stops naming the report, the absent sections `Figures`, `Operating characteristics`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-29.md`, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the first layout
 - **WHEN** `report --check --out reports/motco-adni-2026-10-28.md` runs
-- **THEN** the check stops naming the report, the absent sections `Operating characteristics`, `Export sensitivity`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero
+- **THEN** the check stops naming the report, the absent sections `Figures`, `Operating characteristics`, `Export sensitivity`, `Stage-definition sensitivity` and `Rank sensitivity` and the command `git log -1 --format=%H -- reports/motco-adni-2026-10-28.md`, compares no cell, writes nothing and exits non-zero
 
 ### Requirement: Output discipline
-The report SHALL be written to a temporary file and renamed when complete; an existing file at `--out` SHALL stop the step unless `--force`. After writing, the step SHALL parse the file through the check parser and verify that the parsed tables equal the generated ones.
+The report SHALL be written to a temporary file and its figures to a temporary directory, and both SHALL be renamed when complete; an existing file at `--out`, or an existing figures directory for its name, SHALL stop the step unless `--force`. After writing, the step SHALL parse the file through the check parser and verify that the parsed tables equal the generated ones.
 
 #### Scenario: Existing report
 - **WHEN** `--out` names a file that exists and `--force` is not given
 - **THEN** the step stops naming the file and leaves it unchanged
 
+#### Scenario: Existing figures directory
+- **WHEN** `reports/figures/<stem>/` exists for the report's name, the report does not, and `--force` is not given
+- **THEN** the step stops naming the directory and leaves it unchanged
+
 #### Scenario: Parse-back
 - **WHEN** the report is written
-- **THEN** the step reports the number of tables and cells it parsed back, equal to the number generated, and no temporary file remains
+- **THEN** the step reports the number of tables and cells it parsed back, equal to the number generated, and the number of figure files written, and no temporary file or directory remains
+
+#### Scenario: Failure while drawing
+- **WHEN** drawing a figure fails
+- **THEN** the step stops naming the figure, writes neither the report nor any figure file, and no temporary file or directory remains
 
 ### Requirement: No participant identifier and aggregate values only
-The report and every progress line of the step SHALL hold no participant identifier and SHALL quote aggregate values only: counts, statistics, hashes, settings and constants.
+The report, its figures, their data CSVs and every progress line of the step SHALL hold no participant identifier and SHALL quote aggregate values only: counts, statistics, hashes, settings and constants.
 
 #### Scenario: Identifier search
-- **WHEN** the report is searched for a `rid` value or the token `RID`
-- **THEN** only column-name mentions are found
+- **WHEN** the report is searched for the token `RID` and for the `rid` values of the exported participants
+- **THEN** the token appears only as a column name, and no value is a participant identifier: a number equal to a `rid` value is a count, rank or other aggregate value copied from its source
+
+#### Scenario: Figure data search
+- **WHEN** the figures directory is searched for the token `RID` and for the `rid` values of the exported participants
+- **THEN** the token is not found; no key, field or value is a participant identifier, since a cell equal to a `rid` value is a count, rank or other aggregate value, as its `source` and `field` show; and every source named in a data CSV is a committed aggregate file of `REPORT_INPUT_FILES` or, for a reference line such as α or the correlation flag, a named constant of `constants.py`
 
 ### Requirement: Findings copied, never stops
 The report's findings section SHALL list every deviation and finding of every input manifest, verbatim and attributed to its step, and the step's own findings: a manifest whose recorded revision is dirty, and a manifest without a `numerics` block. None of these SHALL stop the step.
@@ -472,15 +536,15 @@ The step SHALL read, check and quote exactly the export variants of `REPORT_EXPO
 
 #### Scenario: A third variant registered
 - **WHEN** `REPORT_EXPORT_VARIANTS` names `nist_bridge` and `per_run_standardized` only, and the outputs of the four variants registered after them are absent
-- **THEN** `report` reads 94 files, no line of the body names `nmr_all_columns`, `raw_scale`, `log2_plus_one` or `glog`, and one progress line per uncovered variant says that it is registered and not covered by this report
+- **THEN** `report` reads 95 files, no line of the body or of a figure names `nmr_all_columns`, `raw_scale`, `log2_plus_one` or `glog`, and one progress line per uncovered variant says that it is registered and not covered by this report
 
 #### Scenario: Scale variants registered outside the pin
 - **WHEN** `EXPORT_VARIANTS` holds the six variants, `REPORT_EXPORT_VARIANTS` names the first three only, and the outputs of the three scale variants are absent
-- **THEN** `report` reads 107 files, no line of the body names `raw_scale`, `log2_plus_one` or `glog`, and one progress line per scale variant says that it is registered and not covered by this report
+- **THEN** `report` reads 108 files, no line of the body or of a figure names `raw_scale`, `log2_plus_one` or `glog`, and one progress line per scale variant says that it is registered and not covered by this report
 
 #### Scenario: Newest report still checks
 - **WHEN** `report --check` runs on the newest committed report, written under the current layout and pin, on the tree it was written from
-- **THEN** it compares every table and line with no mismatch and exits 0; a report of an earlier layout or pin stops at the section or variant gate instead
+- **THEN** it compares every table, line and figure with no mismatch and exits 0; a report of an earlier layout or pin stops at the section or variant gate instead
 
 #### Scenario: Pin out of order
 - **WHEN** `REPORT_EXPORT_VARIANTS` names a variant that is not in `EXPORT_VARIANTS`, or lists two variants out of registry order
@@ -490,16 +554,16 @@ The step SHALL read, check and quote exactly the export variants of `REPORT_EXPO
 After a report's level-2 headings match the current sections and before any input gate, `--check` SHALL compare the export variants the report lists, its level-3 headings ``Export variant `<name>` `` in the export-sensitivity section in order, with `REPORT_EXPORT_VARIANTS`. On a difference it SHALL stop, naming the report, the absent and extra variants and how to find the revision that committed it, compare no cell and write nothing.
 
 #### Scenario: Report of the three-variant pin
-- **WHEN** `report --check` runs on a report with the fourteen current sections whose export-sensitivity section lists `nist_bridge`, `per_run_standardized` and `nmr_all_columns` only
+- **WHEN** `report --check` runs on a report with the fifteen current sections whose export-sensitivity section lists `nist_bridge`, `per_run_standardized` and `nmr_all_columns` only
 - **THEN** the check stops naming the report, the absent variants `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the `git log -1 --format=%H -- <report>` command, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the two-variant pin
-- **WHEN** `report --check` runs on a report with the fourteen current sections whose export-sensitivity section lists `nist_bridge` and `per_run_standardized` only
+- **WHEN** `report --check` runs on a report with the fifteen current sections whose export-sensitivity section lists `nist_bridge` and `per_run_standardized` only
 - **THEN** the check stops naming the report, the absent variants `nmr_all_columns`, `raw_scale`, `log2_plus_one` and `glog`, no extra variant and the `git log -1 --format=%H -- <report>` command, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Committed reports of earlier pins
 - **WHEN** `report --check --out reports/motco-adni-2026-11-02.md` or `--out reports/motco-adni-2026-10-31.md` runs
-- **THEN** the check stops at the section gate, naming the absent section `Operating characteristics`, before the variant gate, compares no cell, writes nothing and exits non-zero
+- **THEN** the check stops at the section gate, naming the absent sections `Figures` and `Operating characteristics`, before the variant gate, compares no cell, writes nothing and exits non-zero
 
 #### Scenario: Report of the current pin
 - **WHEN** `report --check` runs on a report the step just wrote
@@ -557,3 +621,67 @@ The report SHALL quote the decision's verdict, its size sentence, its per-statis
 #### Scenario: No sensitivity reread
 - **WHEN** the sensitivity sections of the report are compared with those generated before this change on the same inputs
 - **THEN** their tables and lines are unchanged except for section numbers in cross-references, and no line of a sensitivity section names the measurement
+
+### Requirement: Figures are drawn from the report's inputs
+In write mode, after every gate, the step SHALL draw the nine figures of `REPORT_FIGURES` in order from the inputs it has loaded and checked, and read no other file. Each figure SHALL be written as an SVG and a data CSV under `reports/figures/<report stem>/`, and no other file SHALL be written there.
+
+#### Scenario: Nine figures
+- **WHEN** the report is written on the committed outputs to `reports/motco-adni-<date>.md`
+- **THEN** `reports/figures/motco-adni-<date>/` holds `f1_cohort_design` to `f9_rank_sweep`, each as `.svg` and `.csv`, eighteen files and nothing else
+
+#### Scenario: Every export in the run-offset figure
+- **WHEN** `f6_block_phase` is drawn
+- **THEN** it holds one row per export in this order: the primary, the six variants of `REPORT_EXPORT_VARIANTS` grouped by rule set, then the CN / LMCI / AD arm; and no row for the latent arm or a forced rank, which use the primary export
+
+#### Scenario: No figure of participant-level data
+- **WHEN** the figures are drawn
+- **THEN** no figure plots a latent score, a metabolite value of a participant or any value not held by a committed aggregate input
+
+### Requirement: Figures are drawn under pinned software and numerics
+Before anything is written, the step SHALL stop when the installed matplotlib differs from `MATPLOTLIB_VERSION`, or when the numeric state of the run is not pinned, naming the version or the unpinned settings. Each SVG SHALL be drawn with `FIGURE_STYLE`: text as paths, a fixed ID salt and no date.
+
+#### Scenario: Another matplotlib
+- **WHEN** the installed matplotlib is not 3.11.2
+- **THEN** the step stops naming both versions and `uv sync --locked`, and writes nothing
+
+#### Scenario: Numerics not pinned
+- **WHEN** `adni_sexdiff` was imported after numpy, so the run's numeric state is not pinned
+- **THEN** the step stops naming the settings that differ from `NUMERIC_SETTINGS`, and writes nothing
+
+#### Scenario: Check under another matplotlib
+- **WHEN** `report --check` runs with an installed matplotlib other than `MATPLOTLIB_VERSION`
+- **THEN** the check stops naming both versions before any comparison, and writes nothing
+
+### Requirement: Each figure is captioned in three parts
+Under its image each figure SHALL carry: its fixed reading text from `REPORT_FIGURES`, which quotes no value from an input and states no result; the generated lines its entry names, each string-equal to the line that prints it elsewhere in the report; and its input files and rule lists. A figure with no generated lines SHALL carry the other two parts.
+
+#### Scenario: Reading text verbatim
+- **WHEN** the figures section is compared with `REPORT_FIGURES`
+- **THEN** each figure's reading paragraph is string-equal to its entry's reading text
+
+#### Scenario: Primary tests caption
+- **WHEN** `f3_primary_tests` is captioned on the committed outputs
+- **THEN** its generated lines are the primary's three reading bullets, string-equal to `summary.md`, and its rules name `READING_RULES` and `OPERATING_CHARACTERISTICS_READING_RULES`
+
+#### Scenario: Sensitivity figure caption
+- **WHEN** `f8_sensitivities` is captioned on the committed outputs
+- **THEN** its generated lines are the status sentences of `nmr_all_columns` `delta` and forced rank 6 `delta`, string-equal to the comparison documents, and its rules name `READING_RULES` and every sensitivity's rule set
+
+#### Scenario: Figure without generated lines
+- **WHEN** `f1_cohort_design` is captioned
+- **THEN** it carries its reading text, its input file `results/cohort/stage_counts.csv` and `READING_RULES`, and no generated line
+
+### Requirement: Each figure is traced to its inputs
+Each figure SHALL name its inputs three times: in the "Figure files" table of the report (its input files, with its SVG and data CSV and their sha256), in its SVG metadata (each input file with its sha256 and the matplotlib version), and in its data CSV (one row per plotted value with the source file and field).
+
+#### Scenario: Figure files table
+- **WHEN** the report is written on the committed outputs
+- **THEN** each row of "Figure files" holds the sha256 of the SVG and data CSV just written, and input files that are all in `REPORT_INPUT_FILES` and listed in the provenance with their hashes
+
+#### Scenario: Stray figure traced back
+- **WHEN** `f9_rank_sweep.svg` is read on its own
+- **THEN** its metadata names each `result.json` it was drawn from with its sha256, and those hashes equal the provenance of the report whose figures directory holds it
+
+#### Scenario: Data row traced back
+- **WHEN** a row of `f2_trajectories.csv` is read
+- **THEN** it names `results/motco_analysis/stage_means.csv`, the row and column it was read from, and the value read

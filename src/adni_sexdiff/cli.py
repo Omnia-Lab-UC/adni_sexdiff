@@ -35,6 +35,7 @@ from .constants import (
     RANK_SENSITIVITY_RANK_DIR,
     RANK_SENSITIVITY_SUBDIRS,
     REPORT_EXPORT_VARIANTS,
+    REPORT_FIGURES_DIR,
     REPORT_NAME,
     REPORT_NAME_SAME_DAY,
     REPORTED_N_JOBS,
@@ -268,9 +269,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "report",
-        help="Write the case-study report from the kept aggregate outputs and the committed copy of the cited MOTCO "
-        "decision (no participant-level file is read), or check one against them cell by cell -> "
-        f"{REPORTS_DIR}/{REPORT_NAME.format(date='<date>')}",
+        help="Write the case-study report and its figures from the kept aggregate outputs and the committed copy of the "
+        "cited MOTCO decision (no participant-level file is read), or check them against those outputs cell by cell and "
+        f"byte by byte -> {REPORTS_DIR}/{REPORT_NAME.format(date='<date>')} and {REPORTS_DIR}/{REPORT_FIGURES_DIR}/"
+        f"{REPORT_NAME.format(date='<date>').removesuffix('.md')}/",
     )
     p.add_argument("--cleaned-dir", type=Path, default=None, help=f"Output root of clean; the clean manifests are read (default: {CLEANED_DIR})")
     p.add_argument("--cohort-dir", type=Path, default=None, help=f"Output directory of cohort (default: {COHORT_DIR})")
@@ -305,15 +307,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--out", type=Path, default=None,
         help=f"Report path, named {REPORT_NAME.format(date='<date>')}, or {REPORT_NAME_SAME_DAY.format(date='<date>', n='<n>')} "
-        f"(<n> 2 or more) for a later report of the same day; the date and the ordinal are read from the name (default: "
+        f"(<n> 2 or more) for a later report of the same day; the date and the ordinal are read from the name, and the "
+        f"figures directory follows it: {REPORT_FIGURES_DIR}/<its name without .md>/ beside it (default: "
         f"{REPORTS_DIR}/{REPORT_NAME.format(date='<today>')}, or with --check the newest report there by date, then ordinal)",
     )
     p.add_argument(
         "--check", action="store_true",
-        help="Compare the report at --out with the one the outputs now generate, every table cell by cell and every other "
-        "line line by line, instead of writing it; exits 1 on any mismatch and writes nothing",
+        help="Compare the report at --out and its figures with the ones the outputs now generate, every table cell by cell "
+        "and every other line line by line, then each figure's data CSV cell by cell and its SVG by its bytes, instead of "
+        "writing them; exits 1 on any mismatch and writes nothing",
     )
-    p.add_argument("--force", action="store_true", help="Replace an existing report at --out")
+    p.add_argument("--force", action="store_true", help="Replace an existing report at --out and its figures directory")
 
     return parser
 

@@ -155,6 +155,7 @@ from .constants import (
     LATENT_SENSITIVITY_SUBDIRS,
     LATENT_SENSITIVITY_SUMMARY,
     LATENT_SENSITIVITY_TABLE,
+    MATPLOTLIB_VERSION,
     METABO_ADNI_VERSION,
     MOTCO_ANALYSIS_DIR,
     MOTCO_INPUT_DIR,
@@ -179,6 +180,8 @@ from .constants import (
     RAW_INPUT_SHA256,
     READING_RULES,
     REPORT_EXPORT_VARIANTS,
+    REPORT_FIGURES,
+    REPORT_FIGURES_DIR,
     REPORT_INPUT_FILES,
     REPORT_NAME,
     REPORT_NAME_SAME_DAY,
@@ -371,6 +374,39 @@ def check_metabo_adni_version() -> str:
         raise RuntimeError(
             f"metabo_adni {installed} is installed but the pin is {METABO_ADNI_VERSION}; "
             "a pin move is its own change (AGENTS.md constraint 3)"
+        )
+    return installed
+
+
+def check_matplotlib_version() -> str:
+    """Return the installed matplotlib version after checking the pin (change ``adni-report-figures``, design D7).
+
+    ``report`` draws its figures with matplotlib and their bytes depend on
+    it, so it checks the pin before any input is read, in write and check
+    mode alike.
+
+    Returns
+    -------
+    str
+        The installed version, equal to ``constants.MATPLOTLIB_VERSION``.
+
+    Raises
+    ------
+    RuntimeError
+        The installed version differs from the pin (the environment is not
+        the lock's), or matplotlib is not installed.
+    """
+    try:
+        installed = version("matplotlib")
+    except PackageNotFoundError as e:
+        raise RuntimeError(
+            f"matplotlib is not installed; the pin is {MATPLOTLIB_VERSION}: run `uv sync --locked`; nothing was written"
+        ) from e
+    if installed != MATPLOTLIB_VERSION:
+        raise RuntimeError(
+            f"matplotlib {installed} is installed but the pin is {MATPLOTLIB_VERSION} (MATPLOTLIB_VERSION): the report's "
+            "figures depend on the drawing library's version; run `uv sync --locked` (a pin move is its own change, which "
+            "re-issues the report); nothing was written"
         )
     return installed
 
@@ -9649,7 +9685,9 @@ def _load_report_inputs(
         ``variants``: variant → its ``result.json``; ``stage_arm``: the CN /
         LMCI / AD arm's ``result.json``; ``ranks``: forced rank → its
         ``result.json``, in ladder order), ``tables``
-        (``stage_counts``, ``comparison``, ``diagnostics`` and
+        (``stage_counts``, ``stage_means`` (the primary's, which
+        ``f2_trajectories`` draws; change ``adni-report-figures``),
+        ``comparison``, ``diagnostics`` and
         ``arm_diagnostics``; ``variants``: variant → ``comparison``,
         ``bridge`` (``None`` without a bridge role) and ``diagnostics``;
         ``stage_arm`` and ``rank_sweep``: ``comparison`` and
@@ -10375,6 +10413,7 @@ def _load_report_inputs(
         "records": {"primary": primary, "arm": arm, "variants": variant_records, "stage_arm": st_record, "ranks": rank_records},
         "tables": {
             "stage_counts": read_csv("cohort", COHORT_COUNTS),
+            "stage_means": read_csv(a_role, ANALYSIS_STAGE_MEANS),
             "comparison": read_csv(c_role, LATENT_SENSITIVITY_TABLE),
             "diagnostics": diagnostics_tables("diagnostics"),
             "arm_diagnostics": diagnostics_tables(ad_role),
@@ -10634,6 +10673,25 @@ def _flagged_components(manifest: dict, components: pd.DataFrame, *, start: int 
     per = manifest.get("counts", {}).get("per_component", {})
     names = [c for c in list(dict.fromkeys(components["component"]))[start:] if (per.get(c) or {}).get("flagged_variables")]
     return ", ".join(f"`{c}`" for c in names) if names else "none"
+
+
+#: The columns of a bridge variant's per-kit table (``_bridge_kit_rows``).
+_BRIDGE_KIT_COLUMNS: tuple[str, ...] = ("kit", "metabolites", "expected")
+
+
+def _bridge_kit_rows(export_manifest: dict) -> list[dict]:
+    """The bridged metabolites per kit beside the predeclared counts, as "Export sensitivity" and the caption of ``f7_nist_bridge`` print them."""
+    observed = export_manifest.get("bridge", {}).get("summary", {}).get("p180_bridged", {})
+    expected = export_manifest.get("expected", {}).get("p180_bridged", {})
+    return [
+        {"kit": "not bridged" if kit == "not_bridged" else kit, "metabolites": _count(observed.get(kit)), "expected": _count(expected.get(kit))}
+        for kit in dict.fromkeys([*observed, *expected])
+    ]
+
+
+def _row_line(row: dict, columns: Sequence[str]) -> str:
+    """A table row as one caption line (change ``adni-report-figures``): its key, then each other column and its cell, every cell as the table prints it."""
+    return f"{row[columns[0]]}: " + ", ".join(f"{column} {row[column]}" for column in columns[1:])
 
 
 def _section_ref(title: str) -> str:
@@ -10921,11 +10979,7 @@ def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list
             bridge = m.get("bridge")
             if not bridge:
                 continue
-            observed, expected = bridge.get("summary", {}).get("p180_bridged", {}), m.get("expected", {}).get("p180_bridged", {})
-            b.table(f"{v}: NIST bridge per kit", [
-                {"kit": "not bridged" if kit == "not_bridged" else kit, "metabolites": _count(observed.get(kit)), "expected": _count(expected.get(kit))}
-                for kit in dict.fromkeys([*observed, *expected])
-            ], ["kit", "metabolites", "expected"], align="lrr")
+            b.table(f"{v}: NIST bridge per kit", _bridge_kit_rows(m), list(_BRIDGE_KIT_COLUMNS), align="lrr")
             rule = bridge.get("rule", {})
             runs = [rule.get("reference_run"), rule.get("bridged_run")]
             table = inputs["tables"]["variants"][v]["bridge"]
@@ -11356,7 +11410,137 @@ def _operating_characteristics_section(b: _ReportBuilder, inputs: dict) -> None:
         align="lrlrlll")
 
 
-def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
+#: The caption lines of a figure's ``generated`` entry that the section builds
+#: itself (the others come from the summary); each is a line the report
+#: prints elsewhere, through the same function (design D5 of ``adni-report-figures``).
+_FIGURE_FLAGGED_COLUMNS: tuple[str, ...] = ("row", "rho", "rho | design", "flag")
+_FIGURE_BRIDGE_LINES: tuple[str, ...] = ("- NIST SRM 1950 bridge", "- log2 factor b")
+
+
+def _figures_section(b: _ReportBuilder, inputs: dict, *, stem: str, figures: dict[str, dict], generated: dict[str, list[str]]) -> None:
+    """The "Figures" section (design D2 and D5 of ``adni-report-figures``): the lead, "Figure files", then per figure its heading, image and caption.
+
+    The caption has three parts: "How to read it", the fixed reading text of
+    ``REPORT_FIGURES``; "In this report", the lines its ``generated`` entry
+    names, each printed elsewhere in the report by the same function (the
+    primary's reading bullets, the decision's verdict and size sentence, the
+    primary's flagged latent-component rows as cells of
+    ``_flagged_axis_rows``, the bridge lines of ``_export_variant_lines`` with
+    the rows of ``_bridge_kit_rows``, the status sentences that differ from
+    the primary's, the anchor and nesting bullets of ``_rank_anchor_lines``),
+    absent when the entry names none; and its sources and rule lists. The
+    section builds no sentence of its own besides the lead and the pointer
+    after the differing statuses, and quotes the figures' hashes from the
+    bytes in memory.
+    """
+    files, manifests, tables = inputs["files"], inputs["manifests"], inputs["tables"]
+    fig_dir = f"{REPORT_FIGURES_DIR}/{stem}"
+    d_manifest = manifests["axis-diagnostics"]
+    variables = [v["name"] if isinstance(v, dict) else v for v in d_manifest.get("settings", {}).get("DIAGNOSTIC_VARIABLES", [])]
+    bridge = next(v for v in REPORT_EXPORT_VARIANTS if EXPORT_VARIANTS[v]["hook"] == "factors")
+    bridge_manifest = manifests[_variant_labels(bridge)["export"]]
+    rk_anchor = manifests[_RANK_SWEEP_LABELS["comparison"]].get("anchor", {})
+    lines = {
+        **generated,
+        "primary_flagged_rows": [
+            _row_line(r, _FIGURE_FLAGGED_COLUMNS) for r in _flagged_axis_rows(tables["diagnostics"]["axis"], variables)
+        ],
+        "bridge_lines": [
+            *(line[2:] for line in _export_variant_lines(bridge_manifest) if line.startswith(_FIGURE_BRIDGE_LINES)),
+            *(_row_line(r, _BRIDGE_KIT_COLUMNS) for r in _bridge_kit_rows(bridge_manifest)),
+        ],
+        "rank_anchor_and_nesting": _rank_anchor_lines(
+            rk_anchor, top=int(max(RANK_SENSITIVITY_LADDER["ranks"])), primary_rank=inputs["records"]["primary"]["latent"]["selected_lv"]
+        ),
+    }
+    b.para(
+        f"The {len(REPORT_FIGURES)} figures of `REPORT_FIGURES`, drawn by `adni-sexdiff report` in the run that wrote this "
+        f"file, after every gate, from the inputs listed in {_section_ref('Provenance')} and nothing else, with matplotlib "
+        f"{MATPLOTLIB_VERSION} (`MATPLOTLIB_VERSION`) under `FIGURE_STYLE` and the pinned numerics (`NUMERIC_SETTINGS`). "
+        f"They are in `{fig_dir}/`, an SVG and a data CSV per figure. Each SVG draws its text as paths and carries no date; "
+        "its metadata names its title, each input file with its sha256 and the matplotlib version. Each data CSV holds one "
+        "row per plotted value: its key, the quantity, the value as read from its source, the source file (or "
+        "`constants.<NAME>` for a reference line) and the field. `adni-sexdiff report --check` regenerates the figures and "
+        "compares each data CSV cell by cell and each SVG by its bytes, so a regenerated input or a moved drawing is named. "
+        "The figures add no number, statistic or reading: every value is copied from an input or a named constant, every "
+        "line under \"In this report\" is printed elsewhere in this report, and the primary's status is the result wherever "
+        "a sensitivity appears."
+    )
+    b.table("Figure files", [
+        {
+            "figure": fid, "title": entry["title"], "svg": f"{fig_dir}/{fid}.svg", "svg sha256": figures[fid]["svg_sha256"],
+            "data": f"{fig_dir}/{fid}.csv", "data sha256": figures[fid]["csv_sha256"],
+            "inputs": "; ".join(str(files[role][name]["path"]) for role, name in entry["inputs"]),
+        }
+        for fid, entry in REPORT_FIGURES.items()
+    ], ["figure", "title", "svg", "svg sha256", "data", "data sha256", "inputs"])
+    for k, (fid, entry) in enumerate(REPORT_FIGURES.items(), 1):
+        b.heading(f"Figure {k}: {entry['title']}")
+        b.para(f"![Figure {k}: {entry['title']}]({fig_dir}/{fid}.svg)")
+        b.para(f"How to read it: {entry['reading']}")
+        if entry["generated"] is not None:
+            b.para("In this report:")
+            b.bullets(lines[entry["generated"]])
+        b.para(
+            "Sources: " + ", ".join(f"`{files[role][name]['path']}`" for role, name in entry["inputs"])
+            + f"; data `{fig_dir}/{fid}.csv`."
+        )
+        b.para("Rules: " + _and_join([f"`{rule}`" for rule in entry["rules"]]) + f" ({_section_ref('Reading rules')}).")
+
+
+def _report_figures(inputs: dict, *, log: str = "[report]") -> dict[str, dict]:
+    """The figures of ``REPORT_FIGURES``, built in memory after every gate (design D6 to D8 of ``adni-report-figures``); nothing is written.
+
+    Parameters
+    ----------
+    inputs:
+        ``_load_report_inputs`` (its gates have run).
+    log:
+        The progress prefix.
+
+    Returns
+    -------
+    dict
+        Figure stem → ``rows`` (its data rows), ``csv`` and ``svg`` (the
+        bytes of its data CSV and its SVG) and their ``csv_sha256`` and
+        ``svg_sha256``, in ``REPORT_FIGURES`` order.
+
+    Notes
+    -----
+    ``figures.py`` (the one module that imports matplotlib) is imported
+    here, so no pipeline step loads matplotlib. After the figures are drawn,
+    so that every library they loaded is listed, the numeric state is read
+    (``_numerics_record``): a state that is not pinned stops the step naming
+    the settings that differ, since the figures are committed outputs
+    (constraint 6). The report writes no ``numerics`` block of its own.
+    """
+    from . import figures
+
+    rows = figures.figure_rows(inputs)
+    svgs = figures.draw_figures(inputs, rows)
+    problems = _numerics_problems(_numerics_record())
+    if problems:
+        raise RuntimeError(
+            "numerics not pinned: " + "; ".join(problems) + "; the report's figures are committed outputs and must be "
+            "drawn pinned (constraint 6; NUMERIC_SETTINGS, change adni-portable-numerics: import adni_sexdiff before "
+            "numpy); nothing was written"
+        )
+    out: dict[str, dict] = {}
+    for stem in REPORT_FIGURES:
+        data = figures.rows_csv(rows[stem])
+        out[stem] = {
+            "rows": rows[stem], "csv": data, "svg": svgs[stem],
+            "csv_sha256": hashlib.sha256(data).hexdigest(), "svg_sha256": hashlib.sha256(svgs[stem]).hexdigest(),
+        }
+    print(
+        f"{log} figures: {len(out)} drawn in memory with matplotlib {MATPLOTLIB_VERSION} under FIGURE_STYLE "
+        f"({sum(len(f['rows']) for f in out.values())} data rows, {sum(len(f['svg']) for f in out.values()) // 1024} KiB of "
+        "SVG); numerics pinned"
+    )
+    return out
+
+
+def render_report(inputs: dict, *, date: str, stem: str, figures: dict[str, dict]) -> tuple[str, dict[str, pd.DataFrame]]:
     """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D2 to D5 of ``adni-report-nmr-all-columns``; D3, D4 and D8 of ``adni-report-scale-variants``; D5 and D6 of ``adni-operating-characteristics``).
 
     Parameters
@@ -11367,6 +11551,12 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         The date of the report's file name, with its same-day ordinal when
         it has one (``2026-11-02, report 2``; ``_report_date``), written in
         the title line only.
+    stem:
+        The report's file name without ``.md``: the name of its figures
+        directory, written in the lines of "Figures" that name it only.
+    figures:
+        ``_report_figures``: the figures in memory, whose sha256 "Figure
+        files" quotes.
 
     Returns
     -------
@@ -11376,7 +11566,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
 
     Notes
     -----
-    The fourteen sections of ``REPORT_SECTIONS``, in order, each table titled
+    The fifteen sections of ``REPORT_SECTIONS``, in order, each table titled
     by a level-3 heading and keyed by its first column; every reference to
     another section is numbered from ``REPORT_SECTIONS`` (``_section_ref``).
     Every number is read from a record, a manifest, a CSV or the cited
@@ -11386,7 +11576,18 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ``diagnostics.md`` prints them, the decision's rates and standard errors
     at three decimals and its bound at four); no statistic, correlation,
     mean or count is computed here, and no value across the ranks of the
-    sweep. "Operating characteristics", the seventh section
+    sweep. "Figures", the second section (``_figures_section``, change
+    ``adni-report-figures``), holds a lead naming the figures directory, the
+    matplotlib version and how ``--check`` compares the figures; the table
+    "Figure files" (per figure of ``REPORT_FIGURES`` its title, SVG and data
+    CSV with their sha256 and its input files); and per figure a level-3
+    heading, the image and a three-part caption: the fixed reading text of
+    ``REPORT_FIGURES``, the lines its entry names (each printed elsewhere in
+    the report by the same function: the primary's reading bullets, the
+    decision's verdict and size sentence, the primary's flagged rows, the
+    bridge lines, the status sentences that differ from the primary's, the
+    anchor and nesting bullets), and its sources and rule lists. "Operating
+    characteristics", the eighth section
     (``_operating_characteristics_section``), quotes MOTCO's measurement at
     this design from the decision's copy: the citation, the decision rule,
     the size readings with ``size.sentence``, the power per target statistic
@@ -11425,7 +11626,8 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ``git show`` command that restores the decision's copy.
     No sentence reads one sensitivity against another; a sentence that
     lists several, each beside the primary, compares none. The body
-    depends on the inputs and ``date`` only: no revision, host, time or
+    depends on the inputs, ``date``, ``stem`` and the figures (drawn from the
+    inputs with the pinned drawing library) only: no revision, host, time or
     runtime of the report run is written.
     """
     b = _ReportBuilder()
@@ -11452,7 +11654,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para(
         "Generated in full by `adni-sexdiff report` (changes `adni-report`, `adni-report-variants`, "
         "`adni-report-stage-arm`, `adni-report-rank-sweep`, `adni-report-nmr-all-columns`, "
-        "`adni-report-scale-variants` and `adni-operating-characteristics`) from the kept aggregate "
+        "`adni-report-scale-variants`, `adni-operating-characteristics` and `adni-report-figures`) from the kept aggregate "
         "outputs of the pipeline and the committed copy of MOTCO's operating-characteristics decision: every number is "
         "copied from a record, a manifest, a CSV or the decision file and formatted with the digits "
         "of the summary it belongs to, every reading sentence is the one `summary.md`, `latent_sensitivity.md`, "
@@ -11491,7 +11693,10 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         )
     )
     b.para(f"Reading, under `READING_RULES` ({_section_ref('Reading rules')}):")
-    b.bullets([_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS])
+    reading_lines = [_statistic_reading_line(s, p_status[s], stages=stages) for s in ANALYSIS_STATISTICS]
+    b.bullets(reading_lines)
+    # the status sentences that differ from the primary's, in the row order of f8_sensitivities (its caption)
+    differing: list[str] = []
     decision = inputs["decision"]
     b.para(
         f"MOTCO's operating characteristics at this design (`OPERATING_CHARACTERISTICS_SOURCE`, "
@@ -11507,7 +11712,9 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "`ANALYSIS_REJECTION_RULE` equals the primary's, else `differs (basis dependence)`; the primary's status is the "
         "result either way), read under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`:"
     )
-    b.bullets([_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
+    arm_lines = [_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS]
+    b.bullets(arm_lines)
+    differing += [line for s, line in zip(ANALYSIS_STATISTICS, arm_lines) if str(statuses.get(s, "")).startswith("differs")]
     v_labels = {v: _variant_labels(v) for v in variants}
     v_records = inputs["records"]["variants"]
     v_status = {v: {s: _rejected(v_records[v]["p_values"].get(s)) for s in ANALYSIS_STATISTICS} for v in variants}
@@ -11528,9 +11735,11 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         for v in group:
             v_statuses = manifests[v_labels[v]["comparison"]].get("counts", {}).get("statuses", {})
             b.para(f"`{v}` (rank {v_records[v]['latent']['selected_lv']}):")
-            b.bullets([
+            v_lines = [
                 _export_variant_status_line(s, v_statuses.get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
-            ])
+            ]
+            b.bullets(v_lines)
+            differing += [line for s, line in zip(ANALYSIS_STATISTICS, v_lines) if str(v_statuses.get(s, "")).startswith("differs")]
     st_name = STAGE_SENSITIVITY_ARM["name"]
     st_record = inputs["records"]["stage_arm"]
     st_arm = manifests[_STAGE_ARM_LABELS["export"]]["stage_arm"]
@@ -11544,7 +11753,9 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         f"`{_STAGE_SENSITIVITY_STATUS_DIFFERS}`; the primary's status is the result either way), read under `READING_RULES` "
         f"and `STAGE_SENSITIVITY_READING_RULES` ({_section_ref('Reading rules')}):"
     )
-    b.bullets([_stage_arm_status_line(s, st_statuses.get(s, "n/a"), p_status[s], st_status[s]) for s in ANALYSIS_STATISTICS])
+    st_lines = [_stage_arm_status_line(s, st_statuses.get(s, "n/a"), p_status[s], st_status[s]) for s in ANALYSIS_STATISTICS]
+    b.bullets(st_lines)
+    differing += [line for s, line in zip(ANALYSIS_STATISTICS, st_lines) if str(st_statuses.get(s, "")).startswith("differs")]
     ranks = [int(k) for k in RANK_SENSITIVITY_LADDER["ranks"]]
     rk_records = inputs["records"]["ranks"]
     rk_manifest = manifests[_RANK_SWEEP_LABELS["comparison"]]
@@ -11560,13 +11771,18 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         f"`{_RANK_SENSITIVITY_STATUS_DIFFERS}`; the primary's status is the result either way), read under `READING_RULES` "
         f"and `RANK_SENSITIVITY_READING_RULES` ({_section_ref('Reading rules')}):"
     )
-    b.bullets([
+    rk_lines = [
         _rank_status_line(
             s, p_status[s],
             {k: (rk_statuses.get(_rank_dir_name(k), {}).get(s, "n/a"), _rejected(rk_records[k]["p_values"].get(s))) for k in ranks},
         )
         for s in ANALYSIS_STATISTICS
-    ])
+    ]
+    b.bullets(rk_lines)
+    differing += [
+        line for s, line in zip(ANALYSIS_STATISTICS, rk_lines)
+        if any(str(rk_statuses.get(_rank_dir_name(k), {}).get(s, "")).startswith("differs") for k in ranks)
+    ]
     tables = inputs["tables"]
     d_flagged, ad_flagged = d_manifest.get("counts", {}).get("flagged", {}), ad_manifest.get("counts", {}).get("flagged", {})
     st_flagged = manifests[_STAGE_ARM_LABELS["diagnostics"]].get("counts", {}).get("flagged", {})
@@ -11600,7 +11816,22 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "A flagged row is a measurement-space finding, never a change of a statistic."
     )
 
-    # 2. Provenance ------------------------------------------------------------------------
+    # 2. Figures (change adni-report-figures) ----------------------------------------------
+    b.section(next(sections))
+    _figures_section(
+        b, inputs, stem=stem, figures=figures,
+        generated={
+            "primary_reading": reading_lines,
+            "decision_verdict_and_size": [f"verdict `{decision['verdict']}`", decision["size"]["sentence"]],
+            "differing_statuses": [
+                *differing,
+                f"Every status of every sensitivity, with its reading sentence, is in {_section_ref('Summary')} and in the "
+                f"sensitivity sections, from {_section_ref('Latent-adjustment sensitivity')} to {_section_ref('Rank sensitivity')}.",
+            ],
+        },
+    )
+
+    # 3. Provenance ------------------------------------------------------------------------
     b.section(next(sections))
     b.para(
         "This section is the report's manifest: what each step recorded, every input with its sha256, and the chain the "
@@ -11676,7 +11907,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ]
     b.table("Chain links checked", chain_rows, ["link", "upstream", "sha256", "ok", "rerun on failure"])
 
-    # 3. Cohort ----------------------------------------------------------------------------
+    # 4. Cohort ----------------------------------------------------------------------------
     b.section(next(sections))
     cs, cc = c_manifest.get("settings", {}), c_manifest.get("counts", {})
     rule, stage_rule = cs.get("COHORT_RULE", {}), cs.get("STAGE_RULE", {})
@@ -11809,7 +12040,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         count_rows.append({"quantity": key, **{c: _text(src[p].get(key)) for p in PLATFORMS for c, src in ((p, flat), (f"{p} expected", flat_e))}})
     b.table("Cleaning counts", count_rows, ["quantity", *(c for p in PLATFORMS for c in (p, f"{p} expected"))], align="l" + "r" * (2 * len(PLATFORMS)))
 
-    # 4. Export ----------------------------------------------------------------------------
+    # 5. Export ----------------------------------------------------------------------------
     b.section(next(sections))
     es, ec, ee = e_manifest.get("settings", {}), e_manifest.get("counts", {}), e_manifest.get("expected", {})
     scale = es.get("EXPORT_FEATURE_RULE", {}).get("scale", {})
@@ -11864,7 +12095,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ss = ec.get("sex_stage", {})
     b.table("Exported participants per sex × stage", [{"sex": g, **{st: _count(ss.get(g, {}).get(st)) for st in stages}} for g in groups], ["sex", *stages], align="l" + "r" * len(stages))
 
-    # 5. Primary analysis ------------------------------------------------------------------
+    # 6. Primary analysis ------------------------------------------------------------------
     b.section(next(sections))
     ps = p_manifest.get("settings", {})
     setting_rows = [
@@ -11930,7 +12161,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para("The `motco analyze` command that reproduces the directory from its inputs (`cli_equivalent`; " + _text(ps.get("cli_equivalent", {}).get("note")) + "):")
     b.code(_text(ps.get("cli_equivalent", {}).get("command")))
 
-    # 6. Axis diagnostics of the primary ---------------------------------------------------
+    # 7. Axis diagnostics of the primary ---------------------------------------------------
     b.section(next(sections))
     ds, dc = d_manifest.get("settings", {}), d_manifest.get("counts", {})
     b.para(
@@ -11947,11 +12178,11 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ], ["variable", "source", "derivation"])
     _diagnostics_section(b, inputs["tables"]["diagnostics"], d_manifest)
 
-    # 7. Operating characteristics -------------------------------------------------------
+    # 8. Operating characteristics -------------------------------------------------------
     b.section(next(sections))
     _operating_characteristics_section(b, inputs)
 
-    # 8. Latent-adjustment sensitivity ----------------------------------------------------
+    # 9. Latent-adjustment sensitivity ----------------------------------------------------
     b.section(next(sections))
     cmp_ref, cmp_arm = cmp_manifest.get("reference", {}), cmp_manifest.get("arm", {})
     adjustment = arm["latent_adjustment"]
@@ -12035,19 +12266,19 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para("The `motco analyze` command that reproduces the arm's directory (`cli_equivalent`; " + _text(a_settings.get("cli_equivalent", {}).get("note")) + "):")
     b.code(_text(a_settings.get("cli_equivalent", {}).get("command")))
 
-    # 9. Export sensitivity ----------------------------------------------------------------
+    # 10. Export sensitivity ----------------------------------------------------------------
     b.section(next(sections))
     _export_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 10. Stage-definition sensitivity ------------------------------------------------------
+    # 11. Stage-definition sensitivity ------------------------------------------------------
     b.section(next(sections))
     _stage_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 11. Rank sensitivity -----------------------------------------------------------------
+    # 12. Rank sensitivity -----------------------------------------------------------------
     b.section(next(sections))
     _rank_sensitivity_section(b, inputs, stages=stages, p_status=p_status)
 
-    # 12. Findings -------------------------------------------------------------------------
+    # 13. Findings -------------------------------------------------------------------------
     b.section(next(sections))
     b.para("Every deviation from the predeclared counts and every finding of every input manifest, verbatim, under its step; then the report's own.")
     for label, m in manifests.items():
@@ -12063,7 +12294,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     else:
         b.para("None.")
 
-    # 13. Reading rules --------------------------------------------------------------------
+    # 14. Reading rules --------------------------------------------------------------------
     b.section(next(sections))
     b.heading("READING_RULES")
     b.para("Binding for every reader of the result (`READING_RULES`, decided by `adni-analyze` before any run):")
@@ -12093,7 +12324,7 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     b.para(_rank_sweep_rules_heading()[-1])
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(RANK_SENSITIVITY_READING_RULES, 1)))
 
-    # 14. Reproduction ---------------------------------------------------------------------
+    # 15. Reproduction ---------------------------------------------------------------------
     b.section(next(sections))
     sens_dir = dirs[s_role].parent
     reads_root = [v for v in variants if manifests[v_labels[v]["export"]].get("variant", {}).get("reads_data_root")]
@@ -12366,9 +12597,10 @@ def _check_report_layout(path: Path) -> str:
     "Export sensitivity" in order (``_REPORT_VARIANT_HEADING_RE``), must be
     ``REPORT_EXPORT_VARIANTS``. A report written by an earlier layout of
     ``report`` stops the check before any input gate and before any
-    comparison: since "Operating characteristics" was added (change
-    ``adni-operating-characteristics``) every committed report stops at the
-    section gate, the report of 2026-11-02-2 by its thirteen sections (it
+    comparison: since "Figures" was added (change ``adni-report-figures``)
+    every committed report stops at the section gate, the report of
+    2026-11-02-3 by its fourteen sections (it checks at 9779964), the
+    report of 2026-11-02-2, also lacking "Operating characteristics" (it
     checks at 67567e2), those of 2026-11-02 (28e0d48) and 2026-10-31
     (13ce7c8) likewise, and those of 2026-10-30 (2e4a3e1), 2026-10-29
     (c94f5e7) and 2026-10-28 (36c9cc8) with their older absences too; the
@@ -12410,8 +12642,13 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
     A report whose level-2 headings are not ``REPORT_SECTIONS`` in order, or
     whose export variants are not ``REPORT_EXPORT_VARIANTS``, stops first
     (``_check_report_layout``): every report committed before change
-    ``adni-operating-characteristics``, by its sections (the report of
-    2026-11-02-2 lacks "Operating characteristics" alone).
+    ``adni-report-figures``, by its sections (the report of 2026-11-02-3
+    lacks "Figures" alone). Then the matplotlib pin
+    (``check_matplotlib_version``); then the figures are regenerated in
+    memory (``_report_figures``, the numerics gate included) and the report
+    is compared table by table and line by line, then the figures directory
+    (``_compare_figures``): each data CSV by ``key``, each SVG by sha256,
+    its files against the eighteen names.
 
     Parameters
     ----------
@@ -12428,24 +12665,165 @@ def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> di
         ``path``, ``tables`` (the generated frames), ``checked`` ``True`` and
         ``mismatches``: one string per difference (section, table, row key
         and column with both values; or section and line with both texts;
-        or an absent or extra section, table, row or line).
+        or an absent or extra section, table, row or line; for a figure its
+        file, row key, column, both values and source, or both sha256, or a
+        missing or extra file).
     """
     path = Path(path)
     date = _report_date(path)
     text = _check_report_layout(path)
-    generated, tables = render_report(inputs, date=date)
+    check_matplotlib_version()
+    figures = _report_figures(inputs, log=log)
+    generated, tables = render_report(inputs, date=date, stem=path.stem, figures=figures)
     report_parsed, generated_parsed = parse_report(text), parse_report(generated)
     mismatches = _compare_parsed(report_parsed, generated_parsed)
+    figures_dir = _figures_dir(path)
+    mismatches += _compare_figures(figures_dir, figures)
     n_tables = sum(len(s["tables"]) for s in generated_parsed["sections"])
     n_cells = sum(len(t["rows"]) * len(t["columns"]) for s in generated_parsed["sections"] for t in s["tables"])
     n_lines = sum(len(s["lines"]) for s in generated_parsed["sections"])
+    n_rows = sum(len(f["rows"]) for f in figures.values())
+    compared = (
+        f"{n_tables} tables, {n_cells} cells and {n_lines} other lines of the report; {len(figures)} data CSVs ({n_rows} "
+        f"rows) cell by cell and {len(figures)} SVGs by their bytes in {figures_dir}"
+    )
     for msg in mismatches:
         print(f"{log} MISMATCH: {msg}")
     if mismatches:
-        print(f"{log} {path}: {len(mismatches)} mismatch(es) against the generated report ({n_tables} tables, {n_cells} cells, {n_lines} other lines compared); nothing was written")
+        print(f"{log} {path}: {len(mismatches)} mismatch(es) against the generated report and figures ({compared} compared); nothing was written")
     else:
-        print(f"{log} {path}: {n_tables} tables, {n_cells} cells and {n_lines} other lines compared; no mismatch; nothing was written")
+        print(f"{log} {path}: {compared} compared; no mismatch; nothing was written")
     return {"path": path, "tables": tables, "checked": True, "mismatches": mismatches}
+
+
+def _figures_dir(report: Path) -> Path:
+    """The figures directory of a report: ``<its directory>/REPORT_FIGURES_DIR/<its stem>`` (design D3 of ``adni-report-figures``)."""
+    return Path(report).parent / REPORT_FIGURES_DIR / Path(report).stem
+
+
+def _figure_names(figures: dict[str, dict]) -> list[str]:
+    """The files of a figures directory, in ``REPORT_FIGURES`` order: per figure its SVG, then its data CSV."""
+    return [f"{stem}.{ext}" for stem in figures for ext in ("svg", "csv")]
+
+
+def _compare_figures(directory: Path, figures: dict[str, dict]) -> list[str]:
+    """Every difference between a figures directory and the regenerated figures (design D9 of ``adni-report-figures``).
+
+    The directory's files against the eighteen names; each data CSV against
+    the regenerated rows by ``key`` (a missing, extra or changed row, naming
+    the file, the key, the column, both values and the regenerated row's
+    source and field); each SVG by its sha256, saying, when the figure's data
+    CSV equals the regenerated one, that the drawing moved and not a result.
+    """
+    from .figures import FIGURE_CSV_COLUMNS, read_rows_csv
+
+    expected = _figure_names(figures)
+    if not directory.is_dir():
+        return [f"figures › {directory}: the figures directory is absent ({len(expected)} files expected)"]
+    present = sorted(p.name for p in directory.iterdir())
+    out: list[str] = []
+    missing = [n for n in expected if n not in present]
+    extra = [n for n in present if n not in expected]
+    if missing:
+        out.append(f"figures › {directory}: missing {', '.join(missing)}")
+    if extra:
+        out.append(f"figures › {directory}: extra {', '.join(extra)} (not a file of REPORT_FIGURES)")
+    for stem, figure in figures.items():
+        csv_path, svg_path = directory / f"{stem}.csv", directory / f"{stem}.svg"
+        data_equal = None
+        if csv_path.is_file():
+            committed = csv_path.read_bytes()
+            data_equal = committed == figure["csv"]
+            if not data_equal:
+                before = len(out)
+                try:
+                    rows = read_rows_csv(committed)
+                except (ValueError, UnicodeDecodeError) as e:
+                    out.append(f"figures › {csv_path.name}: unreadable ({e})")
+                    rows = None
+                if rows is not None:
+                    c_rows, g_rows = {r["key"]: r for r in rows}, {r["key"]: r for r in figure["rows"]}
+                    for key, g in g_rows.items():
+                        c = c_rows.get(key)
+                        if c is None:
+                            out.append(f"figures › {csv_path.name} › row {key}: absent from the committed data (source {g['source']}, field {g['field']})")
+                            continue
+                        for column in FIGURE_CSV_COLUMNS[1:]:
+                            if c[column] != g[column]:
+                                out.append(
+                                    f"figures › {csv_path.name} › row {key} › {column}: committed {c[column]!r}, generated "
+                                    f"{g[column]!r} (source {g['source']}, field {g['field']})"
+                                )
+                    for key in c_rows:
+                        if key not in g_rows:
+                            out.append(f"figures › {csv_path.name} › row {key}: not generated")
+                    if len(out) == before:
+                        out.append(
+                            f"figures › {csv_path.name}: sha256 {hashlib.sha256(committed).hexdigest()} committed, "
+                            f"{figure['csv_sha256']} generated, with every row equal (their order or bytes differ)"
+                        )
+        if svg_path.is_file():
+            digest = _sha256_file(svg_path)
+            if digest != figure["svg_sha256"]:
+                if data_equal:
+                    why = "its data CSV equals the regenerated data, so the drawing moved, not a result"
+                elif data_equal is None:
+                    why = "its data CSV is missing"
+                else:
+                    why = "its data differ too (above)"
+                out.append(f"figures › {svg_path.name}: sha256 {digest} committed, {figure['svg_sha256']} generated; {why}")
+    return out
+
+
+def _write_report(out_path: Path, text: str, tables: dict[str, pd.DataFrame], figures: dict[str, dict], *, force: bool) -> tuple[int, int, int]:
+    """Write a report and its figures staged together and rename them together (design D8 of ``adni-report-figures``).
+
+    The figures go to ``<figures dir>.tmp/`` and the report to ``<out>.tmp``;
+    the report is parsed back (``_parse_back``), each data CSV read back equal
+    to its rows and each SVG to its bytes; then the figures directory is
+    renamed (an existing one removed just before, with ``force``), then the
+    report. A failure at any point removes both temporaries and renames
+    nothing. Returns the tables and cells parsed back and the figure files
+    written.
+    """
+    from .figures import read_rows_csv
+
+    figures_dir = _figures_dir(out_path)
+    tmp = out_path.with_name(out_path.name + ".tmp")
+    tmp_dir = figures_dir.with_name(figures_dir.name + ".tmp")
+    created = [p for p in (out_path.parent, figures_dir.parent) if not p.exists()]
+    try:
+        figures_dir.parent.mkdir(parents=True, exist_ok=True)
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        tmp_dir.mkdir()
+        for stem, figure in figures.items():
+            (tmp_dir / f"{stem}.svg").write_bytes(figure["svg"])
+            (tmp_dir / f"{stem}.csv").write_bytes(figure["csv"])
+        tmp.write_text(text)
+        n_tables, n_cells = _parse_back(tmp.read_text(), tables)
+        if sorted(p.name for p in tmp_dir.iterdir()) != sorted(_figure_names(figures)):
+            raise RuntimeError(f"read-back: {tmp_dir} does not hold the {len(_figure_names(figures))} figure files; nothing was written")
+        for stem, figure in figures.items():
+            if read_rows_csv((tmp_dir / f"{stem}.csv").read_bytes()) != figure["rows"]:
+                raise RuntimeError(f"read-back: {stem}.csv does not read back to its rows (the writer or the reader is defective); nothing was written")
+            if _sha256_file(tmp_dir / f"{stem}.svg") != figure["svg_sha256"]:
+                raise RuntimeError(f"read-back: {stem}.svg differs from the bytes drawn; nothing was written")
+        for target in (out_path, figures_dir):
+            if target.exists() and not force:
+                raise FileExistsError(f"{target} appeared during the run; nothing was written")
+        if figures_dir.exists():
+            shutil.rmtree(figures_dir)
+        os.replace(tmp_dir, figures_dir)
+        os.replace(tmp, out_path)
+    finally:
+        tmp.unlink(missing_ok=True)
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        for directory in reversed(created):
+            if directory.is_dir() and not any(directory.iterdir()):
+                directory.rmdir()
+    return n_tables, n_cells, len(_figure_names(figures))
 
 
 def _newest_report(reports_dir: Path) -> Path:
@@ -12492,7 +12870,8 @@ def run_report(
     analysis_dir:
         The primary's analysis directory (default
         ``constants.MOTCO_ANALYSIS_DIR``); ``result.json``,
-        ``analysis_manifest.json`` and ``summary.md`` are read.
+        ``analysis_manifest.json``, ``summary.md`` and ``stage_means.csv``
+        are read.
     diagnostics_dir:
         The primary's diagnostics (default ``constants.DIAGNOSTICS_DIR``); its
         six files are read.
@@ -12545,10 +12924,15 @@ def run_report(
         date in its name, then by its ordinal.
     check:
         Instead of writing, read the report at ``out``, run every gate,
-        regenerate the report and compare every table cell by cell and every
-        other line line by line; every mismatch is named (section, table,
-        row key, column, both values; or the line with both texts) and the
-        CLI exits non-zero on any. A report written by an earlier layout,
+        regenerate the report and its figures in memory and compare every
+        table cell by cell and every other line line by line, then each
+        figure's data CSV cell by cell (by ``key``) and its SVG by its sha256,
+        then the figures directory's files against the eighteen names; every
+        mismatch is named (section, table, row key, column, both values; or
+        the line with both texts; for a figure its file, row key, column,
+        both values and source, or both sha256, saying when its data are
+        equal that the drawing moved, not a result) and the CLI exits
+        non-zero on any. A report written by an earlier layout,
         whose level-2 headings are not ``REPORT_SECTIONS`` or whose export
         variants (its ``Export variant `<name>``` headings) are not
         ``REPORT_EXPORT_VARIANTS`` (change ``adni-report-nmr-all-columns``:
@@ -12556,11 +12940,15 @@ def run_report(
         ``adni-report-scale-variants``: the report of 2026-11-02, which
         checks at 28e0d48; change ``adni-operating-characteristics``: the
         report of 2026-11-02-2, which checks at 67567e2, and since then every
-        earlier report by its sections), stops before any gate, naming its
-        absent and extra sections or variants and how to find the revision
-        that committed it, where it checks. Nothing is written.
+        earlier report by its sections; change ``adni-report-figures``: the
+        report of 2026-11-02-3, which checks at 9779964, by its absent
+        "Figures", and every earlier report with its older absences too),
+        stops before any gate, naming its absent and extra sections or
+        variants and how to find the revision that committed it, where it
+        checks. Nothing is written.
     force:
-        Replace an existing report at ``out`` (write mode).
+        Replace an existing report at ``out`` and its figures directory
+        (write mode).
 
     Returns
     -------
@@ -12571,13 +12959,22 @@ def run_report(
 
     Notes
     -----
-    Inputs are the 146 kept aggregate files of ``REPORT_INPUT_FILES`` (45
-    manifests, and the committed copy of the cited MOTCO decision) and
+    Inputs are the 147 kept aggregate files of ``REPORT_INPUT_FILES`` (45
+    manifests, the committed copy of the cited MOTCO decision and, since
+    change ``adni-report-figures``, the primary's ``stage_means.csv``, so
+    the primary's four files; 100 are checked against the ``outputs`` their
+    manifest records) and
     nothing else: no participant-level file is opened or
     required, and the hashes the report quotes for one are the values the
     manifests record. So the step runs on any clone with the committed
-    tree, needs no data root, no MOTCO call and no pinned numeric
-    environment, and records no numerics. Gates (``_load_report_inputs``),
+    tree and needs no data root and no MOTCO call. Since change
+    ``adni-report-figures`` it draws the figures, so two more gates stop it
+    before anything is written: the installed matplotlib must be
+    ``MATPLOTLIB_VERSION`` (``check_matplotlib_version``, before any input
+    is read, in write and check mode alike), and the numeric state read
+    after the figures are drawn must be pinned (``_numerics_record``; a
+    committed output must be pinned, constraint 6); the report still writes
+    no ``numerics`` block of its own. Gates (``_load_report_inputs``),
     before anything is written and each naming the file or setting, both
     values and the step to rerun: every input present; every aggregate file
     hashes to the value its own manifest records (the bridge table to its
@@ -12605,10 +13002,13 @@ def run_report(
     value it describes at the decision's digits
     (``_OPERATING_CHARACTERISTICS_REFERENCE``; change
     ``adni-operating-characteristics``).
-    Write mode also stops on an existing ``out`` without ``force``.
+    Write mode also stops on an existing ``out``, or an existing figures
+    directory for its name, without ``force``.
 
     Output contract (``render_report``): one Markdown file with the
-    fourteen sections of ``REPORT_SECTIONS`` in order (summary; provenance;
+    fifteen sections of ``REPORT_SECTIONS`` in order (summary; figures, the
+    nine figures of ``REPORT_FIGURES`` with their files, hashes and
+    three-part captions, change ``adni-report-figures``; provenance;
     cohort; export; primary analysis; axis diagnostics of the primary;
     operating characteristics, MOTCO's measurement at this design quoted from
     the decision's copy, change ``adni-operating-characteristics``;
@@ -12642,12 +13042,21 @@ def run_report(
     the CN / LMCI / AD arm's and the sweep's constants named beside every
     table that quotes them, no sentence reading one sensitivity against
     another, and the primary's status the result in every table. The body depends on
-    the inputs and the file name only (the date is in the name and the
-    title line; no revision,
+    the inputs, the file name and the pinned drawing library only (the date
+    is in the name, the title line and the figures directory; no revision,
     host, time or runtime of the report run is written), so two runs on the
-    same inputs are byte-identical. The file is written to ``<out>.tmp``,
-    parsed back through ``parse_report`` and checked against the generated
-    tables, then renamed; no temporary file remains. The report quotes
+    same inputs are byte-identical, the figures included. The figures are
+    ``reports/figures/<stem>/`` (``REPORT_FIGURES_DIR``): per figure of
+    ``REPORT_FIGURES`` an SVG (text drawn as paths, a fixed ID salt, no
+    date; its metadata names its title, its inputs with their sha256 and
+    the matplotlib version) and a data CSV (one row per plotted value: key,
+    quantity, value as read, source, field), eighteen files, drawn from the
+    loaded inputs only (``figures.py``). The figures are written to
+    ``<stem>.tmp/`` and the report to ``<out>.tmp``, the report parsed back
+    through ``parse_report`` and checked against the generated tables, each
+    data CSV read back equal to its rows and each SVG to its bytes, then the
+    figures directory and the report are renamed (``_write_report``); a
+    failure removes both temporaries and renames nothing. The report quotes
     aggregate values only and holds no participant identifier; ``reports/``
     is committed. Findings, never stops (printed and listed under
     "Findings"): every deviation and finding of every input manifest,
@@ -12674,6 +13083,12 @@ def run_report(
                 f"{out_path} exists; pass --force to replace it, or --out {_next_same_day_name(out_path)} for a later report "
                 "of the same day; nothing was written"
             )
+        if _figures_dir(out_path).exists() and not force:
+            raise FileExistsError(
+                f"{_figures_dir(out_path)} exists, the figures directory of {out_path.name}; pass --force to replace it, or "
+                f"--out {_next_same_day_name(out_path)} for a later report of the same day; nothing was written"
+            )
+    print(f"{log} matplotlib {check_matplotlib_version()} (MATPLOTLIB_VERSION): the figures' drawing library")
     for variant in EXPORT_VARIANTS:
         if variant not in REPORT_EXPORT_VARIANTS:
             # the report's pin (design D6 of adni-nmr-all-columns): named here, never in the body
@@ -12689,23 +13104,19 @@ def run_report(
     )
     if check:
         return check_report(out_path, inputs, log=log)
-    text, tables = render_report(inputs, date=date)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out_path.with_name(out_path.name + ".tmp")
-    try:
-        tmp.write_text(text)
-        n_tables, n_cells = _parse_back(tmp.read_text(), tables)
-        if out_path.exists() and not force:
-            raise FileExistsError(f"{out_path} appeared during the run; nothing was written")
-        os.replace(tmp, out_path)
-    finally:
-        tmp.unlink(missing_ok=True)
+    figures = _report_figures(inputs, log=log)
+    text, tables = render_report(inputs, date=date, stem=out_path.stem, figures=figures)
+    n_tables, n_cells, n_files = _write_report(out_path, text, tables, figures, force=force)
     n_generated = sum(len(df) * len(df.columns) for df in tables.values())
     print(
         f"{log} wrote {out_path}: {len(REPORT_SECTIONS)} sections, {len(tables)} tables, {n_generated} cells; parsed back "
-        f"{n_tables} tables, {n_cells} cells, equal to the generated ones"
+        f"{n_tables} tables, {n_cells} cells, equal to the generated ones; {n_files} figure files in {_figures_dir(out_path)}, "
+        "each data CSV read back equal to its rows and each SVG to its bytes"
     )
-    print(f"{log} next: `adni-sexdiff report --check --out {out_path}` on the clean tree, then commit the report alone")
+    print(
+        f"{log} next: `adni-sexdiff report --check --out {out_path}` on the clean tree, then commit the report and "
+        f"{_figures_dir(out_path)}/ alone"
+    )
     return {"path": out_path, "tables": tables, "checked": False, "mismatches": []}
 
 
@@ -12716,6 +13127,7 @@ __all__ = [
     "hash_raw_file",
     "check_known_repairs",
     "check_metabo_adni_version",
+    "check_matplotlib_version",
     "check_motco_version",
     "check_motco_rank_floor",
     "render_analysis_summary",

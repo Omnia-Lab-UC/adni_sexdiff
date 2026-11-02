@@ -1,0 +1,63 @@
+key,quantity,value,source,field
+size|alpha,the decision's alpha,0.05,references/motco_adni_design/adni_design_decision.json,rule.alpha
+size|bound,one-sided bound of the size readings,0.06949358868961793,references/motco_adni_design/adni_design_decision.json,size.readings.0.bound
+size|anchor|delta|rate,rejection rate with no effect,0.034,references/motco_adni_design/adni_design_decision.json,size.readings.0.rate
+size|anchor|delta|monte_carlo_se,Monte Carlo standard error,0.008104813384649889,references/motco_adni_design/adni_design_decision.json,size.readings.0.monte_carlo_se
+size|anchor|angle|rate,rejection rate with no effect,0.06,references/motco_adni_design/adni_design_decision.json,size.readings.1.rate
+size|anchor|angle|monte_carlo_se,Monte Carlo standard error,0.010620734437881401,references/motco_adni_design/adni_design_decision.json,size.readings.1.monte_carlo_se
+size|anchor|shape|rate,rejection rate with no effect,0.04,references/motco_adni_design/adni_design_decision.json,size.readings.2.rate
+size|anchor|shape|monte_carlo_se,Monte Carlo standard error,0.008763560920082658,references/motco_adni_design/adni_design_decision.json,size.readings.2.monte_carlo_se
+size|translation|delta|rate,rejection rate with no effect,0.034,references/motco_adni_design/adni_design_decision.json,size.readings.3.rate
+size|translation|delta|monte_carlo_se,Monte Carlo standard error,0.008104813384649889,references/motco_adni_design/adni_design_decision.json,size.readings.3.monte_carlo_se
+size|translation|angle|rate,rejection rate with no effect,0.054,references/motco_adni_design/adni_design_decision.json,size.readings.4.rate
+size|translation|angle|monte_carlo_se,Monte Carlo standard error,0.010107818755794942,references/motco_adni_design/adni_design_decision.json,size.readings.4.monte_carlo_se
+size|translation|shape|rate,rejection rate with no effect,0.068,references/motco_adni_design/adni_design_decision.json,size.readings.5.rate
+size|translation|shape|monte_carlo_se,Monte Carlo standard error,0.011258419071965654,references/motco_adni_design/adni_design_decision.json,size.readings.5.monte_carlo_se
+power|delta|mode,construction,magnitude,references/motco_adni_design/adni_design_decision.json,power.delta.mode
+power|delta|floor,power floor,0.8,references/motco_adni_design/adni_design_decision.json,power.delta.floor
+power|delta|e0|effect,injected effect,0.1,references/motco_adni_design/adni_design_decision.json,power.delta.effects.0.effect
+power|delta|e0|rate,rejection rate,0.034,references/motco_adni_design/adni_design_decision.json,power.delta.effects.0.rate
+power|delta|e0|monte_carlo_se,Monte Carlo standard error,0.008104813384649889,references/motco_adni_design/adni_design_decision.json,power.delta.effects.0.monte_carlo_se
+power|delta|e1|effect,injected effect,0.25,references/motco_adni_design/adni_design_decision.json,power.delta.effects.1.effect
+power|delta|e1|rate,rejection rate,0.056,references/motco_adni_design/adni_design_decision.json,power.delta.effects.1.rate
+power|delta|e1|monte_carlo_se,Monte Carlo standard error,0.010282412168358162,references/motco_adni_design/adni_design_decision.json,power.delta.effects.1.monte_carlo_se
+power|delta|e2|effect,injected effect,0.5,references/motco_adni_design/adni_design_decision.json,power.delta.effects.2.effect
+power|delta|e2|rate,rejection rate,0.134,references/motco_adni_design/adni_design_decision.json,power.delta.effects.2.rate
+power|delta|e2|monte_carlo_se,Monte Carlo standard error,0.015234434679370286,references/motco_adni_design/adni_design_decision.json,power.delta.effects.2.monte_carlo_se
+power|delta|e3|effect,injected effect,1.0,references/motco_adni_design/adni_design_decision.json,power.delta.effects.3.effect
+power|delta|e3|rate,rejection rate,0.53,references/motco_adni_design/adni_design_decision.json,power.delta.effects.3.rate
+power|delta|e3|monte_carlo_se,Monte Carlo standard error,0.022320394261750844,references/motco_adni_design/adni_design_decision.json,power.delta.effects.3.monte_carlo_se
+power|delta|max_rate,highest rejection rate,0.53,references/motco_adni_design/adni_design_decision.json,power.delta.max_rate
+power|delta|effect_at_max,effect at the highest rate,1.0,references/motco_adni_design/adni_design_decision.json,power.delta.effect_at_max
+power|angle|mode,construction,orientation,references/motco_adni_design/adni_design_decision.json,power.angle.mode
+power|angle|floor,power floor,0.8,references/motco_adni_design/adni_design_decision.json,power.angle.floor
+power|angle|e0|effect,injected effect,0.25,references/motco_adni_design/adni_design_decision.json,power.angle.effects.0.effect
+power|angle|e0|rate,rejection rate,0.07,references/motco_adni_design/adni_design_decision.json,power.angle.effects.0.rate
+power|angle|e0|monte_carlo_se,Monte Carlo standard error,0.011410521460476731,references/motco_adni_design/adni_design_decision.json,power.angle.effects.0.monte_carlo_se
+power|angle|e1|effect,injected effect,0.5,references/motco_adni_design/adni_design_decision.json,power.angle.effects.1.effect
+power|angle|e1|rate,rejection rate,0.056,references/motco_adni_design/adni_design_decision.json,power.angle.effects.1.rate
+power|angle|e1|monte_carlo_se,Monte Carlo standard error,0.010282412168358162,references/motco_adni_design/adni_design_decision.json,power.angle.effects.1.monte_carlo_se
+power|angle|e2|effect,injected effect,0.75,references/motco_adni_design/adni_design_decision.json,power.angle.effects.2.effect
+power|angle|e2|rate,rejection rate,0.076,references/motco_adni_design/adni_design_decision.json,power.angle.effects.2.rate
+power|angle|e2|monte_carlo_se,Monte Carlo standard error,0.011851075900524812,references/motco_adni_design/adni_design_decision.json,power.angle.effects.2.monte_carlo_se
+power|angle|e3|effect,injected effect,1.0,references/motco_adni_design/adni_design_decision.json,power.angle.effects.3.effect
+power|angle|e3|rate,rejection rate,0.058,references/motco_adni_design/adni_design_decision.json,power.angle.effects.3.rate
+power|angle|e3|monte_carlo_se,Monte Carlo standard error,0.010453324829928513,references/motco_adni_design/adni_design_decision.json,power.angle.effects.3.monte_carlo_se
+power|angle|max_rate,highest rejection rate,0.076,references/motco_adni_design/adni_design_decision.json,power.angle.max_rate
+power|angle|effect_at_max,effect at the highest rate,0.75,references/motco_adni_design/adni_design_decision.json,power.angle.effect_at_max
+power|shape|mode,construction,shape,references/motco_adni_design/adni_design_decision.json,power.shape.mode
+power|shape|floor,power floor,0.8,references/motco_adni_design/adni_design_decision.json,power.shape.floor
+power|shape|e0|effect,injected effect,0.25,references/motco_adni_design/adni_design_decision.json,power.shape.effects.0.effect
+power|shape|e0|rate,rejection rate,0.062,references/motco_adni_design/adni_design_decision.json,power.shape.effects.0.rate
+power|shape|e0|monte_carlo_se,Monte Carlo standard error,0.010784804124322332,references/motco_adni_design/adni_design_decision.json,power.shape.effects.0.monte_carlo_se
+power|shape|e1|effect,injected effect,0.5,references/motco_adni_design/adni_design_decision.json,power.shape.effects.1.effect
+power|shape|e1|rate,rejection rate,0.048,references/motco_adni_design/adni_design_decision.json,power.shape.effects.1.rate
+power|shape|e1|monte_carlo_se,Monte Carlo standard error,0.009559916317625379,references/motco_adni_design/adni_design_decision.json,power.shape.effects.1.monte_carlo_se
+power|shape|e2|effect,injected effect,0.75,references/motco_adni_design/adni_design_decision.json,power.shape.effects.2.effect
+power|shape|e2|rate,rejection rate,0.034,references/motco_adni_design/adni_design_decision.json,power.shape.effects.2.rate
+power|shape|e2|monte_carlo_se,Monte Carlo standard error,0.008104813384649889,references/motco_adni_design/adni_design_decision.json,power.shape.effects.2.monte_carlo_se
+power|shape|e3|effect,injected effect,1.0,references/motco_adni_design/adni_design_decision.json,power.shape.effects.3.effect
+power|shape|e3|rate,rejection rate,0.046,references/motco_adni_design/adni_design_decision.json,power.shape.effects.3.rate
+power|shape|e3|monte_carlo_se,Monte Carlo standard error,0.00936845771725528,references/motco_adni_design/adni_design_decision.json,power.shape.effects.3.monte_carlo_se
+power|shape|max_rate,highest rejection rate,0.062,references/motco_adni_design/adni_design_decision.json,power.shape.max_rate
+power|shape|effect_at_max,effect at the highest rate,0.25,references/motco_adni_design/adni_design_decision.json,power.shape.effect_at_max
