@@ -131,21 +131,21 @@ Every task runs on any machine with the Nix shell and the committed tree. The in
 ## 4. The report and commit hygiene
 
 - [x] 4.1 Commit the implementation, the docs and the change's artifacts on the branch `adni-report-nmr-all-columns`, created from `main` (98d136c). Verify that `git status` is clean and that no file under `results/` or `reports/` changed. (Committed on 2026-10-31 on `adni-report-nmr-all-columns`, from 98d136c; `git status` clean after it; the commit touches `src/adni_sexdiff/constants.py`, `src/adni_sexdiff/data.py`, `README.md`, `AGENTS.md` and the change's artifacts only.)
-- [ ] 4.2 Only once `date +%F` is later than 2026-10-31 (design D9), on the clean tree at the implementing commit:
+- [x] 4.2 Only once `date +%F` is later than 2026-10-31 (design D9), on the clean tree at the implementing commit:
   - run `uv run adni-sexdiff report` (no `--out`, so it is named by today's date), then `uv run adni-sexdiff report --check`;
   - verify the check passes and reads the new report as the newest;
   - verify that the new report equals the scratch render of 2.6 apart from its title line;
   - verify that `grep -nE '\bRID\b|\brid\b'` over the new report hits only column-name mentions;
   - verify that the four earlier reports are byte-unchanged.
 
-  Commit the new report alone, and record its name, sections, tables, cells, chain links and size in this line.
-- [ ] 4.3 Check commit hygiene. Verify that:
+  Commit the new report alone, and record its name, sections, tables, cells, chain links and size in this line. (Recorded on 2026-11-02 on the clean tree at 5f11f58: the scratch render of 2.6, regenerated first under its 2026-11-01 name, reproduced its sha256 `b818d544c05c1b9d97865f1f912a9cb270fc8512d6135da34a9cd10455dd78d6`; `uv run adni-sexdiff report` wrote `reports/motco-adni-2026-11-02.md`, 13 sections, 89 tables, 5418 cells, 106 inputs under 33 directories, 33 manifests, 189 chain links, 241526 bytes, parsed back equal to the generated tables; `uv run adni-sexdiff report --check` read it as the newest, compared 89 tables, 5418 cells and 929 other lines, no mismatch, exit 0, the five no-`numerics` findings as before; `diff` against the scratch render differs in line 1 only; the identifier grep gives 25 hits, every one the sample column `rid` (the export bullet and `--sample-col rid` in the 24 `cli_equivalent`s); the four earlier reports byte-unchanged (`git status` shows the new file alone). Committed alone as 28e0d48.)
+- [x] 4.3 Check commit hygiene. Verify that:
   - `git status` is clean;
   - `git ls-files results` lists the same files as `main`;
   - no file under `results/` changed in any commit of the branch;
   - over every file the branch adds or changes, the identifier grep finds only column names (`RID`, `rid`), never a participant value.
 
-  Record the files the branch adds or changes in this line.
+  Record the files the branch adds or changes in this line. (Recorded on 2026-11-02 after 28e0d48: `git status` clean; `git ls-files results` lists the same 130 files as `main`; no commit of the branch touches `results/`; the branch changes `AGENTS.md`, `README.md`, `src/adni_sexdiff/constants.py` and `src/adni_sexdiff/data.py` and adds `reports/motco-adni-2026-11-02.md` and the change's five artifacts under `openspec/changes/adni-report-nmr-all-columns/`; the identifier grep over them finds column names (`RID`, `rid`), the constants `PARTICIPANT_ID_COLUMN` and `SAMPLE_COLUMN` and loop variables named `rid` in `data.py`, never a participant value.)
 
 ## Workflow follow-up
 
