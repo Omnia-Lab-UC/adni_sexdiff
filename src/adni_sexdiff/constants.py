@@ -118,17 +118,24 @@ Scientific constants
     (the report extended to the CN / LMCI / AD arm),
     ``adni-report-rank-sweep`` (the report extended to the rank sweep),
     ``adni-report-nmr-all-columns`` (``nmr_all_columns`` added to
-    ``REPORT_EXPORT_VARIANTS``) and ``adni-report-scale-variants``
+    ``REPORT_EXPORT_VARIANTS``), ``adni-report-scale-variants``
     (``raw_scale``, ``log2_plus_one`` and ``glog`` added to it, so the report
-    covers every registered variant) introduce no scientific constant: their
+    covers every registered variant) and ``adni-report-figures`` (the nine
+    figures the report draws) introduce no scientific constant: their
     conventions ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
-    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 146
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 147
     with the six variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD
-    arm, the rank sweep and, since ``adni-operating-characteristics``, the
-    copy of the cited MOTCO decision) and
-    ``REPORT_SECTIONS`` (the report's fourteen section titles, in order) are
-    defined below, and the report quotes every setting by constant name from
-    the manifests and every number from the records.
+    arm, the rank sweep, since ``adni-operating-characteristics`` the copy of
+    the cited MOTCO decision and since ``adni-report-figures`` the primary's
+    ``stage_means.csv``), ``REPORT_SECTIONS`` (the report's fifteen section
+    titles, in order), ``REPORT_FIGURES`` (per figure its title, subtitle,
+    inputs, generated caption lines, rule lists and fixed reading text; two
+    import-time assertions tie its inputs to ``REPORT_INPUT_FILES`` and its
+    rules to tuples of this module), ``REPORT_FIGURES_DIR``, ``FIGURE_STYLE``
+    (the palette, the bundled font and the drawing settings) and
+    ``MATPLOTLIB_VERSION`` (the drawing library's exact pin) are defined below,
+    and the report quotes every setting by constant name from the manifests
+    and every number from the records.
 """
 
 from __future__ import annotations
@@ -218,6 +225,10 @@ REPORT_NAME_SAME_DAY = "motco-adni-{date}-{n}.md"
 assert REPORT_NAME_SAME_DAY == REPORT_NAME.replace("{date}", "{date}-{n}"), (
     "REPORT_NAME_SAME_DAY must be REPORT_NAME with the ordinal after the date"
 )
+#: The report's figures (change ``adni-report-figures``, design D3):
+#: ``<REPORTS_DIR>/<REPORT_FIGURES_DIR>/<report stem>/``, one SVG and one data
+#: CSV per figure of ``REPORT_FIGURES``, beside the report that cites them.
+REPORT_FIGURES_DIR = "figures"
 
 # --- Controlled access -----------------------------------------------------
 
@@ -251,6 +262,11 @@ AGGREGATE_EXCEPTIONS: tuple[str, ...] = (
 
 #: The exact metabo_adni release the lock holds; ``clean`` refuses any other.
 METABO_ADNI_VERSION = "0.5.8"
+#: The exact matplotlib release the lock holds (change ``adni-report-figures``,
+#: design D7): ``report`` draws its figures with it and refuses any other, in
+#: write and check mode alike, since the figures' bytes depend on it. Moving
+#: it is a change that re-issues the report.
+MATPLOTLIB_VERSION = "3.11.2"
 #: MOTCO's release tag in ``pyproject.toml``; ``analyze`` refuses an older one.
 ANALYSIS_MOTCO_MIN_VERSION = "0.10.0"
 #: Reported runs use one worker: MOTCO seeds one RRPP stream per worker, so
@@ -2112,19 +2128,21 @@ assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIA
 #: ``operating-characteristics`` of ``--operating-characteristics-dir``
 #: (change ``adni-operating-characteristics``): the committed copy of the
 #: cited MOTCO decision file, recorded by ``OPERATING_CHARACTERISTICS_SOURCE``
-#: rather than by a manifest. All 146 are aggregate and committed
+#: rather than by a manifest. All 147 are aggregate and committed
 #: (93 before ``adni-report-nmr-all-columns`` added the 13 of
 #: ``nmr_all_columns``, which has no bridge table, 106 before
 #: ``adni-report-scale-variants`` added the 13 of each scale variant, which
-#: have none either, and 145 before ``adni-operating-characteristics`` added
-#: the copy);
+#: have none either, 145 before ``adni-operating-characteristics`` added
+#: the copy, and 146 before ``adni-report-figures`` added the primary's
+#: ``stage_means.csv``, which ``f2_trajectories`` draws and the primary
+#: manifest records under ``outputs``);
 #: no participant-level file is read, and the hashes the report quotes for
 #: one come from these manifests. No other file is read.
 REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
     "cleaned": tuple(f"{platform}/{CLEAN_MANIFEST}" for platform in PLATFORMS),
     "cohort": (COHORT_COUNTS, COHORT_MANIFEST),
     "export": (EXPORT_MANIFEST,),
-    "analysis": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
+    "analysis": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY, ANALYSIS_STAGE_MEANS),
     "diagnostics": DIAGNOSTICS_FILES,
     f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['analysis']}": (ANALYSIS_RESULT, ANALYSIS_MANIFEST, ANALYSIS_SUMMARY),
     f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}": (
@@ -2152,10 +2170,13 @@ REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {
 #: sensitivity" by ``adni-report-stage-arm``, "Rank sensitivity" by
 #: ``adni-report-rank-sweep``, "Operating characteristics" by
 #: ``adni-operating-characteristics``, after the primary's sections since it
-#: measures the primary's construction and before the sensitivities).
+#: measures the primary's construction and before the sensitivities;
+#: "Figures" by ``adni-report-figures``, second, so a reader reaches the
+#: figures right after the summary they illustrate).
 #: ``report --check`` names a mismatch by section, table, row and column.
 REPORT_SECTIONS: tuple[str, ...] = (
     "Summary",
+    "Figures",
     "Provenance",
     "Cohort",
     "Export",
@@ -2169,4 +2190,318 @@ REPORT_SECTIONS: tuple[str, ...] = (
     "Findings",
     "Reading rules",
     "Reproduction",
+)
+
+
+# --- report: figures (change ``adni-report-figures``) ---------------------------
+
+#: The palette of the figures (design, Context): the dataviz reference
+#: instance, its pairs validated for colour-vision deficiency. Three colours
+#: fall below 3:1 contrast on the surface, so every series that uses them is
+#: also labelled directly.
+_FIGURE_PALETTE: dict = {
+    "surface": "#fcfcfb",
+    "ink": "#0b0b0b",
+    "ink2": "#52514e",
+    "muted": "#898781",
+    "grid": "#e1e0d9",
+    "axis": "#c3c2b7",
+    "white": "#ffffff",
+    "sex": {"Female": "#2a78d6", "Male": "#eb6834"},
+    "run": {"ADNI1": "#1baf7a", "ADNI2GO": "#6250d6"},
+    "block": {"p180": "#e87ba4", "nmr": "#008300"},
+    "ordinal": ("#86b6ef", "#2a78d6", "#104281"),
+    "diverging": ("#104281", "#5598e7", "#f0efec", "#ec8a89", "#a52c2b"),
+}
+#: How every figure is drawn (design D6): the palette; the bundled DejaVu Sans
+#: by file name under ``matplotlib.get_data_path()/fonts/ttf`` (``report``
+#: restricts matplotlib's font list to these two files while it draws, so a
+#: system DejaVu of another version cannot be picked); the colour limit of the
+#: correlation panels; and the matplotlib settings applied on top of
+#: ``rcParamsDefault`` inside ``rc_context`` (a user's ``matplotlibrc`` or style
+#: cannot move the bytes): text drawn as paths, a fixed ID salt, no mathtext,
+#: and the sizes, line widths and grid of the drafts. The SVG's ``Date`` is
+#: removed when it is saved.
+FIGURE_STYLE: dict = {
+    "palette": _FIGURE_PALETTE,
+    "fonts": {"normal": "DejaVuSans.ttf", "bold": "DejaVuSans-Bold.ttf"},
+    "correlation_limit": 0.6,
+    "rc": {
+        "svg.fonttype": "path",
+        "svg.hashsalt": "adni-sexdiff",
+        "text.parse_math": False,
+        "font.family": ["DejaVu Sans"],
+        "font.size": 9,
+        "figure.facecolor": _FIGURE_PALETTE["surface"],
+        "axes.facecolor": _FIGURE_PALETTE["surface"],
+        "savefig.facecolor": _FIGURE_PALETTE["surface"],
+        "axes.edgecolor": _FIGURE_PALETTE["axis"],
+        "axes.linewidth": 0.8,
+        "axes.labelcolor": _FIGURE_PALETTE["ink2"],
+        "axes.titlesize": 10,
+        "axes.titlecolor": _FIGURE_PALETTE["ink"],
+        "axes.titleweight": "bold",
+        "axes.titlelocation": "left",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.grid": True,
+        "axes.axisbelow": True,
+        "grid.color": _FIGURE_PALETTE["grid"],
+        "grid.linewidth": 0.6,
+        "grid.linestyle": "-",
+        "xtick.color": _FIGURE_PALETTE["muted"],
+        "ytick.color": _FIGURE_PALETTE["muted"],
+        "xtick.labelcolor": _FIGURE_PALETTE["ink2"],
+        "ytick.labelcolor": _FIGURE_PALETTE["ink2"],
+        "legend.frameon": False,
+        "text.color": _FIGURE_PALETTE["ink"],
+    },
+}
+#: The export variant whose bridge table ``f7_nist_bridge`` draws: the one of
+#: ``REPORT_EXPORT_VARIANTS`` with hook ``factors``.
+_FIGURE_BRIDGE_VARIANT = next(v for v in REPORT_EXPORT_VARIANTS if EXPORT_VARIANTS[v]["hook"] == "factors")
+#: The rule list of each export variant, by ``EXPORT_VARIANT_RULE_SETS``, once
+#: each in registry order.
+_FIGURE_VARIANT_RULES: tuple[str, ...] = tuple(
+    dict.fromkeys(EXPORT_VARIANT_RULE_SETS[v]["rules"] for v in REPORT_EXPORT_VARIANTS)
+)
+#: The report's figures, in order (change ``adni-report-figures``, design D5),
+#: keyed by the file stem of the figure's SVG and data CSV: ``title`` and
+#: ``subtitle`` (drawn in the figure and printed in the report), ``inputs``
+#: (the files it is drawn from, as ``(role, name)`` of ``REPORT_INPUT_FILES``,
+#: in the order its data CSV reads them), ``generated`` (the name of the
+#: report fragment its caption reuses, string-equal to the line printed
+#: elsewhere in the report, or ``None``), ``rules`` (the rule lists that govern
+#: it, by constant name) and ``reading`` (the fixed text of its caption). The
+#: titles, subtitles and reading texts describe what is drawn, quote no value
+#: from an input and state no result; they were decided verbatim by the
+#: change. No scientific constant: the figures read and draw committed values.
+REPORT_FIGURES: dict[str, dict] = {
+    "f1_cohort_design": {
+        "title": "Analysis cohort by baseline diagnosis and p180 run",
+        "subtitle": (
+            "Participants per sex, baseline diagnosis (DX.bl) and p180 run; diagnoses grouped by the stage STAGE_RULE "
+            "assigns."
+        ),
+        "inputs": (("cohort", COHORT_COUNTS),),
+        "generated": None,
+        "rules": ("READING_RULES",),
+        "reading": (
+            "Each bar counts the participants of the analysis cohort (both platforms at baseline) in one cell of sex, "
+            "baseline diagnosis (`DX.bl`) and p180 run; the run is the `phase` covariate. Diagnoses are grouped under "
+            "the stage `STAGE_RULE` assigns them (CN and SMC to CN, EMCI and LMCI to MCI, AD to AD). A cell with no row "
+            "in `stage_counts.csv` is drawn empty and labelled `none`. The figure describes the design: it shows how the "
+            "composition of each stage differs between the two runs, which is why `phase` enters the analysis as a "
+            "covariate and why the CN / LMCI / AD arm exists. It is not a result."
+        ),
+    },
+    "f2_trajectories": {
+        "title": "Sex × stage trajectories in the primary's latent space",
+        "subtitle": (
+            "Covariate-adjusted stage means of each sex on each latent component of the primary; component signs are "
+            "arbitrary."
+        ),
+        "inputs": (
+            ("analysis", ANALYSIS_STAGE_MEANS),
+            ("analysis", ANALYSIS_RESULT),
+            ("diagnostics", DIAGNOSTICS_GEOMETRY_SHARES),
+            ("diagnostics", DIAGNOSTICS_AXIS_CORRELATIONS),
+        ),
+        "generated": None,
+        "rules": ("READING_RULES",),
+        "reading": (
+            "Each panel is one component of the primary's PLS-DA latent space at its CV-selected rank, and each line "
+            "joins one sex's covariate-adjusted stage means (LS-means at the record's reference row) from CN through MCI "
+            "to AD. Every component has a panel, so no projection hides a dimension. A component's sign and scale are "
+            "arbitrary, so a line's direction or a panel's range is not compared across panels. Above each panel are the "
+            "component's share of the summed squared sex differences across stages (`sex_difference_by_stage` in "
+            "`geometry_shares.csv`) and the diagnostic variables it tracks at or above "
+            "`DIAGNOSTIC_CORRELATION_THRESHOLD`, a reporting flag on magnitude and never a test. `delta`, `angle` and "
+            "`shape` are computed on all components together; no panel tests a sex difference on its own."
+        ),
+    },
+    "f3_primary_tests": {
+        "title": "The primary's statistics against their permutation nulls",
+        "subtitle": (
+            "Observed delta, angle and shape against their RRPP nulls; below each, the most power measured at this "
+            "design."
+        ),
+        "inputs": (("analysis", ANALYSIS_RESULT), ("operating-characteristics", OPERATING_CHARACTERISTICS_DECISION)),
+        "generated": "primary_reading",
+        "rules": ("READING_RULES", "OPERATING_CHARACTERISTICS_READING_RULES"),
+        "reading": (
+            "For each statistic the grey box spans the primary's RRPP null from its median (q50) to its 95th percentile "
+            "(q95), the whisker reaches the 99th (q99), and the dot is the observed value, all from the primary's record. "
+            "The p-value is the share of null draws at or above the observed value, so a dot beyond q95 lies near a "
+            "rejection at `ANALYSIS_ALPHA`; the recorded p-value under `ANALYSIS_REJECTION_RULE` decides. Below each "
+            "panel is the highest rejection rate MOTCO measured for that statistic at this design, beside the decision's "
+            "power floor. A dot inside the box is a non-rejection, and what a non-rejection says is set by that measured "
+            "power, not by the dot's distance from the box."
+        ),
+    },
+    "f4_operating_characteristics": {
+        "title": "MOTCO's operating characteristics at this design",
+        "subtitle": (
+            "Rejection rates with no effect (size) and as the effect grows (power), from the cited MOTCO decision."
+        ),
+        "inputs": (("operating-characteristics", OPERATING_CHARACTERISTICS_DECISION),),
+        "generated": "decision_verdict_and_size",
+        "rules": ("OPERATING_CHARACTERISTICS_READING_RULES",),
+        "reading": (
+            "Left: each statistic's rejection rate when no sex effect is injected, at MOTCO's two controls (anchor and "
+            "translation), with ±1.96 Monte Carlo standard errors, against the decision's α and one-sided bound. Right: "
+            "each statistic's rejection rate as the injected effect grows along its own construction (magnitude for "
+            "`delta`, orientation for `angle`, shape for `shape`), against the decision's power floor. The rates are "
+            "MOTCO's synthetic measurement (`OPERATING_CHARACTERISTICS_SOURCE`), a structural analogue of this design for "
+            "the primary's construction only: they say nothing about a metabolite and are not the size or power of any "
+            "sensitivity (measurement rules 6 to 8)."
+        ),
+    },
+    "f5_axis_diagnostics": {
+        "title": "What the primary's latent components track",
+        "subtitle": (
+            "Correlation of each component with the diagnostic variables, raw and partial, beside its loading share per "
+            "block."
+        ),
+        "inputs": (
+            ("diagnostics", DIAGNOSTICS_AXIS_CORRELATIONS),
+            ("diagnostics", DIAGNOSTICS_COMPONENTS),
+            ("export", EXPORT_MANIFEST),
+        ),
+        "generated": "primary_flagged_rows",
+        "rules": ("READING_RULES",),
+        "reading": (
+            "Rows are the primary's latent components and columns the eight `DIAGNOSTIC_VARIABLES`. The left panel holds "
+            "the Spearman correlation of each component's scores with each variable, and the middle panel the partial "
+            "correlation given the record's six design columns, drawn `—` for a variable that is itself a conditioning "
+            "column. Colour runs from blue (negative) through grey to red (positive); an outlined cell reaches |ρ| ≥ "
+            "`DIAGNOSTIC_CORRELATION_THRESHOLD`, a reporting flag on magnitude with no p-value. The right panel splits "
+            "each component's loadings between the p180 and NMR blocks, beside the p180 share of the joint features "
+            "(dashed). A component that tracks `phase` or `dx_bl` is a reading of the measurement space (reading rule "
+            "6), never grounds to change the analysis."
+        ),
+    },
+    "f6_block_phase": {
+        "title": "Each export's block principal components against the p180 run",
+        "subtitle": (
+            "|Spearman ρ| of each block's first three principal components with phase, for the primary export and each "
+            "sensitivity's own export."
+        ),
+        "inputs": (
+            ("diagnostics", DIAGNOSTICS_BLOCK_PCS),
+            *(
+                (f"export-sensitivity/{v}/{EXPORT_SENSITIVITY_SUBDIRS['diagnostics']}", DIAGNOSTICS_BLOCK_PCS)
+                for v in REPORT_EXPORT_VARIANTS
+            ),
+            (f"stage-sensitivity/{STAGE_SENSITIVITY_SUBDIRS['diagnostics']}", DIAGNOSTICS_BLOCK_PCS),
+        ),
+        "generated": None,
+        "rules": ("READING_RULES", *_FIGURE_VARIANT_RULES, "STAGE_SENSITIVITY_READING_RULES"),
+        "reading": (
+            "Each row is one export: the primary's, each export variant's (grouped by rule set) and the CN / LMCI / AD "
+            "arm's. Each mark is the absolute Spearman correlation of one of the first three principal components of a "
+            "z-scored block with `phase`, from that export's diagnostics (`block_pcs.csv`); the dashed line is "
+            "`DIAGNOSTIC_CORRELATION_THRESHOLD`. The latent arm and the forced ranks use the primary export and have no "
+            "row of their own. Each export is read against the primary's only, under its own rule set, and a block axis "
+            "that follows `phase` describes the measurement, not the sex × stage result."
+        ),
+    },
+    "f7_nist_bridge": {
+        "title": "The NIST SRM 1950 bridge factor per p180 metabolite",
+        "subtitle": (
+            "b = mean log2 in ADNI-1 minus mean log2 in ADNI-GO/2 of the reference material, per metabolite, ordered "
+            "by b."
+        ),
+        "inputs": (
+            (
+                f"export-sensitivity/{_FIGURE_BRIDGE_VARIANT}/{EXPORT_SENSITIVITY_SUBDIRS['bridge']}",
+                EXPORT_SENSITIVITY_BRIDGE_TABLE,
+            ),
+            (f"export-sensitivity/{_FIGURE_BRIDGE_VARIANT}/{EXPORT_SENSITIVITY_SUBDIRS['export']}", EXPORT_MANIFEST),
+        ),
+        "generated": "bridge_lines",
+        "rules": ("READING_RULES", EXPORT_VARIANT_RULE_SETS[_FIGURE_BRIDGE_VARIANT]["rules"]),
+        "reading": (
+            "Each mark is one p180 metabolite, ordered by its bridge factor b: the mean log2 of NIST SRM 1950 in ADNI-1 "
+            "minus that in ADNI-GO/2, over each run's valid replicates, with a ±1.96 plate-clustered standard error "
+            "where the table records one. A b above zero means ADNI-1 measured the reference material higher. Filled "
+            "marks are bridged under `NIST_BRIDGE_RULE`, and the `nist_bridge` variant multiplies their ADNI-GO/2 values "
+            "by 2^b; open, labelled marks are not bridged and keep the factor 1. The shape marks the kit (FIA or UPLC). "
+            "The factors come from reference material alone: they describe calibration between the runs and say nothing "
+            "about sex or stage."
+        ),
+    },
+    "f8_sensitivities": {
+        "title": "Every predeclared sensitivity beside the primary",
+        "subtitle": "RRPP p-value of each sensitivity per statistic, on a log scale, beside the primary's.",
+        "inputs": (
+            (f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}", LATENT_SENSITIVITY_TABLE),
+            (f"sensitivity/{LATENT_SENSITIVITY_SUBDIRS['comparison']}", LATENT_SENSITIVITY_MANIFEST),
+            *(
+                (f"export-sensitivity/{v}/{EXPORT_SENSITIVITY_SUBDIRS['comparison']}", name)
+                for v in REPORT_EXPORT_VARIANTS
+                for name in (EXPORT_SENSITIVITY_TABLE, EXPORT_SENSITIVITY_MANIFEST)
+            ),
+            (f"stage-sensitivity/{STAGE_SENSITIVITY_SUBDIRS['comparison']}", STAGE_SENSITIVITY_TABLE),
+            (f"stage-sensitivity/{STAGE_SENSITIVITY_SUBDIRS['comparison']}", STAGE_SENSITIVITY_MANIFEST),
+            (f"rank-sensitivity/{RANK_SENSITIVITY_SUBDIRS['comparison']}", RANK_SENSITIVITY_TABLE),
+            (f"rank-sensitivity/{RANK_SENSITIVITY_SUBDIRS['comparison']}", RANK_SENSITIVITY_MANIFEST),
+        ),
+        "generated": "differing_statuses",
+        "rules": (
+            "READING_RULES", "LATENT_SENSITIVITY_READING_RULES", *_FIGURE_VARIANT_RULES,
+            "STAGE_SENSITIVITY_READING_RULES", "RANK_SENSITIVITY_READING_RULES",
+        ),
+        "reading": (
+            "Each row is one sensitivity (the latent arm, the six export variants in their rule-set groups, the CN / "
+            "LMCI / AD arm and the six forced ranks of the sweep) and each panel one statistic. The dot is the row's RRPP "
+            "p-value on a log scale, filled when rejected under `ANALYSIS_REJECTION_RULE`; the solid line is the "
+            "primary's p-value and the dashed line `ANALYSIS_ALPHA`. A row is read against the primary only: a status "
+            "that differs from the primary's carries its dependence label and never replaces the primary (reading rule 1 "
+            "and the row's rule set). Rows are not read against one another, nothing is combined across the rank sweep, "
+            "and no row is singled out by its p-value."
+        ),
+    },
+    "f9_rank_sweep": {
+        "title": "The rank sweep, each rank against its own null",
+        "subtitle": (
+            "Observed delta, angle and shape at each PLS-DA rank against that rank's RRPP null; the primary at its "
+            "CV-selected rank."
+        ),
+        "inputs": (
+            ("analysis", ANALYSIS_RESULT),
+            *(
+                (f"rank-sensitivity/{RANK_SENSITIVITY_RANK_DIR.format(rank=rank)}", ANALYSIS_RESULT)
+                for rank in RANK_SENSITIVITY_LADDER["ranks"]
+            ),
+            (f"rank-sensitivity/{RANK_SENSITIVITY_SUBDIRS['comparison']}", RANK_SENSITIVITY_MANIFEST),
+        ),
+        "generated": "rank_anchor_and_nesting",
+        "rules": ("READING_RULES", "RANK_SENSITIVITY_READING_RULES"),
+        "reading": (
+            "At each PLS-DA rank the grey box spans that rank's own RRPP null from q50 to q95, the whisker reaches q99, "
+            "and the dot is the observed statistic. The black dot is the primary at its CV-selected rank, and the blue "
+            "dots are the forced ranks of `RANK_SENSITIVITY_LADDER`, each the primary with only the rank fixed and the "
+            "same permutation draws. The nulls change with the rank, so each dot is read against its own box only: "
+            "observed values are not compared across ranks, no rank is chosen, and the sweep is not a test "
+            "(`RANK_SENSITIVITY_READING_RULES`)."
+        ),
+    },
+}
+assert all(
+    name in REPORT_INPUT_FILES.get(role, ()) for entry in REPORT_FIGURES.values() for role, name in entry["inputs"]
+), (
+    "REPORT_FIGURES names an input outside REPORT_INPUT_FILES: "
+    + ", ".join(
+        f"{figure} ({role}/{name})" for figure, entry in REPORT_FIGURES.items() for role, name in entry["inputs"]
+        if name not in REPORT_INPUT_FILES.get(role, ())
+    )
+    + "; a figure reads only the report's inputs"
+)
+assert all(isinstance(globals().get(rule), tuple) for entry in REPORT_FIGURES.values() for rule in entry["rules"]), (
+    "REPORT_FIGURES names a rule list this module does not define as a tuple: "
+    + ", ".join(
+        f"{figure} ({rule!r})" for figure, entry in REPORT_FIGURES.items() for rule in entry["rules"]
+        if not isinstance(globals().get(rule), tuple)
+    )
 )

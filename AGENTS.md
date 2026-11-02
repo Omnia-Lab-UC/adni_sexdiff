@@ -497,10 +497,13 @@ implemented by its own OpenSpec change, in order.
      ladder included), selects a rank, reruns the primary or defines an
      arm.
 6. `report` – from the kept aggregate outputs only (`REPORT_INPUT_FILES`,
-   146 committed files with 45 manifests: the two `clean_manifest.json`;
+   147 committed files with 45 manifests: the two `clean_manifest.json`;
    `stage_counts.csv` and `cohort_manifest.json`; the export
-   `manifest.json`; the primary's `result.json`, `analysis_manifest.json`
-   and `summary.md`; the primary diagnostics' six files; under
+   `manifest.json`; the primary's four files `result.json`,
+   `analysis_manifest.json`, `summary.md` and `stage_means.csv` (the last
+   since change `adni-report-figures`, which `f2_trajectories` draws, checked
+   against `analysis_manifest.json`'s `outputs` with `analyze` as its rerun
+   hint); the primary diagnostics' six files; under
    `results/motco_latent_sensitivity/` the arm's three aggregate analysis
    files, the comparison's three files and the arm diagnostics' six files;
    under `results/motco_export_sensitivity/<variant>/`, per variant of
@@ -527,8 +530,16 @@ implemented by its own OpenSpec change, in order.
    never read from a MOTCO clone), nothing else: no
    participant-level file is opened or required (their hashes are quoted
    from the manifests; every rank's `stage_means.csv` and
-   `pls_loadings.csv` too), no data root, no MOTCO call, no pinned
-   numerics, so it runs on any clone. Thirteen flags: the ten directories
+   `pls_loadings.csv` too), no data root, no MOTCO call, so it runs on any
+   clone with the lock. Since change `adni-report-figures` it draws the
+   report's nine figures (`REPORT_FIGURES`) from those inputs, so two more
+   gates stop it before anything is written: the installed matplotlib is
+   `MATPLOTLIB_VERSION` (`check_matplotlib_version`, before any input is
+   read, in write and check mode, naming both versions and
+   `uv sync --locked`), and the numeric state read after the figures are
+   drawn is pinned (`_numerics_record`, naming each setting that differs;
+   a committed output must be pinned, constraint 6); the report writes no
+   `numerics` block of its own. Thirteen flags: the ten directories
    (`--export-sensitivity-dir` the root of the variants,
    `--stage-sensitivity-dir` the root of the CN / LMCI / AD arm,
    `--rank-sensitivity-dir` the root of the rank sweep,
@@ -539,7 +550,7 @@ implemented by its own OpenSpec change, in order.
    from the pinned MOTCO commit); every aggregate file hashes to the value
    its own manifest records, and the copy to the sha256
    `OPERATING_CHARACTERISTICS_SOURCE` pins (before the bridge table; it
-   counts neither among the 99 manifest-checked files nor among the
+   counts neither among the 100 manifest-checked files nor among the
    chain's links); the primary is the primary, the arm is
    `LATENT_SENSITIVITY_ARM` (`is_primary` in the two diagnostics manifests)
    and each variant directory of `REPORT_EXPORT_VARIANTS` holds its variant (its export, analysis and
@@ -594,10 +605,37 @@ implemented by its own OpenSpec change, in order.
    the title line only, `… — 2026-11-02, report 2`; any other name stops
    it; write mode without `--out` uses today's name without an ordinal and
    never picks one; an existing file stops it unless `--force`, naming the
-   next free same-day name; staged as `<out>.tmp`, parsed back and
-   renamed): the fourteen sections of
+   next free same-day name, and so does an existing figures directory
+   `reports/figures/<stem>/` for its name; the figures are staged as
+   `reports/figures/<stem>.tmp/` and the report as `<out>.tmp`, the report
+   parsed back, each data CSV read back equal to its rows and each SVG to
+   its bytes, then the figures directory and the report renamed together,
+   a failure removing both temporaries; `_write_report`), and its figures
+   under `reports/figures/<stem>/` (change `adni-report-figures`, `<stem>`
+   the report's name without `.md`, `REPORT_FIGURES_DIR`): per figure of
+   `REPORT_FIGURES` (`f1_cohort_design` … `f9_rank_sweep`) an SVG (drawn by
+   `figures.py` on `matplotlib.figure.Figure` with the SVG canvas inside
+   `rc_context` on `rcParamsDefault` plus `FIGURE_STYLE`, the bundled
+   DejaVu Sans by path, text as paths, a fixed ID salt, no date; its
+   metadata names its title, its inputs with their sha256 and the
+   matplotlib version) and a data CSV (one row per plotted value: `key`,
+   `quantity`, `value` as read, `source`, `field`; `absent` for a cell
+   `stage_counts.csv` does not list), eighteen files, every number in a
+   figure its row value at the report's digits, no statistic, correlation,
+   mean or count computed; the report: the fifteen sections of
    `REPORT_SECTIONS` (summary, with the measured verdict and MOTCO's three
-   statements after the primary's reading; provenance, the report's
+   statements after the primary's reading; figures (change
+   `adni-report-figures`, `_figures_section`): a lead naming the figures
+   directory, the matplotlib version and how `--check` compares the
+   figures, the table "Figure files" (per figure its title, SVG and data
+   CSV with their sha256 and its input files), then per figure a level-3
+   heading, the image and a three-part caption: its fixed reading text of
+   `REPORT_FIGURES`, the lines its entry names, each printed elsewhere in
+   the report by the same function (`f3` the primary's reading bullets,
+   `f4` the verdict and the size sentence, `f5` the primary's flagged rows,
+   `f7` the bridge lines and per-kit counts, `f8` the status sentences that
+   differ from the primary's, `f9` the anchor and nesting bullets), and its
+   sources and rule lists; provenance, the report's
    manifest with the QC archives, NIST workbooks and the decision's copy;
    cohort; export; primary analysis; axis diagnostics of the primary;
    operating characteristics (change `adni-operating-characteristics`,
@@ -658,8 +696,9 @@ implemented by its own OpenSpec change, in order.
    beside every table of the group, the CN / LMCI / AD arm's beside every
    table that quotes it and the sweep's beside every table that quotes the
    sweep, the primary's status the result in every table;
-   the body depends on the inputs and the file name only, so two runs are
-   byte-identical. With `--check` (default: the newest report under
+   the body and the figures depend on the inputs, the file name and the
+   pinned drawing library only, so two runs are byte-identical, the
+   eighteen figure files included. With `--check` (default: the newest report under
    `reports/` by the date in its name, then by its same-day ordinal) it
    first compares the report's
    level-2 headings with `REPORT_SECTIONS`, then the export variants it
@@ -671,24 +710,36 @@ implemented by its own OpenSpec change, in order.
    `reports/motco-adni-2026-10-30.md`, twelve sections,
    `reports/motco-adni-2026-10-31.md`, thirteen sections and two export
    variants, `reports/motco-adni-2026-11-02.md`, thirteen sections and
-   three export variants, and `reports/motco-adni-2026-11-02-2.md`,
-   thirteen sections; since change `adni-operating-characteristics` each
-   stops at the section gate, absent "Operating characteristics", and no
-   committed report reaches the variant gate) stops before
+   three export variants, `reports/motco-adni-2026-11-02-2.md`,
+   thirteen sections, and `reports/motco-adni-2026-11-02-3.md`, fourteen
+   sections; since change `adni-report-figures` each stops at the section
+   gate, absent "Figures" (and the earlier ones "Operating characteristics"
+   and older sections too), and no committed report of an earlier layout
+   reaches the variant gate) stops before
    any gate, naming its absent and extra sections or variants (or that
    their order differs) and `git log -1 --format=%H -- <report>`, the
-   revision where it checks (36c9cc8, c94f5e7, 2e4a3e1, 13ce7c8, 28e0d48
-   and 67567e2 for those reports); otherwise it reruns the gates, regenerates
-   the report and compares every table cell by cell and every other line
-   line by line, printing each mismatch (section, table, row key, column,
-   both values; or the line with both texts), exits 1 on any and writes
-   nothing; a regenerated results directory fails it on the provenance
-   hashes until a new report is written and checked. Findings,
+   revision where it checks (36c9cc8, c94f5e7, 2e4a3e1, 13ce7c8, 28e0d48,
+   67567e2 and 9779964 for those reports); otherwise it checks the
+   matplotlib pin, reruns the gates, regenerates the report and its
+   figures in memory (the numerics gate included) and compares every table
+   cell by cell and every other line line by line, then each figure's data
+   CSV cell by cell by `key` and its SVG by its sha256, then the figures
+   directory's files against the eighteen names, printing each mismatch
+   (section, table, row key, column, both values; or the line with both
+   texts; for a figure its file, row key, column, both values and the
+   regenerated row's source, or both sha256, saying when the data CSV is
+   equal that the drawing moved, not a result; a missing or extra file),
+   exits 1 on any and writes nothing; a regenerated results directory
+   fails it on the provenance hashes, on the rows of every figure that
+   reads the file and on those figures' SVGs until a new report is written
+   and checked. Findings,
    never stops: every deviation and finding of every input manifest,
    verbatim under its step; a dirty recorded revision; a manifest without
-   a `numerics` block. A report is committed alone after `--check` passes
-   on the clean tree; it quotes aggregate values only and holds no
-   participant identifier.
+   a `numerics` block. A report is committed alone with its figures
+   directory after `--check` passes on the clean tree (since change
+   `adni-report-figures` also on a second machine with the same lock); it
+   and its figures quote aggregate values only and hold no participant
+   identifier.
 
 `README.md` documents the layout and the pipeline; keep it in sync when
 behavior or defaults change.
@@ -713,7 +764,11 @@ behavior or defaults change.
   `export_sensitivity.md`, its manifest), the stage-sensitivity comparison
   (`stage_sensitivity.csv`, `stage_sensitivity.md`, its manifest), the
   rank-sensitivity comparison (`rank_sensitivity.csv`,
-  `rank_sensitivity.md`, its manifest) and the reports under `reports/`.
+  `rank_sensitivity.md`, its manifest), the reports under `reports/` and
+  their figures under `reports/figures/<report stem>/` (change
+  `adni-report-figures`: per figure an SVG and a data CSV, every value
+  copied from a committed aggregate input, one row per plotted value with
+  its source file and field; no latent score, no participant value).
   Besides the outputs, the copy of MOTCO's operating-characteristics
   decision file `references/motco_adni_design/adni_design_decision.json`
   (change `adni-operating-characteristics`) is committed: it comes from
@@ -957,12 +1012,21 @@ behavior or defaults change.
   assertion ties its keys to `RANK_SENSITIVITY_SUBDIRS`),
   `REPORT_INPUT_FILES` keyed by directory role with one role per variant
   subdirectory, per arm subdirectory, per rank of the ladder and per sweep
-  subdirectory, `REPORT_SECTIONS` with fourteen titles, the name of a
+  subdirectory, `REPORT_SECTIONS` with fifteen titles ("Figures" second
+  since change `adni-report-figures`), the name of a
   later report of the same day `REPORT_NAME_SAME_DAY` (tied to
   `REPORT_NAME` by an import-time assertion, change
-  `adni-report-scale-variants`); no scientific
+  `adni-report-scale-variants`), the figures `REPORT_FIGURES` (per figure,
+  keyed by its file stem, the title, subtitle, inputs as roles of
+  `REPORT_INPUT_FILES`, the generated caption lines, the rule lists and the
+  fixed reading text; two import-time assertions tie its inputs to
+  `REPORT_INPUT_FILES` and its rules to tuples of the module),
+  `REPORT_FIGURES_DIR`, `FIGURE_STYLE` (the palette, the bundled DejaVu
+  Sans by file name, the drawing settings) and the drawing library's exact
+  pin `MATPLOTLIB_VERSION`, change `adni-report-figures`; no scientific
   constant, changes `adni-report`, `adni-report-variants`,
-  `adni-report-stage-arm` and `adni-report-rank-sweep`; the pin
+  `adni-report-stage-arm`, `adni-report-rank-sweep` and
+  `adni-report-figures`; the pin
   `REPORT_EXPORT_VARIANTS`, the variants the report covers, a subsequence of
   `EXPORT_VARIANTS` by an import-time assertion, from which
   `REPORT_INPUT_FILES` is built, change `adni-nmr-all-columns`; it holds
@@ -987,7 +1051,14 @@ behavior or defaults change.
   `_stage_sensitivity_section` and `_rank_sensitivity_section`, the parser
   `parse_report` and the checker `check_report` with the earlier-layout
   gate `_check_report_layout` (the sections, then the export variants a
-  report lists against `REPORT_EXPORT_VARIANTS`); the shared reading sentences
+  report lists against `REPORT_EXPORT_VARIANTS`); the figures (change
+  `adni-report-figures`): `_report_figures` (the rows and SVGs of
+  `figures.py` in memory, then the numerics gate), `_figures_section` (the
+  "Figures" section, its caption lines through `_row_line`, the shared
+  `_bridge_kit_rows`, `_flagged_axis_rows`, `_export_variant_lines` and
+  `_rank_anchor_lines`), `_write_report` (the report and its figures staged
+  and renamed together) and `_compare_figures` (each data CSV by `key`, each
+  SVG by sha256, the directory's files); the shared reading sentences
   `_statistic_reading_line` and `_arm_status_line` that `summary.md`,
   `latent_sensitivity.md` and the report print) and the sensitivity step `latent-sensitivity` (`run_latent_sensitivity`,
   with the reference checks `_check_primary_reference` and
@@ -1021,7 +1092,8 @@ behavior or defaults change.
   `rank_sensitivity.md` and the report alike, and
   `render_rank_sensitivity`),
   `resolve_data_root`, the version gates
-  (`check_metabo_adni_version`, `check_motco_version`,
+  (`check_metabo_adni_version`, `check_matplotlib_version` (change
+  `adni-report-figures`), `check_motco_version`,
   `check_motco_rank_floor`), the raw-input helpers, the analysis input
   loader (shared by `analyze`, `axis-diagnostics` and the four
   sensitivity steps), the shared export function (`_run_export`:
@@ -1077,11 +1149,28 @@ behavior or defaults change.
   `results/motco_rank_sensitivity/` holds `rank_02/` … `rank_12/` (each
   laid out as `results/motco_analysis/`), `comparison/` and
   `diagnostics/`.
+- `src/adni_sexdiff/figures.py` – the report's figures (change
+  `adni-report-figures`), the one exception to "`data.py` holds all
+  logic": `figure_rows` (per figure of `REPORT_FIGURES` the rows of its
+  data CSV, one per plotted value: key, quantity, value as read, source,
+  field), `draw_figures` (the SVGs, drawn from those rows on
+  `matplotlib.figure.Figure` with the SVG canvas, never `pyplot`, inside
+  `rc_context` on `rcParamsDefault` plus `FIGURE_STYLE`, with the bundled
+  DejaVu Sans by path) and the CSV writer and reader. matplotlib is
+  imported by this module only, and `data.py` imports it inside
+  `run_report` and `check_report` only, so no pipeline step loads
+  matplotlib.
 - `reports/` – committed case-study reports (`motco-adni-<date>.md`, a
   later report of the same day `motco-adni-<date>-<n>.md`),
   generated in full by `report` from the aggregate outputs (every number
   copied, every sentence a constant or a renderer's) and checked by
-  `report --check`; aggregate, no participant identifier.
+  `report --check`; aggregate, no participant identifier. Since change
+  `adni-report-figures` a report's figures are in
+  `reports/figures/<report stem>/` (`REPORT_FIGURES_DIR`): per figure of
+  `REPORT_FIGURES` an SVG (text drawn as paths, a fixed ID salt, no date;
+  its metadata names its inputs with their sha256 and the matplotlib
+  version) and a data CSV, written with the report and checked by
+  `report --check`; aggregate, committed with the report.
 - `references/` – committed third-party aggregate files the report cites
   (change `adni-operating-characteristics`):
   `motco_adni_design/adni_design_decision.json`, MOTCO's
@@ -1106,7 +1195,11 @@ behavior or defaults change.
   every real-input check of the report change runs on the committed tree.
 - Dependencies: `motco` (git tag, constraint 4), `metabo_adni==0.5.8`
   (constraint 3), `pandas`, `numpy`, `threadpoolctl` (the numeric-state
-  record). Add dependencies with `uv add <pkg>` so `pyproject.toml` and
+  record), `matplotlib==3.11.2` (the report's figures, change
+  `adni-report-figures`: exact, `constants.MATPLOTLIB_VERSION`, checked at
+  run time by `report`, because the figures' bytes depend on it; it was in
+  the lock as a MOTCO dependency at the same version; moving it is a change
+  that re-issues the report). Add dependencies with `uv add <pkg>` so `pyproject.toml` and
   `uv.lock` stay consistent.
 - Numerics (constraint 6, change `adni-portable-numerics`): importing
   `adni_sexdiff` sets `constants.NUMERIC_SETTINGS` in the process
