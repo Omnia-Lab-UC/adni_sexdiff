@@ -1,0 +1,507 @@
+{
+  "counts": {
+    "cv_mean_auroc": {
+      "log2_plus_one": 0.5964958876697454,
+      "primary": 0.5995142920769246
+    },
+    "eigengap": {
+      "log2_plus_one": 0.6906969823021837,
+      "primary": 0.7439897653827622
+    },
+    "phase_offset": {
+      "log2_plus_one": {
+        "nmr": {
+          "abs_corr_pc1_phase": 0.1329251032485018,
+          "abs_corr_pc2_phase": 0.06521144983746678,
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 0.6761676675052588,
+          "median_abs_d": 0.19683995945656863
+        },
+        "p180": {
+          "abs_corr_pc1_phase": 0.731113994463022,
+          "abs_corr_pc2_phase": 0.3923876334016229,
+          "abs_d_gt_0_5": 108,
+          "abs_d_gt_1": 80,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 2.322022845377341,
+          "median_abs_d": 1.1089346257802146
+        }
+      },
+      "primary": {
+        "nmr": {
+          "abs_corr_pc1_phase": 0.134914819678611,
+          "abs_corr_pc2_phase": 0.07177054898291932,
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 0.6722749103659197,
+          "median_abs_d": 0.20765838704530382
+        },
+        "p180": {
+          "abs_corr_pc1_phase": 0.7338041282644211,
+          "abs_corr_pc2_phase": 0.3982350519508593,
+          "abs_d_gt_0_5": 109,
+          "abs_d_gt_1": 80,
+          "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+          "max_abs_d": 2.876015830557166,
+          "median_abs_d": 1.121003151194811
+        }
+      }
+    },
+    "ranks": {
+      "log2_plus_one": 8,
+      "primary": 8
+    },
+    "rejected": {
+      "log2_plus_one": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      },
+      "primary": {
+        "angle": false,
+        "delta": false,
+        "shape": false
+      }
+    },
+    "rows": 2,
+    "runs": {
+      "ADNI1": 684,
+      "ADNI2GO": 817
+    },
+    "statuses": {
+      "angle": "same",
+      "delta": "same",
+      "shape": "same"
+    }
+  },
+  "created_at": "2026-11-02T13:59:44+00:00",
+  "deviations": [],
+  "expected": {
+    "analysis": {
+      "component_selection": "cv",
+      "covariate_levels": {
+        "apoe4": {
+          "0": 810,
+          "1": 542,
+          "2": 149
+        },
+        "phase": {
+          "ADNI1": 684,
+          "ADNI2GO": 817
+        },
+        "statin": {
+          "0": 797,
+          "1": 704
+        }
+      },
+      "design_columns": [
+        "age",
+        "education",
+        "apoe4[1]",
+        "apoe4[2]",
+        "phase[ADNI2GO]",
+        "statin[1]"
+      ],
+      "dropped": 0,
+      "features": {
+        "joint": 298,
+        "nmr": 165,
+        "p180": 133
+      },
+      "min_components": 2,
+      "participants": 1501,
+      "permutations": 9999,
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      }
+    },
+    "export": {
+      "features": {
+        "nmr": {
+          "cleaned": 245,
+          "derived": {
+            "degree": 1,
+            "percentage": 72,
+            "ratio": 4,
+            "size": 3
+          },
+          "kept": 165
+        },
+        "p180": {
+          "cleaned": 133,
+          "derived": {
+            "degree": 0,
+            "percentage": 0,
+            "ratio": 0,
+            "size": 0
+          },
+          "kept": 133
+        }
+      },
+      "floors_not_positive": {
+        "nmr": 0,
+        "p180": 0
+      },
+      "metabolites_with_zeros": {
+        "nmr": 3,
+        "p180": 0
+      },
+      "missing_covariate_values": 0,
+      "non_finite": {
+        "nmr": 0,
+        "p180": 0
+      },
+      "participants": 1501,
+      "phase_offset": {
+        "nmr": {
+          "abs_d_gt_0_5": 2,
+          "abs_d_gt_1": 0
+        },
+        "p180": {
+          "abs_d_gt_0_5": 108,
+          "abs_d_gt_1": 80
+        }
+      },
+      "runs_differing_from_phase": 0,
+      "scale": {
+        "median_below_offset": {
+          "nmr": 129,
+          "p180": 46
+        }
+      },
+      "sex_stage": {
+        "Female": {
+          "AD": 125,
+          "CN": 237,
+          "MCI": 310
+        },
+        "Male": {
+          "AD": 158,
+          "CN": 223,
+          "MCI": 448
+        }
+      },
+      "shape": {
+        "nmr": {
+          "abs_skew_gt_1": 30,
+          "max_abs_z_gt_8": 4
+        },
+        "p180": {
+          "abs_skew_gt_1": 14,
+          "max_abs_z_gt_8": 9
+        }
+      },
+      "spectrum": {
+        "nmr": {
+          "numerical_rank": 165
+        },
+        "p180": {
+          "numerical_rank": 133
+        }
+      },
+      "unchanged_equal_primary": {
+        "covariates.csv": true,
+        "metadata.csv": true
+      },
+      "zero_cells": {
+        "nmr": 41,
+        "p180": 0
+      }
+    }
+  },
+  "findings": [],
+  "git_revision": {
+    "commit": "237e91630b4bf97a60a9c657d9266e3d25039ed9",
+    "dirty": false
+  },
+  "inputs": {
+    "primary": {
+      "analysis": {
+        "chain": {
+          "covariates.csv": true,
+          "metadata.csv": true,
+          "nmr.csv": true,
+          "p180.csv": true
+        },
+        "created_at": "2026-10-27T18:14:42+00:00",
+        "dir": "results/motco_analysis",
+        "files": {
+          "analysis_manifest.json": {
+            "bytes": 11512,
+            "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+          },
+          "result.json": {
+            "bytes": 7818,
+            "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+          }
+        },
+        "git_revision": {
+          "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+          "dirty": false
+        },
+        "latent_adjustment": null,
+        "motco": "0.10.0",
+        "n_jobs": 1,
+        "primary_records_export": true,
+        "seed_and_permutations_equal_constants": true,
+        "selected_rank": 8
+      },
+      "export": {
+        "chain": {
+          "cohort.csv": true,
+          "cohort_manifest.json": true,
+          "nmr/NMR.csv": true,
+          "p180/P180.csv": true
+        },
+        "dir": "results/motco_input",
+        "files": {
+          "covariates.csv": {
+            "bytes": 35630,
+            "equals_export_manifest": true,
+            "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+            "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+          },
+          "manifest.json": {
+            "bytes": 14840,
+            "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+          },
+          "metadata.csv": {
+            "bytes": 21092,
+            "equals_export_manifest": true,
+            "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+            "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+          },
+          "nmr.csv": {
+            "bytes": 4802997,
+            "equals_export_manifest": true,
+            "recorded": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43",
+            "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+          },
+          "p180.csv": {
+            "bytes": 3756402,
+            "equals_export_manifest": true,
+            "recorded": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e",
+            "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+          }
+        },
+        "manifest": {
+          "name": "manifest.json",
+          "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+        }
+      }
+    },
+    "variant": {
+      "analysis": {
+        "dir": "results/motco_export_sensitivity/log2_plus_one/analysis",
+        "files": {
+          "analysis_manifest.json": {
+            "bytes": 14102,
+            "sha256": "b74bce6b4312f4ced98a6cff71473d323c047a157af7593db0bc0f23281a4db4"
+          },
+          "result.json": {
+            "bytes": 7826,
+            "sha256": "1b2479bdd02ad3432535417522700b0bb9b346fcb1231a12d6ff8180a594e523"
+          }
+        },
+        "n_jobs": 1,
+        "selected_rank": 8
+      },
+      "bridge": null,
+      "export": {
+        "dir": "results/motco_export_sensitivity/log2_plus_one/motco_input",
+        "files": {
+          "covariates.csv": {
+            "bytes": 35630,
+            "equals_export_manifest": true,
+            "recorded": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd",
+            "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+          },
+          "manifest.json": {
+            "bytes": 20634,
+            "sha256": "526e30f384fb671e8ab1c24682ddd9b53eabc576b7c97bf8f5e84f5a04e68001"
+          },
+          "metadata.csv": {
+            "bytes": 21092,
+            "equals_export_manifest": true,
+            "recorded": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221",
+            "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+          },
+          "nmr.csv": {
+            "bytes": 4882682,
+            "equals_export_manifest": true,
+            "recorded": "c80b3aa1b7006342922c3b49fdaad2d12f507ff44b4d212e5fbe516315c5d039",
+            "sha256": "c80b3aa1b7006342922c3b49fdaad2d12f507ff44b4d212e5fbe516315c5d039"
+          },
+          "p180.csv": {
+            "bytes": 3742472,
+            "equals_export_manifest": true,
+            "recorded": "f01f73330591032c32f48afea2d09374fbc20a0c6d49bb3e37919448a8354050",
+            "sha256": "f01f73330591032c32f48afea2d09374fbc20a0c6d49bb3e37919448a8354050"
+          }
+        },
+        "manifest": {
+          "name": "manifest.json",
+          "sha256": "526e30f384fb671e8ab1c24682ddd9b53eabc576b7c97bf8f5e84f5a04e68001"
+        }
+      }
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "export_sensitivity.csv": {
+      "bytes": 1056,
+      "participant_level": false,
+      "sha256": "521fa94736b2385366fd67b3d86d3d120e24c0f8c1c2e233fd0bd07b1ebd947b"
+    },
+    "export_sensitivity.md": {
+      "bytes": 13352,
+      "participant_level": false,
+      "sha256": "ca4702364f7a047a0897be4146fe5bf04641592f6f3dafe60f03944024ee7395"
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-27T18:14:42+00:00",
+    "dir": "results/motco_analysis",
+    "export": {
+      "dir": "results/motco_input",
+      "manifest": {
+        "name": "manifest.json",
+        "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+      }
+    },
+    "files": {
+      "analysis_manifest.json": {
+        "bytes": 11512,
+        "sha256": "d09447600a477d19970fed803206af3ebd27fe237dcf359a9acba38bfdc4eed3"
+      },
+      "result.json": {
+        "bytes": 7818,
+        "sha256": "d4a5cbf90dda74763dea91b9f9be8df47439da0e5fd4c475a8546fe2a6f581f0"
+      }
+    },
+    "git_revision": {
+      "commit": "af4d6e4c85de4929766bcc52cf85b261968499f4",
+      "dirty": false
+    },
+    "latent_adjustment": null,
+    "motco": "0.10.0",
+    "n_jobs": 1,
+    "selected_rank": 8
+  },
+  "settings": {
+    "ANALYSIS_ALPHA": 0.05,
+    "ANALYSIS_RANK_FLOOR": 2,
+    "ANALYSIS_REJECTION_RULE": "p <= alpha",
+    "EXPORT_VARIANTS": {
+      "log2_plus_one": {
+        "block": "all",
+        "change": "adni-scale-variants",
+        "hook": "scale",
+        "reads_data_root": false,
+        "rule": "SCALE_VARIANT_RULE",
+        "setting": "both blocks on log2(x + 1): every kept cell log2 of the cleaned concentration plus 1 in its platform's unit, the transform of the 2022 study (SCALE_VARIANT_RULE); the membership, the participants, the metadata and the covariates the primary's; the rule's floors recorded, not applied"
+      }
+    },
+    "REPORTED_N_JOBS": 1,
+    "columns": [
+      "analysis",
+      "directory",
+      "export_variant",
+      "selected_rank",
+      "component_selection",
+      "cv_mean_auroc",
+      "cv_repeats_completed",
+      "eigengap",
+      "delta_observed",
+      "delta_p",
+      "delta_rejected",
+      "delta_null_mean",
+      "delta_null_sd",
+      "delta_null_q95",
+      "angle_observed",
+      "angle_p",
+      "angle_rejected",
+      "angle_null_mean",
+      "angle_null_sd",
+      "angle_null_q95",
+      "shape_observed",
+      "shape_p",
+      "shape_rejected",
+      "shape_null_mean",
+      "shape_null_sd",
+      "shape_null_q95"
+    ],
+    "n_jobs": 1,
+    "status_rule": "'same' when both rejections under ANALYSIS_REJECTION_RULE are equal, else 'differs (scale dependence)'; the primary's status is the result either way"
+  },
+  "step": "export-sensitivity",
+  "variant": {
+    "block": "all",
+    "change": "adni-scale-variants",
+    "constant": "EXPORT_VARIANTS",
+    "hook": "scale",
+    "name": "log2_plus_one",
+    "reads_data_root": false,
+    "rule": "SCALE_VARIANT_RULE",
+    "setting": "both blocks on log2(x + 1): every kept cell log2 of the cleaned concentration plus 1 in its platform's unit, the transform of the 2022 study (SCALE_VARIANT_RULE); the membership, the participants, the metadata and the covariates the primary's; the rule's floors recorded, not applied"
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "motco": "0.10.0",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scikit-learn": "1.8.0",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}

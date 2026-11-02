@@ -1,0 +1,887 @@
+{
+  "counts": {
+    "block_shares": {
+      "nmr": 0.5536912751677853,
+      "p180": 0.4463087248322148
+    },
+    "features": {
+      "nmr": {
+        "cleaned": 245,
+        "derived": {
+          "degree": 1,
+          "percentage": 72,
+          "ratio": 4,
+          "size": 3
+        },
+        "kept": 165
+      },
+      "p180": {
+        "cleaned": 133,
+        "derived": {
+          "degree": 0,
+          "percentage": 0,
+          "ratio": 0,
+          "size": 0
+        },
+        "kept": 133
+      }
+    },
+    "floors_not_positive": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "joint_features": 298,
+    "metabolites_with_zeros": {
+      "nmr": 3,
+      "p180": 0
+    },
+    "missing_covariate_values": 0,
+    "non_finite": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "participants": 1501,
+    "phase_offset": {
+      "nmr": {
+        "abs_corr_pc1_phase": 0.1329251032485018,
+        "abs_corr_pc2_phase": 0.06521144983746678,
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 0.6761676675052588,
+        "median_abs_d": 0.19683995945656863
+      },
+      "p180": {
+        "abs_corr_pc1_phase": 0.731113994463022,
+        "abs_corr_pc2_phase": 0.3923876334016229,
+        "abs_d_gt_0_5": 108,
+        "abs_d_gt_1": 80,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 2.322022845377341,
+        "median_abs_d": 1.1089346257802146
+      }
+    },
+    "runs": {
+      "ADNI1": 684,
+      "ADNI2GO": 817
+    },
+    "runs_differing_from_phase": 0,
+    "scale": {
+      "median_below_offset": {
+        "nmr": 129,
+        "p180": 46
+      },
+      "offset": 1,
+      "transform": "log2(x + 1)"
+    },
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    },
+    "shape": {
+      "nmr": {
+        "abs_skew_gt_1": 30,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 30,
+        "max_abs_z_gt_8": 4,
+        "median_abs_skew": 0.5127202487984538,
+        "skew_lt_minus_1": 0
+      },
+      "p180": {
+        "abs_skew_gt_1": 14,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 27,
+        "max_abs_z_gt_8": 9,
+        "median_abs_skew": 0.30983103203603723,
+        "skew_lt_minus_1": 0
+      }
+    },
+    "spectrum": {
+      "nmr": {
+        "effective_rank": 3.7664945516203407,
+        "features": 165,
+        "numerical_rank": 165,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.9260886916613228,
+        "pc1_3_share": 0.7767364987899841,
+        "pc1_share": 0.4367640374026041
+      },
+      "p180": {
+        "effective_rank": 5.309931339206763,
+        "features": 133,
+        "numerical_rank": 133,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.7419270665848795,
+        "pc1_3_share": 0.5445863777121451,
+        "pc1_share": 0.41452436950482946
+      }
+    },
+    "unchanged_equal_primary": {
+      "covariates.csv": true,
+      "metadata.csv": true
+    },
+    "zero_cells": {
+      "nmr": 41,
+      "p180": 0
+    }
+  },
+  "created_at": "2026-11-02T13:58:20+00:00",
+  "deviations": [],
+  "expected": {
+    "features": {
+      "nmr": {
+        "cleaned": 245,
+        "derived": {
+          "degree": 1,
+          "percentage": 72,
+          "ratio": 4,
+          "size": 3
+        },
+        "kept": 165
+      },
+      "p180": {
+        "cleaned": 133,
+        "derived": {
+          "degree": 0,
+          "percentage": 0,
+          "ratio": 0,
+          "size": 0
+        },
+        "kept": 133
+      }
+    },
+    "floors_not_positive": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "metabolites_with_zeros": {
+      "nmr": 3,
+      "p180": 0
+    },
+    "missing_covariate_values": 0,
+    "non_finite": {
+      "nmr": 0,
+      "p180": 0
+    },
+    "participants": 1501,
+    "phase_offset": {
+      "nmr": {
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0
+      },
+      "p180": {
+        "abs_d_gt_0_5": 108,
+        "abs_d_gt_1": 80
+      }
+    },
+    "runs_differing_from_phase": 0,
+    "scale": {
+      "median_below_offset": {
+        "nmr": 129,
+        "p180": 46
+      }
+    },
+    "sex_stage": {
+      "Female": {
+        "AD": 125,
+        "CN": 237,
+        "MCI": 310
+      },
+      "Male": {
+        "AD": 158,
+        "CN": 223,
+        "MCI": 448
+      }
+    },
+    "shape": {
+      "nmr": {
+        "abs_skew_gt_1": 30,
+        "max_abs_z_gt_8": 4
+      },
+      "p180": {
+        "abs_skew_gt_1": 14,
+        "max_abs_z_gt_8": 9
+      }
+    },
+    "spectrum": {
+      "nmr": {
+        "numerical_rank": 165
+      },
+      "p180": {
+        "numerical_rank": 133
+      }
+    },
+    "unchanged_equal_primary": {
+      "covariates.csv": true,
+      "metadata.csv": true
+    },
+    "zero_cells": {
+      "nmr": 41,
+      "p180": 0
+    }
+  },
+  "findings": [],
+  "git_revision": {
+    "commit": "237e91630b4bf97a60a9c657d9266e3d25039ed9",
+    "dirty": false
+  },
+  "inputs": {
+    "chain": {
+      "nmr/NMR.csv": true,
+      "p180/P180.csv": true,
+      "p180/p180_runs.csv": true
+    },
+    "clean": {
+      "nmr": {
+        "manifest": {
+          "name": "nmr/clean_manifest.json",
+          "sha256": "089df72cd5891029a791d1704578d5ef049efe9c25dd99cc41511e1ce64f7657"
+        },
+        "outputs": {
+          "NMR.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "e711d62cf03f9da3f761fb18bfe4acb2d5fdf15fab6695fa5ed3901fa45d3159"
+          }
+        }
+      },
+      "p180": {
+        "manifest": {
+          "name": "p180/clean_manifest.json",
+          "sha256": "6f11a627648d17a5c1294420fd3ed32c1e125c8c0cb53b37d3f3d247fb5f78ce"
+        },
+        "outputs": {
+          "P180.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "33b18bd2187173179aa280ee74fc0a8f37ca2f155cdd37d4f87412631132ff9d"
+          },
+          "p180_runs.csv": {
+            "equals_clean_manifest": true,
+            "sha256": "4c3d7b972428548b94a1f2762ccfa9d460f29929a5f19304fe28a69271d0197d"
+          }
+        }
+      }
+    },
+    "cohort": {
+      "manifest": {
+        "name": "cohort_manifest.json",
+        "sha256": "dcb65a530bfc41f3d77bec08ad530bc81dede9f90ac2b4580d88e2e156d1e630"
+      },
+      "outputs": {
+        "cohort.csv": {
+          "equals_cohort_manifest": true,
+          "sha256": "fe70cbf2e38f21ab25c9f32bfb1c503387b8eab2babf96aba7a286ea02b109ce"
+        }
+      }
+    }
+  },
+  "numerics": {
+    "blas": [
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas-5f890258.so",
+        "num_threads": 1,
+        "version": "0.3.31.dev"
+      },
+      {
+        "api": "openblas",
+        "architecture": "Haswell",
+        "library": "libscipy_openblas64_-32a4b2a6.so",
+        "num_threads": 1,
+        "version": "0.3.31.188.0"
+      }
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "cpus_available": 16,
+    "environment": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "host": "nixos-home",
+    "numpy_log2_float64": "baseline(X86_V2)",
+    "pinned": true,
+    "requested": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_CORETYPE": "Haswell",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "outputs": {
+    "covariates.csv": {
+      "bytes": 35630,
+      "participant_level": true,
+      "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+    },
+    "features_nmr.csv": {
+      "bytes": 33486,
+      "participant_level": false,
+      "sha256": "3a32c9dc2234bb6acb7daebdf7f383ac07b051766ebcaeaa8f8c7a62ce166126"
+    },
+    "features_p180.csv": {
+      "bytes": 22250,
+      "participant_level": false,
+      "sha256": "c29c202232c9b96401ae06c8f430099db35e4b1f9e3805fbeee1bad9013c0eef"
+    },
+    "metadata.csv": {
+      "bytes": 21092,
+      "participant_level": true,
+      "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+    },
+    "nmr.csv": {
+      "bytes": 4882682,
+      "participant_level": true,
+      "sha256": "c80b3aa1b7006342922c3b49fdaad2d12f507ff44b4d212e5fbe516315c5d039"
+    },
+    "p180.csv": {
+      "bytes": 3742472,
+      "participant_level": true,
+      "sha256": "f01f73330591032c32f48afea2d09374fbc20a0c6d49bb3e37919448a8354050"
+    }
+  },
+  "reference": {
+    "chain": {
+      "cohort.csv": true,
+      "cohort_manifest.json": true,
+      "nmr/NMR.csv": true,
+      "p180/P180.csv": true
+    },
+    "created_at": "2026-10-27T14:13:06+00:00",
+    "dir": "results/motco_input",
+    "git_revision": {
+      "commit": "b10da517bed5919012610813aa8d7cdd778ce7bf",
+      "dirty": false
+    },
+    "manifest": {
+      "name": "manifest.json",
+      "sha256": "9f4adf8cbc1da0b4cacdfe6673479991b40676033c365bc1433cc382f67d7204"
+    },
+    "outputs": {
+      "covariates.csv": {
+        "sha256": "06999e827d4f6eb6987bfa9c63bb24f9dfd4c07dfac96ce0b55500e8cd3fccfd"
+      },
+      "features_nmr.csv": {
+        "sha256": "d4495f6aae38985460a118582e8e3250f9c56b8e27fc38d64bedc5b14514b9ee"
+      },
+      "features_p180.csv": {
+        "sha256": "7793776534d580f9a49e0ad95e0d8f6ecef3b5a7ff3c02f64dd07c905f4bb5ee"
+      },
+      "metadata.csv": {
+        "sha256": "9c445b7de5a50ee14c0771f2ebf57416120e46f6daa3703e48ff90308cecf221"
+      },
+      "nmr.csv": {
+        "sha256": "a90d3eb43a86db456861e53a413f73ce8c70ec4d121eaa56e258725493114e43"
+      },
+      "p180.csv": {
+        "sha256": "5547356eb1761705eeee2295cfe5838e302821594b5b2675630419123861402e"
+      }
+    },
+    "phase_offset": {
+      "nmr": {
+        "abs_corr_pc1_phase": 0.134914819678611,
+        "abs_corr_pc2_phase": 0.07177054898291932,
+        "abs_d_gt_0_5": 2,
+        "abs_d_gt_1": 0,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 0.6722749103659197,
+        "median_abs_d": 0.20765838704530382
+      },
+      "p180": {
+        "abs_corr_pc1_phase": 0.7338041282644211,
+        "abs_corr_pc2_phase": 0.3982350519508593,
+        "abs_d_gt_0_5": 109,
+        "abs_d_gt_1": 80,
+        "contrast": "ADNI1 minus ADNI2GO, pooled within-phase sd",
+        "max_abs_d": 2.876015830557166,
+        "median_abs_d": 1.121003151194811
+      }
+    },
+    "shape": {
+      "nmr": {
+        "abs_skew_gt_1": 3,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 4,
+        "max_abs_z_gt_8": 1,
+        "median_abs_skew": 0.17827974010201486,
+        "skew_lt_minus_1": 1
+      },
+      "p180": {
+        "abs_skew_gt_1": 1,
+        "max_abs_z_gt_15": 0,
+        "max_abs_z_gt_5": 17,
+        "max_abs_z_gt_8": 0,
+        "median_abs_skew": 0.31659780424775685,
+        "skew_lt_minus_1": 0
+      }
+    },
+    "spectrum": {
+      "nmr": {
+        "effective_rank": 3.772615086962188,
+        "features": 165,
+        "numerical_rank": 165,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.9201938345984545,
+        "pc1_3_share": 0.7698923488782725,
+        "pc1_share": 0.43779980094289406
+      },
+      "p180": {
+        "effective_rank": 5.221503615245744,
+        "features": 133,
+        "numerical_rank": 133,
+        "numerical_rank_tolerance": 1e-08,
+        "pc1_10_share": 0.746712247211651,
+        "pc1_3_share": 0.5490671070376468,
+        "pc1_share": 0.41830751767785274
+      }
+    }
+  },
+  "settings": {
+    "EXPORT_FEATURE_RULE": {
+      "membership": {
+        "nmr": {
+          "derived": {
+            "degree": [
+              "equals",
+              "UNSATURATION"
+            ],
+            "percentage": [
+              "endswith",
+              "_PCT"
+            ],
+            "ratio": [
+              "contains",
+              "_BY_"
+            ],
+            "size": [
+              "endswith",
+              "_SIZE"
+            ]
+          }
+        },
+        "p180": {
+          "derived": {}
+        }
+      },
+      "scale": {
+        "floor_method": "linear",
+        "floor_quantile": 0.05,
+        "motco_transform": "identity",
+        "transform": "log2(x + floor)"
+      }
+    },
+    "block_columns": {
+      "nmr": [
+        "TOTAL_C",
+        "NON_HDL_C",
+        "REMNANT_C",
+        "VLDL_C",
+        "CLINICAL_LDL_C",
+        "LDL_C",
+        "HDL_C",
+        "TOTAL_TG",
+        "VLDL_TG",
+        "LDL_TG",
+        "HDL_TG",
+        "TOTAL_PL",
+        "VLDL_PL",
+        "LDL_PL",
+        "HDL_PL",
+        "TOTAL_CE",
+        "VLDL_CE",
+        "LDL_CE",
+        "HDL_CE",
+        "TOTAL_FC",
+        "VLDL_FC",
+        "LDL_FC",
+        "HDL_FC",
+        "TOTAL_L",
+        "VLDL_L",
+        "LDL_L",
+        "HDL_L",
+        "TOTAL_P",
+        "VLDL_P",
+        "LDL_P",
+        "HDL_P",
+        "PHOSPHOGLYC",
+        "CHOLINES",
+        "PHOSPHATIDYLC",
+        "SPHINGOMYELINS",
+        "APOB",
+        "APOA1",
+        "TOTAL_FA",
+        "OMEGA_3",
+        "OMEGA_6",
+        "PUFA",
+        "MUFA",
+        "SFA",
+        "LA",
+        "DHA",
+        "ALA",
+        "GLN",
+        "GLY",
+        "HIS",
+        "TOTAL_BCAA",
+        "ILE",
+        "LEU",
+        "VAL",
+        "PHE",
+        "TYR",
+        "GLUCOSE",
+        "LACTATE",
+        "PYRUVATE",
+        "CITRATE",
+        "GLYCEROL",
+        "BOHBUTYRATE",
+        "ACETATE",
+        "ACETOACETATE",
+        "ACETONE",
+        "CREATININE",
+        "ALBUMIN",
+        "GLYCA",
+        "XXL_VLDL_P",
+        "XXL_VLDL_L",
+        "XXL_VLDL_PL",
+        "XXL_VLDL_C",
+        "XXL_VLDL_CE",
+        "XXL_VLDL_FC",
+        "XXL_VLDL_TG",
+        "XL_VLDL_P",
+        "XL_VLDL_L",
+        "XL_VLDL_PL",
+        "XL_VLDL_C",
+        "XL_VLDL_CE",
+        "XL_VLDL_FC",
+        "XL_VLDL_TG",
+        "L_VLDL_P",
+        "L_VLDL_L",
+        "L_VLDL_PL",
+        "L_VLDL_C",
+        "L_VLDL_CE",
+        "L_VLDL_FC",
+        "L_VLDL_TG",
+        "M_VLDL_P",
+        "M_VLDL_L",
+        "M_VLDL_PL",
+        "M_VLDL_C",
+        "M_VLDL_CE",
+        "M_VLDL_FC",
+        "M_VLDL_TG",
+        "S_VLDL_P",
+        "S_VLDL_L",
+        "S_VLDL_PL",
+        "S_VLDL_C",
+        "S_VLDL_CE",
+        "S_VLDL_FC",
+        "S_VLDL_TG",
+        "XS_VLDL_P",
+        "XS_VLDL_L",
+        "XS_VLDL_PL",
+        "XS_VLDL_C",
+        "XS_VLDL_CE",
+        "XS_VLDL_FC",
+        "XS_VLDL_TG",
+        "IDL_P",
+        "IDL_L",
+        "IDL_PL",
+        "IDL_C",
+        "IDL_CE",
+        "IDL_FC",
+        "IDL_TG",
+        "L_LDL_P",
+        "L_LDL_L",
+        "L_LDL_PL",
+        "L_LDL_C",
+        "L_LDL_CE",
+        "L_LDL_FC",
+        "L_LDL_TG",
+        "M_LDL_P",
+        "M_LDL_L",
+        "M_LDL_PL",
+        "M_LDL_C",
+        "M_LDL_CE",
+        "M_LDL_FC",
+        "M_LDL_TG",
+        "S_LDL_P",
+        "S_LDL_L",
+        "S_LDL_PL",
+        "S_LDL_C",
+        "S_LDL_CE",
+        "S_LDL_FC",
+        "S_LDL_TG",
+        "XL_HDL_P",
+        "XL_HDL_L",
+        "XL_HDL_PL",
+        "XL_HDL_C",
+        "XL_HDL_CE",
+        "XL_HDL_FC",
+        "XL_HDL_TG",
+        "L_HDL_P",
+        "L_HDL_L",
+        "L_HDL_PL",
+        "L_HDL_C",
+        "L_HDL_CE",
+        "L_HDL_FC",
+        "L_HDL_TG",
+        "M_HDL_P",
+        "M_HDL_L",
+        "M_HDL_PL",
+        "M_HDL_C",
+        "M_HDL_CE",
+        "M_HDL_FC",
+        "M_HDL_TG",
+        "S_HDL_P",
+        "S_HDL_L",
+        "S_HDL_PL",
+        "S_HDL_C",
+        "S_HDL_CE",
+        "S_HDL_FC",
+        "S_HDL_TG"
+      ],
+      "p180": [
+        "C0",
+        "C10",
+        "C10.2",
+        "C12",
+        "C14.1",
+        "C14.1.OH",
+        "C14.2",
+        "C16",
+        "C16.1",
+        "C18",
+        "C18.1",
+        "C18.2",
+        "C2",
+        "C3",
+        "C4",
+        "C6..C4.1.DC.",
+        "C5",
+        "C7.DC",
+        "C9",
+        "lysoPC.a.C16.0",
+        "lysoPC.a.C16.1",
+        "lysoPC.a.C17.0",
+        "lysoPC.a.C18.0",
+        "lysoPC.a.C18.1",
+        "lysoPC.a.C18.2",
+        "lysoPC.a.C20.3",
+        "lysoPC.a.C20.4",
+        "lysoPC.a.C24.0",
+        "lysoPC.a.C28.0",
+        "lysoPC.a.C28.1",
+        "PC.aa.C28.1",
+        "PC.aa.C30.0",
+        "PC.aa.C32.0",
+        "PC.aa.C32.1",
+        "PC.aa.C32.3",
+        "PC.aa.C34.3",
+        "PC.aa.C34.4",
+        "PC.aa.C36.0",
+        "PC.aa.C36.1",
+        "PC.aa.C36.3",
+        "PC.aa.C36.5",
+        "PC.aa.C36.6",
+        "PC.aa.C38.0",
+        "PC.aa.C38.3",
+        "PC.aa.C38.4",
+        "PC.aa.C38.5",
+        "PC.aa.C38.6",
+        "PC.aa.C40.2",
+        "PC.aa.C40.3",
+        "PC.aa.C40.4",
+        "PC.aa.C40.5",
+        "PC.aa.C40.6",
+        "PC.aa.C42.0",
+        "PC.aa.C42.1",
+        "PC.aa.C42.2",
+        "PC.aa.C42.4",
+        "PC.aa.C42.5",
+        "PC.aa.C42.6",
+        "PC.ae.C30.0",
+        "PC.ae.C30.2",
+        "PC.ae.C32.1",
+        "PC.ae.C32.2",
+        "PC.ae.C34.0",
+        "PC.ae.C34.1",
+        "PC.ae.C34.2",
+        "PC.ae.C34.3",
+        "PC.ae.C36.0",
+        "PC.ae.C36.1",
+        "PC.ae.C36.2",
+        "PC.ae.C36.3",
+        "PC.ae.C36.4",
+        "PC.ae.C36.5",
+        "PC.ae.C38.0",
+        "PC.ae.C38.2",
+        "PC.ae.C38.3",
+        "PC.ae.C38.4",
+        "PC.ae.C38.5",
+        "PC.ae.C38.6",
+        "PC.ae.C40.1",
+        "PC.ae.C40.2",
+        "PC.ae.C40.3",
+        "PC.ae.C40.4",
+        "PC.ae.C40.5",
+        "PC.ae.C40.6",
+        "PC.ae.C42.1",
+        "PC.ae.C42.2",
+        "PC.ae.C42.3",
+        "PC.ae.C42.4",
+        "PC.ae.C42.5",
+        "PC.ae.C44.3",
+        "PC.ae.C44.4",
+        "PC.ae.C44.5",
+        "PC.ae.C44.6",
+        "SM..OH..C14.1",
+        "SM..OH..C16.1",
+        "SM..OH..C22.1",
+        "SM..OH..C22.2",
+        "SM..OH..C24.1",
+        "SM.C16.0",
+        "SM.C16.1",
+        "SM.C18.0",
+        "SM.C18.1",
+        "SM.C20.2",
+        "SM.C24.0",
+        "SM.C24.1",
+        "SM.C26.0",
+        "SM.C26.1",
+        "Ala",
+        "Arg",
+        "Asn",
+        "Asp",
+        "Cit",
+        "Glu",
+        "Gly",
+        "His",
+        "Ile",
+        "Lys",
+        "Met",
+        "Orn",
+        "Phe",
+        "Pro",
+        "Ser",
+        "Thr",
+        "Trp",
+        "Tyr",
+        "Val",
+        "Creatinine",
+        "Kynurenine",
+        "Sarcosine",
+        "Serotonin",
+        "Spermidine",
+        "t4.OH.Pro",
+        "SDMA"
+      ]
+    },
+    "blocks": [
+      "p180",
+      "nmr"
+    ],
+    "covariate_columns": [
+      "age",
+      "education",
+      "apoe4",
+      "phase",
+      "statin"
+    ],
+    "covariates": {
+      "age": {
+        "coding": "numeric",
+        "column": "AGE",
+        "file": "clinical"
+      },
+      "apoe4": {
+        "coding": "categorical",
+        "column": "APOE4",
+        "file": "clinical",
+        "levels": [
+          0,
+          1,
+          2
+        ]
+      },
+      "education": {
+        "coding": "numeric",
+        "column": "PTEDUCAT",
+        "file": "clinical"
+      },
+      "phase": {
+        "coding": "categorical",
+        "column": "ORIGPROT",
+        "file": "clinical",
+        "levels": [
+          "ADNI1",
+          "ADNI2GO"
+        ],
+        "map": {
+          "ADNI1": "ADNI1",
+          "ADNI2": "ADNI2GO",
+          "ADNIGO": "ADNI2GO"
+        }
+      },
+      "statin": {
+        "coding": "categorical",
+        "column": "HMG CoA reductase inhibitors",
+        "file": "medication",
+        "levels": [
+          0,
+          1
+        ],
+        "visit": "sc"
+      }
+    },
+    "covariates_applied": false,
+    "group_column": "sex",
+    "group_values": [
+      "Female",
+      "Male"
+    ],
+    "motco_transform": "identity",
+    "sample_column": "rid",
+    "scale": {
+      "constant": "SCALE_VARIANT_RULE",
+      "offset": 1,
+      "transform": "log2(x + 1)",
+      "variant": "log2_plus_one"
+    },
+    "stage_column": "stage",
+    "stage_order": [
+      "CN",
+      "MCI",
+      "AD"
+    ],
+    "units": "log2(x + 1)"
+  },
+  "step": "export-sensitivity",
+  "variant": {
+    "block": "all",
+    "change": "adni-scale-variants",
+    "constant": "EXPORT_VARIANTS",
+    "hook": "scale",
+    "name": "log2_plus_one",
+    "reads_data_root": false,
+    "rule": "SCALE_VARIANT_RULE",
+    "setting": "both blocks on log2(x + 1): every kept cell log2 of the cleaned concentration plus 1 in its platform's unit, the transform of the 2022 study (SCALE_VARIANT_RULE); the membership, the participants, the metadata and the covariates the primary's; the rule's floors recorded, not applied"
+  },
+  "versions": {
+    "adni-sexdiff": "0.1.0",
+    "metabo_adni": "0.5.8",
+    "numpy": "2.4.6",
+    "openpyxl": "3.1.5",
+    "pandas": "2.3.3",
+    "pingouin": "0.5.4",
+    "python": "3.12.15",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  }
+}
