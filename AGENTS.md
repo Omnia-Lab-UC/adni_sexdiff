@@ -790,14 +790,21 @@ behavior or defaults change.
   `result.json`, the manifests, `stage_counts.csv`) and checked by
   `adni-sexdiff report --check`, never retyped.
 
-### 7. Private repository and the cluster
+### 7. Public repository and the cluster
 
-- `Omnia-Lab-UC/adni_sexdiff` is private, so the cluster cannot clone it
-  over plain HTTPS as it does the template. It needs a read-only deploy key
-  (an SSH key added to the repository's deploy keys, used through a host
-  alias in `~/.ssh/config` on the cluster) or a fine-grained token scoped
-  to this repository (for HTTPS). Neither is set up yet; setting one up is
-  its own task, done by the user, not by an agent.
+- `Omnia-Lab-UC/adni_sexdiff` is public since 2026-11-02 (the user's
+  decision). Every pushed commit and branch is published with the whole
+  history, so constraint 1 binds every commit, not only the tip of `main`:
+  a participant-level file pushed once stays public in the history even
+  after a later commit removes it. On 2026-11-02 the history held none (no
+  participant-level file, identifier column or ADNI subject ID in any of
+  its 484 file versions).
+- The cluster clones it over plain HTTPS as it does the template; no deploy
+  key or token is needed. `/home1/tgonza/adni_sexdiff` already holds
+  `data/`, so the clone is made in place (`git init`, `git remote add
+  origin https://github.com/Omnia-Lab-UC/adni_sexdiff.git`, `git fetch
+  origin`, `git checkout -b main --track origin/main`; `data/` is
+  ignored). Making it is the user's task, not an agent's.
 
 ## Layout
 
@@ -1610,8 +1617,8 @@ behavior or defaults change.
 
 ## Cluster (`cluster.ing.uc.cl`)
 
-- Repo clone at `/home1/tgonza/adni_sexdiff` (needs the deploy key or token
-  of constraint 7); raw data canonical at `/home1/tgonza/adni_sexdiff/data`,
+- Repo clone at `/home1/tgonza/adni_sexdiff` (over HTTPS, made in place
+  around `data/`, constraint 7); raw data canonical at `/home1/tgonza/adni_sexdiff/data`,
   uploaded by hand; `uv sync --locked` on the login node (uv in
   `~/.local/bin`; MOTCO is fetched from public GitHub there).
 - Partition `512x1024`, no scratch. Avoid the `full` partition: node n14 has
