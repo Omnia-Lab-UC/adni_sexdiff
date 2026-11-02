@@ -1,0 +1,148 @@
+key,quantity,value,source,field
+alpha,ANALYSIS_ALPHA,0.05,constants.ANALYSIS_ALPHA,ANALYSIS_ALPHA
+primary|delta|p,the primary's RRPP p-value,0.1116,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=primary:delta_p
+primary|delta|rejected,the primary's rejection,False,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=primary:delta_rejected
+primary|angle|p,the primary's RRPP p-value,0.6879,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=primary:angle_p
+primary|angle|rejected,the primary's rejection,False,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=primary:angle_rejected
+primary|shape|p,the primary's RRPP p-value,0.7105,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=primary:shape_p
+primary|shape|rejected,the primary's rejection,False,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=primary:shape_rejected
+latent_stage|selected_rank,rank,4,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:selected_rank
+latent_stage|delta|p,RRPP p-value,0.0568,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:delta_p
+latent_stage|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:delta_rejected
+latent_stage|delta|status,status against the primary,same,results/motco_latent_sensitivity/comparison/latent_sensitivity_manifest.json,counts.statuses.delta
+latent_stage|angle|p,RRPP p-value,0.7244,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:angle_p
+latent_stage|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:angle_rejected
+latent_stage|angle|status,status against the primary,same,results/motco_latent_sensitivity/comparison/latent_sensitivity_manifest.json,counts.statuses.angle
+latent_stage|shape|p,RRPP p-value,0.6402,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:shape_p
+latent_stage|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_latent_sensitivity/comparison/latent_sensitivity.csv,analysis=latent_stage:shape_rejected
+latent_stage|shape|status,status against the primary,same,results/motco_latent_sensitivity/comparison/latent_sensitivity_manifest.json,counts.statuses.shape
+nist_bridge|selected_rank,rank,6,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:selected_rank
+nist_bridge|delta|p,RRPP p-value,0.1366,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:delta_p
+nist_bridge|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:delta_rejected
+nist_bridge|delta|status,status against the primary,same,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity_manifest.json,counts.statuses.delta
+nist_bridge|angle|p,RRPP p-value,0.7569,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:angle_p
+nist_bridge|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:angle_rejected
+nist_bridge|angle|status,status against the primary,same,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity_manifest.json,counts.statuses.angle
+nist_bridge|shape|p,RRPP p-value,0.9048,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:shape_p
+nist_bridge|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity.csv,analysis=nist_bridge:shape_rejected
+nist_bridge|shape|status,status against the primary,same,results/motco_export_sensitivity/nist_bridge/comparison/export_sensitivity_manifest.json,counts.statuses.shape
+per_run_standardized|selected_rank,rank,4,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:selected_rank
+per_run_standardized|delta|p,RRPP p-value,0.0526,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:delta_p
+per_run_standardized|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:delta_rejected
+per_run_standardized|delta|status,status against the primary,same,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity_manifest.json,counts.statuses.delta
+per_run_standardized|angle|p,RRPP p-value,0.718,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:angle_p
+per_run_standardized|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:angle_rejected
+per_run_standardized|angle|status,status against the primary,same,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity_manifest.json,counts.statuses.angle
+per_run_standardized|shape|p,RRPP p-value,0.6978,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:shape_p
+per_run_standardized|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity.csv,analysis=per_run_standardized:shape_rejected
+per_run_standardized|shape|status,status against the primary,same,results/motco_export_sensitivity/per_run_standardized/comparison/export_sensitivity_manifest.json,counts.statuses.shape
+nmr_all_columns|selected_rank,rank,7,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:selected_rank
+nmr_all_columns|delta|p,RRPP p-value,0.0447,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:delta_p
+nmr_all_columns|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,True,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:delta_rejected
+nmr_all_columns|delta|status,status against the primary,differs (feature-membership dependence),results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity_manifest.json,counts.statuses.delta
+nmr_all_columns|angle|p,RRPP p-value,0.6815,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:angle_p
+nmr_all_columns|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:angle_rejected
+nmr_all_columns|angle|status,status against the primary,same,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity_manifest.json,counts.statuses.angle
+nmr_all_columns|shape|p,RRPP p-value,0.9533,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:shape_p
+nmr_all_columns|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity.csv,analysis=nmr_all_columns:shape_rejected
+nmr_all_columns|shape|status,status against the primary,same,results/motco_export_sensitivity/nmr_all_columns/comparison/export_sensitivity_manifest.json,counts.statuses.shape
+raw_scale|selected_rank,rank,7,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:selected_rank
+raw_scale|delta|p,RRPP p-value,0.1182,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:delta_p
+raw_scale|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:delta_rejected
+raw_scale|delta|status,status against the primary,same,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity_manifest.json,counts.statuses.delta
+raw_scale|angle|p,RRPP p-value,0.5027,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:angle_p
+raw_scale|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:angle_rejected
+raw_scale|angle|status,status against the primary,same,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity_manifest.json,counts.statuses.angle
+raw_scale|shape|p,RRPP p-value,0.6188,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:shape_p
+raw_scale|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity.csv,analysis=raw_scale:shape_rejected
+raw_scale|shape|status,status against the primary,same,results/motco_export_sensitivity/raw_scale/comparison/export_sensitivity_manifest.json,counts.statuses.shape
+log2_plus_one|selected_rank,rank,8,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:selected_rank
+log2_plus_one|delta|p,RRPP p-value,0.1263,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:delta_p
+log2_plus_one|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:delta_rejected
+log2_plus_one|delta|status,status against the primary,same,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity_manifest.json,counts.statuses.delta
+log2_plus_one|angle|p,RRPP p-value,0.5654,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:angle_p
+log2_plus_one|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:angle_rejected
+log2_plus_one|angle|status,status against the primary,same,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity_manifest.json,counts.statuses.angle
+log2_plus_one|shape|p,RRPP p-value,0.7029,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:shape_p
+log2_plus_one|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity.csv,analysis=log2_plus_one:shape_rejected
+log2_plus_one|shape|status,status against the primary,same,results/motco_export_sensitivity/log2_plus_one/comparison/export_sensitivity_manifest.json,counts.statuses.shape
+glog|selected_rank,rank,7,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:selected_rank
+glog|delta|p,RRPP p-value,0.2127,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:delta_p
+glog|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:delta_rejected
+glog|delta|status,status against the primary,same,results/motco_export_sensitivity/glog/comparison/export_sensitivity_manifest.json,counts.statuses.delta
+glog|angle|p,RRPP p-value,0.7251,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:angle_p
+glog|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:angle_rejected
+glog|angle|status,status against the primary,same,results/motco_export_sensitivity/glog/comparison/export_sensitivity_manifest.json,counts.statuses.angle
+glog|shape|p,RRPP p-value,0.7625,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:shape_p
+glog|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_export_sensitivity/glog/comparison/export_sensitivity.csv,analysis=glog:shape_rejected
+glog|shape|status,status against the primary,same,results/motco_export_sensitivity/glog/comparison/export_sensitivity_manifest.json,counts.statuses.shape
+cn_lmci_ad|selected_rank,rank,6,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:selected_rank
+cn_lmci_ad|delta|p,RRPP p-value,0.188,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:delta_p
+cn_lmci_ad|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:delta_rejected
+cn_lmci_ad|delta|status,status against the primary,same,results/motco_stage_sensitivity/comparison/stage_sensitivity_manifest.json,counts.statuses.delta
+cn_lmci_ad|angle|p,RRPP p-value,0.5702,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:angle_p
+cn_lmci_ad|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:angle_rejected
+cn_lmci_ad|angle|status,status against the primary,same,results/motco_stage_sensitivity/comparison/stage_sensitivity_manifest.json,counts.statuses.angle
+cn_lmci_ad|shape|p,RRPP p-value,0.9853,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:shape_p
+cn_lmci_ad|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_stage_sensitivity/comparison/stage_sensitivity.csv,analysis=cn_lmci_ad:shape_rejected
+cn_lmci_ad|shape|status,status against the primary,same,results/motco_stage_sensitivity/comparison/stage_sensitivity_manifest.json,counts.statuses.shape
+rank_02|selected_rank,rank,2,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:selected_rank
+rank_02|delta|p,RRPP p-value,0.5533,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:delta_p
+rank_02|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:delta_rejected
+rank_02|delta|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_02.delta
+rank_02|angle|p,RRPP p-value,0.2758,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:angle_p
+rank_02|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:angle_rejected
+rank_02|angle|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_02.angle
+rank_02|shape|p,RRPP p-value,0.4099,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:shape_p
+rank_02|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_02:shape_rejected
+rank_02|shape|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_02.shape
+rank_03|selected_rank,rank,3,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:selected_rank
+rank_03|delta|p,RRPP p-value,0.1738,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:delta_p
+rank_03|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:delta_rejected
+rank_03|delta|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_03.delta
+rank_03|angle|p,RRPP p-value,0.5433,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:angle_p
+rank_03|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:angle_rejected
+rank_03|angle|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_03.angle
+rank_03|shape|p,RRPP p-value,0.8699,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:shape_p
+rank_03|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_03:shape_rejected
+rank_03|shape|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_03.shape
+rank_04|selected_rank,rank,4,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:selected_rank
+rank_04|delta|p,RRPP p-value,0.0733,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:delta_p
+rank_04|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:delta_rejected
+rank_04|delta|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_04.delta
+rank_04|angle|p,RRPP p-value,0.5697,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:angle_p
+rank_04|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:angle_rejected
+rank_04|angle|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_04.angle
+rank_04|shape|p,RRPP p-value,0.8421,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:shape_p
+rank_04|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_04:shape_rejected
+rank_04|shape|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_04.shape
+rank_06|selected_rank,rank,6,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:selected_rank
+rank_06|delta|p,RRPP p-value,0.0471,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:delta_p
+rank_06|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,True,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:delta_rejected
+rank_06|delta|status,status against the primary,differs (rank dependence),results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_06.delta
+rank_06|angle|p,RRPP p-value,0.6699,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:angle_p
+rank_06|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:angle_rejected
+rank_06|angle|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_06.angle
+rank_06|shape|p,RRPP p-value,0.7848,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:shape_p
+rank_06|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_06:shape_rejected
+rank_06|shape|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_06.shape
+rank_09|selected_rank,rank,9,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:selected_rank
+rank_09|delta|p,RRPP p-value,0.1075,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:delta_p
+rank_09|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:delta_rejected
+rank_09|delta|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_09.delta
+rank_09|angle|p,RRPP p-value,0.6483,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:angle_p
+rank_09|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:angle_rejected
+rank_09|angle|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_09.angle
+rank_09|shape|p,RRPP p-value,0.7442,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:shape_p
+rank_09|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_09:shape_rejected
+rank_09|shape|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_09.shape
+rank_12|selected_rank,rank,12,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:selected_rank
+rank_12|delta|p,RRPP p-value,0.1212,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:delta_p
+rank_12|delta|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:delta_rejected
+rank_12|delta|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_12.delta
+rank_12|angle|p,RRPP p-value,0.7098,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:angle_p
+rank_12|angle|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:angle_rejected
+rank_12|angle|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_12.angle
+rank_12|shape|p,RRPP p-value,0.6914,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:shape_p
+rank_12|shape|rejected,rejected under ANALYSIS_REJECTION_RULE,False,results/motco_rank_sensitivity/comparison/rank_sensitivity.csv,analysis=rank_12:shape_rejected
+rank_12|shape|status,status against the primary,same,results/motco_rank_sensitivity/comparison/rank_sensitivity_manifest.json,counts.statuses.rank_12.shape

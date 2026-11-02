@@ -1,0 +1,23 @@
+key,quantity,value,source,field
+alpha,ANALYSIS_ALPHA,0.05,constants.ANALYSIS_ALPHA,ANALYSIS_ALPHA
+delta|null_q50,RRPP null q50,0.46647133592899026,results/motco_analysis/result.json,null_summary.delta.q50
+delta|null_q95,RRPP null q95,1.3709377443310053,results/motco_analysis/result.json,null_summary.delta.q95
+delta|null_q99,RRPP null q99,1.81790223827047,results/motco_analysis/result.json,null_summary.delta.q99
+delta|observed,observed statistic,1.1027865085817625,results/motco_analysis/result.json,statistics.delta
+delta|p,RRPP p-value,0.1116,results/motco_analysis/result.json,p_values.delta
+delta|max_rate,highest rejection rate measured at this design,0.53,references/motco_adni_design/adni_design_decision.json,power.delta.max_rate
+delta|floor,power floor of the decision,0.8,references/motco_adni_design/adni_design_decision.json,power.delta.floor
+angle|null_q50,RRPP null q50,19.846333483888387,results/motco_analysis/result.json,null_summary.angle.q50
+angle|null_q95,RRPP null q95,35.439893040594875,results/motco_analysis/result.json,null_summary.angle.q95
+angle|null_q99,RRPP null q99,43.10069763674057,results/motco_analysis/result.json,null_summary.angle.q99
+angle|observed,observed statistic,16.54057137018362,results/motco_analysis/result.json,statistics.angle
+angle|p,RRPP p-value,0.6879,results/motco_analysis/result.json,p_values.angle
+angle|max_rate,highest rejection rate measured at this design,0.076,references/motco_adni_design/adni_design_decision.json,power.angle.max_rate
+angle|floor,power floor of the decision,0.8,references/motco_adni_design/adni_design_decision.json,power.angle.floor
+shape|null_q50,RRPP null q50,0.15327700307791034,results/motco_analysis/result.json,null_summary.shape.q50
+shape|null_q95,RRPP null q95,0.3227987555478926,results/motco_analysis/result.json,null_summary.shape.q95
+shape|null_q99,RRPP null q99,0.4003215185474242,results/motco_analysis/result.json,null_summary.shape.q99
+shape|observed,observed statistic,0.10735476247507846,results/motco_analysis/result.json,statistics.shape
+shape|p,RRPP p-value,0.7105,results/motco_analysis/result.json,p_values.shape
+shape|max_rate,highest rejection rate measured at this design,0.062,references/motco_adni_design/adni_design_decision.json,power.shape.max_rate
+shape|floor,power floor of the decision,0.8,references/motco_adni_design/adni_design_decision.json,power.shape.floor

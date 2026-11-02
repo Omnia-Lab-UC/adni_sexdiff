@@ -1,0 +1,92 @@
+key,quantity,value,source,field
+rank_02|rank,PLS-DA rank,2,results/motco_rank_sensitivity/rank_02/result.json,latent.selected_lv
+rank_02|delta|null_q50,RRPP null q50,0.47803112009371906,results/motco_rank_sensitivity/rank_02/result.json,null_summary.delta.q50
+rank_02|delta|null_q95,RRPP null q95,1.4192541570631985,results/motco_rank_sensitivity/rank_02/result.json,null_summary.delta.q95
+rank_02|delta|null_q99,RRPP null q99,1.8815872019197981,results/motco_rank_sensitivity/rank_02/result.json,null_summary.delta.q99
+rank_02|delta|observed,observed statistic,0.4203213856832779,results/motco_rank_sensitivity/rank_02/result.json,statistics.delta
+rank_02|angle|null_q50,RRPP null q50,13.564023795209208,results/motco_rank_sensitivity/rank_02/result.json,null_summary.angle.q50
+rank_02|angle|null_q95,RRPP null q95,43.82808430658294,results/motco_rank_sensitivity/rank_02/result.json,null_summary.angle.q95
+rank_02|angle|null_q99,RRPP null q99,60.53146379596801,results/motco_rank_sensitivity/rank_02/result.json,null_summary.angle.q99
+rank_02|angle|observed,observed statistic,22.690843319686717,results/motco_rank_sensitivity/rank_02/result.json,statistics.angle
+rank_02|shape|null_q50,RRPP null q50,0.28671345373239027,results/motco_rank_sensitivity/rank_02/result.json,null_summary.shape.q50
+rank_02|shape|null_q95,RRPP null q95,0.6350709288017164,results/motco_rank_sensitivity/rank_02/result.json,null_summary.shape.q95
+rank_02|shape|null_q99,RRPP null q99,0.7918808754448369,results/motco_rank_sensitivity/rank_02/result.json,null_summary.shape.q99
+rank_02|shape|observed,observed statistic,0.3282013818959221,results/motco_rank_sensitivity/rank_02/result.json,statistics.shape
+rank_03|rank,PLS-DA rank,3,results/motco_rank_sensitivity/rank_03/result.json,latent.selected_lv
+rank_03|delta|null_q50,RRPP null q50,0.5497026495480095,results/motco_rank_sensitivity/rank_03/result.json,null_summary.delta.q50
+rank_03|delta|null_q95,RRPP null q95,1.6196906252121315,results/motco_rank_sensitivity/rank_03/result.json,null_summary.delta.q95
+rank_03|delta|null_q99,RRPP null q99,2.0973499405703766,results/motco_rank_sensitivity/rank_03/result.json,null_summary.delta.q99
+rank_03|delta|observed,observed statistic,1.1139374362888752,results/motco_rank_sensitivity/rank_03/result.json,statistics.delta
+rank_03|angle|null_q50,RRPP null q50,18.84856827957068,results/motco_rank_sensitivity/rank_03/result.json,null_summary.angle.q50
+rank_03|angle|null_q95,RRPP null q95,42.330356959133184,results/motco_rank_sensitivity/rank_03/result.json,null_summary.angle.q95
+rank_03|angle|null_q99,RRPP null q99,53.450821156304066,results/motco_rank_sensitivity/rank_03/result.json,null_summary.angle.q99
+rank_03|angle|observed,observed statistic,17.607458822426185,results/motco_rank_sensitivity/rank_03/result.json,statistics.angle
+rank_03|shape|null_q50,RRPP null q50,0.24855635785525088,results/motco_rank_sensitivity/rank_03/result.json,null_summary.shape.q50
+rank_03|shape|null_q95,RRPP null q95,0.5090078722453075,results/motco_rank_sensitivity/rank_03/result.json,null_summary.shape.q95
+rank_03|shape|null_q99,RRPP null q99,0.6329398021722678,results/motco_rank_sensitivity/rank_03/result.json,null_summary.shape.q99
+rank_03|shape|observed,observed statistic,0.11122338823432808,results/motco_rank_sensitivity/rank_03/result.json,statistics.shape
+rank_04|rank,PLS-DA rank,4,results/motco_rank_sensitivity/rank_04/result.json,latent.selected_lv
+rank_04|delta|null_q50,RRPP null q50,0.5299971375283024,results/motco_rank_sensitivity/rank_04/result.json,null_summary.delta.q50
+rank_04|delta|null_q95,RRPP null q95,1.544805003894888,results/motco_rank_sensitivity/rank_04/result.json,null_summary.delta.q95
+rank_04|delta|null_q99,RRPP null q99,2.015055864768528,results/motco_rank_sensitivity/rank_04/result.json,null_summary.delta.q99
+rank_04|delta|observed,observed statistic,1.3953277393537,results/motco_rank_sensitivity/rank_04/result.json,statistics.delta
+rank_04|angle|null_q50,RRPP null q50,17.322960012474862,results/motco_rank_sensitivity/rank_04/result.json,null_summary.angle.q50
+rank_04|angle|null_q95,RRPP null q95,35.866573036095375,results/motco_rank_sensitivity/rank_04/result.json,null_summary.angle.q95
+rank_04|angle|null_q99,RRPP null q99,44.89064814685,results/motco_rank_sensitivity/rank_04/result.json,null_summary.angle.q99
+rank_04|angle|observed,observed statistic,15.794932551859802,results/motco_rank_sensitivity/rank_04/result.json,statistics.angle
+rank_04|shape|null_q50,RRPP null q50,0.20468109204411467,results/motco_rank_sensitivity/rank_04/result.json,null_summary.shape.q50
+rank_04|shape|null_q95,RRPP null q95,0.4227410098233091,results/motco_rank_sensitivity/rank_04/result.json,null_summary.shape.q95
+rank_04|shape|null_q99,RRPP null q99,0.5223670411733264,results/motco_rank_sensitivity/rank_04/result.json,null_summary.shape.q99
+rank_04|shape|observed,observed statistic,0.10038549704436636,results/motco_rank_sensitivity/rank_04/result.json,statistics.shape
+rank_06|rank,PLS-DA rank,6,results/motco_rank_sensitivity/rank_06/result.json,latent.selected_lv
+rank_06|delta|null_q50,RRPP null q50,0.4962954399554613,results/motco_rank_sensitivity/rank_06/result.json,null_summary.delta.q50
+rank_06|delta|null_q95,RRPP null q95,1.4559011598785745,results/motco_rank_sensitivity/rank_06/result.json,null_summary.delta.q95
+rank_06|delta|null_q99,RRPP null q99,1.9095437506191622,results/motco_rank_sensitivity/rank_06/result.json,null_summary.delta.q99
+rank_06|delta|observed,observed statistic,1.4741550651418134,results/motco_rank_sensitivity/rank_06/result.json,statistics.delta
+rank_06|angle|null_q50,RRPP null q50,18.930202165987176,results/motco_rank_sensitivity/rank_06/result.json,null_summary.angle.q50
+rank_06|angle|null_q95,RRPP null q95,35.26764067099265,results/motco_rank_sensitivity/rank_06/result.json,null_summary.angle.q95
+rank_06|angle|null_q99,RRPP null q99,43.138544269884484,results/motco_rank_sensitivity/rank_06/result.json,null_summary.angle.q99
+rank_06|angle|observed,observed statistic,15.679107235687031,results/motco_rank_sensitivity/rank_06/result.json,statistics.angle
+rank_06|shape|null_q50,RRPP null q50,0.1744489218904069,results/motco_rank_sensitivity/rank_06/result.json,null_summary.shape.q50
+rank_06|shape|null_q95,RRPP null q95,0.3632611704984232,results/motco_rank_sensitivity/rank_06/result.json,null_summary.shape.q95
+rank_06|shape|null_q99,RRPP null q99,0.44957219752673944,results/motco_rank_sensitivity/rank_06/result.json,null_summary.shape.q99
+rank_06|shape|observed,observed statistic,0.10303005980161649,results/motco_rank_sensitivity/rank_06/result.json,statistics.shape
+primary|rank,PLS-DA rank,8,results/motco_analysis/result.json,latent.selected_lv
+primary|delta|null_q50,RRPP null q50,0.46647133592899026,results/motco_analysis/result.json,null_summary.delta.q50
+primary|delta|null_q95,RRPP null q95,1.3709377443310053,results/motco_analysis/result.json,null_summary.delta.q95
+primary|delta|null_q99,RRPP null q99,1.81790223827047,results/motco_analysis/result.json,null_summary.delta.q99
+primary|delta|observed,observed statistic,1.1027865085817625,results/motco_analysis/result.json,statistics.delta
+primary|angle|null_q50,RRPP null q50,19.846333483888387,results/motco_analysis/result.json,null_summary.angle.q50
+primary|angle|null_q95,RRPP null q95,35.439893040594875,results/motco_analysis/result.json,null_summary.angle.q95
+primary|angle|null_q99,RRPP null q99,43.10069763674057,results/motco_analysis/result.json,null_summary.angle.q99
+primary|angle|observed,observed statistic,16.54057137018362,results/motco_analysis/result.json,statistics.angle
+primary|shape|null_q50,RRPP null q50,0.15327700307791034,results/motco_analysis/result.json,null_summary.shape.q50
+primary|shape|null_q95,RRPP null q95,0.3227987555478926,results/motco_analysis/result.json,null_summary.shape.q95
+primary|shape|null_q99,RRPP null q99,0.4003215185474242,results/motco_analysis/result.json,null_summary.shape.q99
+primary|shape|observed,observed statistic,0.10735476247507846,results/motco_analysis/result.json,statistics.shape
+rank_09|rank,PLS-DA rank,9,results/motco_rank_sensitivity/rank_09/result.json,latent.selected_lv
+rank_09|delta|null_q50,RRPP null q50,0.4540217370003443,results/motco_rank_sensitivity/rank_09/result.json,null_summary.delta.q50
+rank_09|delta|null_q95,RRPP null q95,1.3532695126409866,results/motco_rank_sensitivity/rank_09/result.json,null_summary.delta.q95
+rank_09|delta|null_q99,RRPP null q99,1.7861813575773333,results/motco_rank_sensitivity/rank_09/result.json,null_summary.delta.q99
+rank_09|delta|observed,observed statistic,1.0959591467741525,results/motco_rank_sensitivity/rank_09/result.json,statistics.delta
+rank_09|angle|null_q50,RRPP null q50,20.0237049267148,results/motco_rank_sensitivity/rank_09/result.json,null_summary.angle.q50
+rank_09|angle|null_q95,RRPP null q95,35.26392007336992,results/motco_rank_sensitivity/rank_09/result.json,null_summary.angle.q95
+rank_09|angle|null_q99,RRPP null q99,43.06125730415034,results/motco_rank_sensitivity/rank_09/result.json,null_summary.angle.q99
+rank_09|angle|observed,observed statistic,17.48374487452198,results/motco_rank_sensitivity/rank_09/result.json,statistics.angle
+rank_09|shape|null_q50,RRPP null q50,0.14846235335090813,results/motco_rank_sensitivity/rank_09/result.json,null_summary.shape.q50
+rank_09|shape|null_q95,RRPP null q95,0.3131634428964078,results/motco_rank_sensitivity/rank_09/result.json,null_summary.shape.q95
+rank_09|shape|null_q99,RRPP null q99,0.3908429029349595,results/motco_rank_sensitivity/rank_09/result.json,null_summary.shape.q99
+rank_09|shape|observed,observed statistic,0.09649670226169808,results/motco_rank_sensitivity/rank_09/result.json,statistics.shape
+rank_12|rank,PLS-DA rank,12,results/motco_rank_sensitivity/rank_12/result.json,latent.selected_lv
+rank_12|delta|null_q50,RRPP null q50,0.4419368239600203,results/motco_rank_sensitivity/rank_12/result.json,null_summary.delta.q50
+rank_12|delta|null_q95,RRPP null q95,1.3147497929599061,results/motco_rank_sensitivity/rank_12/result.json,null_summary.delta.q95
+rank_12|delta|null_q99,RRPP null q99,1.7255327589679417,results/motco_rank_sensitivity/rank_12/result.json,null_summary.delta.q99
+rank_12|delta|observed,observed statistic,1.0329531798415572,results/motco_rank_sensitivity/rank_12/result.json,statistics.delta
+rank_12|angle|null_q50,RRPP null q50,20.77374484058794,results/motco_rank_sensitivity/rank_12/result.json,null_summary.angle.q50
+rank_12|angle|null_q95,RRPP null q95,35.275658667670704,results/motco_rank_sensitivity/rank_12/result.json,null_summary.angle.q95
+rank_12|angle|null_q99,RRPP null q99,42.76263891343554,results/motco_rank_sensitivity/rank_12/result.json,null_summary.angle.q99
+rank_12|angle|observed,observed statistic,17.422404498425628,results/motco_rank_sensitivity/rank_12/result.json,statistics.angle
+rank_12|shape|null_q50,RRPP null q50,0.13984115213086196,results/motco_rank_sensitivity/rank_12/result.json,null_summary.shape.q50
+rank_12|shape|null_q95,RRPP null q95,0.295945378651968,results/motco_rank_sensitivity/rank_12/result.json,null_summary.shape.q95
+rank_12|shape|null_q99,RRPP null q99,0.3653004779055458,results/motco_rank_sensitivity/rank_12/result.json,null_summary.shape.q99
+rank_12|shape|observed,observed statistic,0.10135497082168372,results/motco_rank_sensitivity/rank_12/result.json,statistics.shape
