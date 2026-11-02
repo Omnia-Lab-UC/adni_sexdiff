@@ -108,8 +108,9 @@ No task line records a participant value.
 
 ## 5. The real runs and commit hygiene (data machine)
 
-- [ ] 5.1 Commit the implementation, the docs, the spike script and the change's artifacts on the branch `adni-scale-variants`, created from `main`. Verify that `git status` is clean and that no file under `results/` or `reports/` changed.
-- [ ] 5.2 On the clean tree at that commit, for each variant in registry order (`raw_scale`, `log2_plus_one`, `glog`): run `export-sensitivity --variant <name>` pinned at `n_jobs = 1`, then `axis-diagnostics --input-dir results/motco_export_sensitivity/<name>/motco_input --analysis-dir results/motco_export_sensitivity/<name>/analysis --out-dir results/motco_export_sensitivity/<name>/diagnostics`. Verify, per variant:
+- [x] 5.1 Commit the implementation, the docs, the spike script and the change's artifacts on the branch `adni-scale-variants`, created from `main`. Verify that `git status` is clean and that no file under `results/` or `reports/` changed.
+  Done 2026-11-02: committed as 237e916 on `adni-scale-variants`, on top of the proposal commit c0ad0ef, which holds the spike script and the change's artifacts. `git status` was clean afterwards, and the commit touches no file under `results/` or `reports/`.
+- [x] 5.2 On the clean tree at that commit, for each variant in registry order (`raw_scale`, `log2_plus_one`, `glog`): run `export-sensitivity --variant <name>` pinned at `n_jobs = 1`, then `axis-diagnostics --input-dir results/motco_export_sensitivity/<name>/motco_input --analysis-dir results/motco_export_sensitivity/<name>/analysis --out-dir results/motco_export_sensitivity/<name>/diagnostics`. Verify, per variant:
   - no deviation from `EXPORT_VARIANT_EXPECTED_COUNTS[<name>]` in the export, analysis and comparison manifests, nor from the rank-independent keys in the diagnostics manifest;
   - the export counts equal the spike's;
   - `metadata.csv` and `covariates.csv` equal the primary's;
@@ -118,11 +119,32 @@ No task line records a participant value.
   - the tracked files of the primary, the latent arm, the three registered variants, the CN / LMCI / AD arm and the rank sweep are unchanged (sha256 before and after).
 
   Record the hostname, and point to the committed files for each variant's rank, statistics and statuses: none is written in this line.
-- [ ] 5.3 Rerun 5.2's `export-sensitivity` for each variant with `--force` on the same clean tree, with the first run's `diagnostics/` moved aside, then move it back. Verify that every non-JSON file is byte-identical to the first run's, and that the manifests and `result.json` differ only in time, revision, runtime and the hashes of the files that carry them. Record the outcome per variant in this line.
-- [ ] 5.4 Commit the outputs. Before the commit, name every file added under `results/motco_export_sensitivity/<name>/` for the three variants with why it is aggregate: `motco_input/manifest.json`, the analysis' `result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six (15 per variant, 45 in all). Verify:
+  Done 2026-11-02 on nixos-home, on the clean tree at 237e916, one variant at a time (export-sensitivity 108 s, 102 s and 83 s). A scratch script ran 61 of 61 checks:
+  - the export, analysis, comparison and diagnostics manifests have no deviation, are pinned and record a clean revision at `n_jobs` 1;
+  - per block, the run offset (median |d|, |corr(PC1, phase)|) and the spectrum (PC1 share, effective rank) equal the spike's to three decimals;
+  - `metadata.csv` and `covariates.csv` equal the primary's;
+  - the diagnostics read the variant (`export_variant`, `is_primary` false), expect the rank-independent keys with 165 NMR features, and the hashes they record equal the export and analysis files on disk;
+  - the 135 tracked files under `results/` and `reports/` from before the runs are unchanged.
+
+  Each variant's rank, statistics and statuses are in its committed `comparison/export_sensitivity.md` and `export_sensitivity_manifest.json`.
+- [x] 5.3 Rerun 5.2's `export-sensitivity` for each variant with `--force` on the same clean tree, with the first run's `diagnostics/` moved aside, then move it back. Verify that every non-JSON file is byte-identical to the first run's, and that the manifests and `result.json` differ only in time, revision, runtime and the hashes of the files that carry them. Record the outcome per variant in this line.
+  Done 2026-11-02 on nixos-home, same tree. The first run's 23 files per variant were copied to the scratchpad, and its `diagnostics/` moved there. One step differs from the wording above: after each `--force` rerun, `axis-diagnostics` was rerun on the second run instead of moving the first run's diagnostics back. A diagnostics manifest records the hashes of the analysis' `result.json` and `analysis_manifest.json`, which carry the runtime and time, so only the second run's diagnostics chain to the committed second-run analysis (the committed `nmr_all_columns` diagnostics record its second run's hashes too). Per variant (`raw_scale`, `log2_plus_one`, `glog`):
+  - the same 23 files, and the 18 non-JSON files are byte-identical, the diagnostics' included;
+  - the JSON files differ only in 9 time, runtime and numerics keys, and in 17, 17 and 12 sha256 and bytes keys of `result.json` and the manifests that carry them;
+  - the revision is the same and no stale-diagnostics finding appears.
+
+  The second run's files are the ones committed. The scratch copies were deleted.
+- [x] 5.4 Commit the outputs. Before the commit, name every file added under `results/motco_export_sensitivity/<name>/` for the three variants with why it is aggregate: `motco_input/manifest.json`, the analysis' `result.json`, `pls_loadings.csv`, `stage_means.csv`, `analysis_manifest.json` and `summary.md`, the comparison's three files and the diagnostics' six (15 per variant, 45 in all). Verify:
   - `git check-ignore` matches the participant-level files of each variant: the four export CSVs, the two feature tables, `latent_scores.csv` and `analysis_metadata.csv`;
   - no staged CSV has an `rid` or `RID` column, and `grep -w` finds `rid` only as a column name;
   - `report --check` on `reports/motco-adni-2026-11-02.md` still passes with no mismatch and prints the three uncovered-variant lines;
+  - `openspec validate adni-scale-variants --strict` passes.
+
+  Done 2026-11-02, committed as 787861d; its message names the 15 files per variant and why each is aggregate. Verified:
+  - `git check-ignore` matches all 24 participant-level files (8 per variant);
+  - the staged CSV headers are `block`/`feature`, `group`/`stage`, `analysis` and the diagnostics' `component`/`quantity`, never `rid` or `RID`;
+  - `grep -w` finds `rid` only as the sample column's name (`sample_column`, `sample_col`, and the `--sample-col` argument of `cli_equivalent`);
+  - `report --check` on `reports/motco-adni-2026-11-02.md` passes with no mismatch (89 tables, 5418 cells, 929 other lines) and prints the three uncovered-variant lines;
   - `openspec validate adni-scale-variants --strict` passes.
 
 ## Workflow follow-up
