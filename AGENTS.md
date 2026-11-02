@@ -909,11 +909,26 @@ behavior or defaults change.
   participant-level file, identifier column or ADNI subject ID in any of
   its 484 file versions).
 - The cluster clones it over plain HTTPS as it does the template; no deploy
-  key or token is needed. `/home1/tgonza/adni_sexdiff` already holds
-  `data/`, so the clone is made in place (`git init`, `git remote add
-  origin https://github.com/Omnia-Lab-UC/adni_sexdiff.git`, `git fetch
-  origin`, `git checkout -b main --track origin/main`; `data/` is
-  ignored). Making it is the user's task, not an agent's.
+  key or token is needed. Since 2026-11-02 (the user's decision) an agent
+  may make the clone and work in it through the user's SSH access
+  (`ssh ing`, `tgonza@cluster.ing.uc.cl`): clone and fetch, `uv sync
+  --locked`, run the light steps on the login node and the others through
+  the sbatch scripts, and pull aggregate outputs with
+  `scripts/sync_results.sh`. Constraints 1 and 2 bind there as everywhere:
+  an agent never copies a raw ADNI file, a cleaned matrix, a MOTCO input
+  or any other participant-level file to, from or off the cluster, never
+  prints one, never uploads the data root (that stays the user's) and
+  never pushes from the cluster. A branch that is not on GitHub yet
+  reaches the clone as a git bundle copied over SSH, never by a push the
+  user has not asked for. Before writing there an agent looks at the
+  target, and it never deletes or overwrites a file it did not make. When
+  `/home1/tgonza/adni_sexdiff` holds `data/`, the clone is made in place
+  (`git init`, `git remote add origin
+  https://github.com/Omnia-Lab-UC/adni_sexdiff.git`, `git fetch origin`,
+  `git checkout -b main --track origin/main`; `data/` is ignored); when the
+  directory does not exist, it is a plain `git clone` of that URL to that
+  path. On 2026-11-02 the directory did not exist, so the cluster held no
+  data root at the path constraint 2 names.
 
 ## Layout
 
@@ -1828,8 +1843,9 @@ behavior or defaults change.
 
 ## Cluster (`cluster.ing.uc.cl`)
 
-- Repo clone at `/home1/tgonza/adni_sexdiff` (over HTTPS, made in place
-  around `data/`, constraint 7); raw data canonical at `/home1/tgonza/adni_sexdiff/data`,
+- Repo clone at `/home1/tgonza/adni_sexdiff` (over HTTPS; made in place
+  around `data/` when the data root is there, else a plain clone;
+  constraint 7, which also says what an agent may do there); raw data canonical at `/home1/tgonza/adni_sexdiff/data`,
   uploaded by hand; `uv sync --locked` on the login node (uv in
   `~/.local/bin`; MOTCO is fetched from public GitHub there).
 - Partition `512x1024`, no scratch. Avoid the `full` partition: node n14 has
