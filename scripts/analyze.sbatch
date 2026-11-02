@@ -16,11 +16,12 @@
 # adjustment); none is a flag. No --n-jobs is passed, so the run uses
 # REPORTED_N_JOBS = 1 and is a reported run (AGENTS.md constraint 6).
 #
-# Prerequisites (the user's, AGENTS.md constraint 7): the repository clone at
+# Prerequisites (the user's, or an agent's at the user's request; AGENTS.md
+# constraint 7): the repository clone at
 # /home1/tgonza/adni_sexdiff, `clean` (sbatch), `cohort` and `export` run on
 # the cluster, and the environment synced on the login node (compute nodes
 # have no internet access):
-#   uv sync --locked
+#   uv sync --locked --compile-bytecode   # a compute node writes each .pyc to NFS slowly
 #   mkdir -p results/motco_analysis/logs   # Slurm needs the log directory to exist
 #   sbatch scripts/analyze.sbatch
 # An existing analysis directory stops the step; to replace it, pass --force:

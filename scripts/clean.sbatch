@@ -12,11 +12,13 @@
 # writes results/cleaned/p180/ and results/cleaned/nmr/ (participant-level
 # except each clean_manifest.json; see AGENTS.md constraint 1).
 #
-# Prerequisites (the user's, AGENTS.md constraint 7): the repository clone at
-# /home1/tgonza/adni_sexdiff, the raw files uploaded by hand into its data/
-# (the metabo_adni names as symlinks into Metabolomics/), and the environment
-# synced on the login node (compute nodes have no internet access):
-#   uv sync --locked
+# Prerequisites (the user's, or an agent's at the user's request; AGENTS.md
+# constraint 7): the repository clone at /home1/tgonza/adni_sexdiff, the data
+# root copied into its data/ (the metabo_adni names as symlinks into
+# Metabolomics/; since 2026-11-02 an owner-only rsync copy of a data
+# machine's root), and the environment synced on the login node (compute
+# nodes have no internet access):
+#   uv sync --locked --compile-bytecode   # a compute node writes each .pyc to NFS slowly
 #   mkdir -p results/cleaned/logs   # Slurm needs the log directory to exist
 #   sbatch scripts/clean.sbatch
 # An existing platform directory stops the step; to replace it, pass --force:

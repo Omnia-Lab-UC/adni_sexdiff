@@ -67,8 +67,14 @@ newest is `reports/motco-adni-2026-11-02-4.md` with
 cover fewer and have no figures). The cluster clone exists since
 2026-11-02 (`/home1/tgonza/adni_sexdiff`, a plain clone made by an agent
 under constraint 7, where `report --check` of 2026-11-02-4 passed with
-every figure); the cluster's data copy does not exist yet, so of the
-steps only `report` runs there. A data machine is
+every figure). The cluster is a data machine since the same day: its data
+root, copied at the user's request from the user's data machine, was
+rebuilt pinned into a scratch directory (`clean` on node n11 in 44
+minutes, most of it first imports writing bytecode to NFS; `cohort` and
+`export` on the login node; `analyze` on n11 in 21 minutes); every
+recorded output matched except the two named below, and the
+participant-level files are installed under `results/`.
+A data machine is
 any of the user's machines whose
 local participant-level files under `results/` (the export CSVs,
 `cohort.csv`, the primary's `latent_scores.csv` and
@@ -79,7 +85,11 @@ a data root becomes one by a pinned rebuild from it (`clean` → `cohort` →
 output the committed manifests record, and copying the participant-level
 files into the gitignored paths under `results/`. The manifests written
 before `adni-portable-numerics` record no machine, but their outputs
-reproduce pinned on any machine. Decided scientific constants:
+reproduce pinned on any machine, except two outputs that no step reads:
+the p180 `metabo_adni.log` when the environment is at another path (a
+pandas warning prints that path) and `result.json`'s
+`measurement.runtime_seconds` (with `software.python` under another
+Python). Decided scientific constants:
 `CLEAN_OPTIONS`, `COHORT_RULE`, `STAGE_RULE`, `ANALYSIS_COVARIATES`,
 `EXPORT_FEATURE_RULE`, the analysis settings (`ANALYSIS_PERMUTATIONS`,
 `ANALYSIS_SEED`, `ANALYSIS_ALPHA` with `ANALYSIS_REJECTION_RULE`,
@@ -923,10 +933,14 @@ behavior or defaults change.
   --locked`, run the light steps on the login node and the others through
   the sbatch scripts, and pull aggregate outputs with
   `scripts/sync_results.sh`. Constraints 1 and 2 bind there as everywhere:
-  an agent never copies a raw ADNI file, a cleaned matrix, a MOTCO input
-  or any other participant-level file to, from or off the cluster, never
-  prints one, never uploads the data root (that stays the user's) and
-  never pushes from the cluster. A branch that is not on GitHub yet
+  an agent never copies a cleaned matrix, a MOTCO input or any other
+  participant-level output to, from or off the cluster, never prints a
+  participant-level file and never pushes from the cluster. It copies the
+  data root there only when the user asks, from a data root whose inputs
+  hash to `RAW_INPUT_SHA256`, with `rsync -a --chmod=go-rwx` over SSH
+  (symlinks preserved, owner-only), and checks the copy on the cluster
+  (a checksum dry-run with no difference, every input against its pin);
+  raw files go nowhere else. A branch that is not on GitHub yet
   reaches the clone as a git bundle copied over SSH, never by a push the
   user has not asked for. Before writing there an agent looks at the
   target, and it never deletes or overwrites a file it did not make. When
@@ -935,8 +949,10 @@ behavior or defaults change.
   https://github.com/Omnia-Lab-UC/adni_sexdiff.git`, `git fetch origin`,
   `git checkout -b main --track origin/main`; `data/` is ignored); when the
   directory does not exist, it is a plain `git clone` of that URL to that
-  path. On 2026-11-02 the directory did not exist, so the cluster held no
-  data root at the path constraint 2 names.
+  path. On 2026-11-02 the directory did not exist: an agent made a plain
+  clone and then, at the user's request, copied the data root of the
+  user's data machine into its `data/` as above (40 files and 14
+  symlinks, 603 MB; all 14 inputs equal to their pins on the cluster).
 
 ## Layout
 
@@ -1854,8 +1870,16 @@ behavior or defaults change.
 - Repo clone at `/home1/tgonza/adni_sexdiff` (over HTTPS; made in place
   around `data/` when the data root is there, else a plain clone;
   constraint 7, which also says what an agent may do there); raw data canonical at `/home1/tgonza/adni_sexdiff/data`,
-  uploaded by hand; `uv sync --locked` on the login node (uv in
+  owner-only, copied from a data machine's root with `rsync -a` since
+  2026-11-02 (constraint 7); `uv sync --locked` on the login node (uv in
   `~/.local/bin`; MOTCO is fetched from public GitHub there).
+- On a fresh clone, compile the environment's bytecode on the login node
+  before the first job (`uv sync --locked --compile-bytecode`, or
+  `.venv/bin/python -m compileall -q -j 8 .venv/lib/python3.13/site-packages`):
+  a compute node writes each `.pyc` to the NFS `/home1` in about a second,
+  so the first `clean` (2026-11-02) spent most of its 44 minutes in its
+  first imports, while the whole environment compiled in 44 s on the login
+  node.
 - Partition `512x1024`, no scratch. Avoid the `full` partition: node n14 has
   glibc 2.17 and cannot import the numpy wheels installed from the login
   node (glibc 2.34).
