@@ -91,13 +91,15 @@ Scientific constants
     decided; a later variant or arm introduces its own by proposal. The changes
     ``adni-report`` (the ``report`` step), ``adni-report-variants`` (the
     report extended to every export variant), ``adni-report-stage-arm``
-    (the report extended to the CN / LMCI / AD arm) and
-    ``adni-report-rank-sweep`` (the report extended to the rank sweep)
-    introduce no scientific constant: their conventions
+    (the report extended to the CN / LMCI / AD arm),
+    ``adni-report-rank-sweep`` (the report extended to the rank sweep) and
+    ``adni-report-nmr-all-columns`` (``nmr_all_columns`` added to
+    ``REPORT_EXPORT_VARIANTS``, so the report covers every registered
+    variant) introduce no scientific constant: their conventions
     ``REPORT_STAGE_ARM_FILES``, ``REPORT_RANK_SWEEP_FILES``,
-    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 93
-    with the variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD arm
-    and the rank sweep) and
+    ``REPORT_INPUT_FILES`` (every file the step reads, by directory role; 106
+    with the three variants of ``REPORT_EXPORT_VARIANTS``, the CN / LMCI / AD
+    arm and the rank sweep) and
     ``REPORT_SECTIONS`` (the report's thirteen section titles, in order) are
     defined below, and the report quotes every setting by constant name from
     the manifests and every number from the records.
@@ -1771,8 +1773,11 @@ assert tuple(REPORT_RANK_SWEEP_FILES) == ("rank", *RANK_SENSITIVITY_SUBDIRS), (
 #: registered variant outside it is not read or required and leaves the
 #: report's body unchanged; ``report`` names it on a progress line. The change
 #: that adds a variant to the report extends this tuple and re-issues the
-#: report.
-REPORT_EXPORT_VARIANTS: tuple[str, ...] = ("nist_bridge", "per_run_standardized")
+#: report: ``nmr_all_columns`` by the change ``adni-report-nmr-all-columns``
+#: (design D1), so every registered variant is covered. ``report --check``
+#: compares it with the variants a report lists (its ``Export variant``
+#: headings), and a report of an earlier pin is an earlier layout.
+REPORT_EXPORT_VARIANTS: tuple[str, ...] = ("nist_bridge", "per_run_standardized", "nmr_all_columns")
 assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIANTS] == list(REPORT_EXPORT_VARIANTS), (
     "REPORT_EXPORT_VARIANTS must be a subsequence of EXPORT_VARIANTS, in registry order, each name once"
 )
@@ -1784,7 +1789,8 @@ assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIA
 #: subdirectories of ``--sensitivity-dir`` (``LATENT_SENSITIVITY_SUBDIRS``:
 #: the arm's analysis, the comparison and the arm's diagnostics), and, per
 #: variant of ``REPORT_EXPORT_VARIANTS`` in registry order (change
-#: ``adni-report-variants``; the pin, change ``adni-nmr-all-columns``), the
+#: ``adni-report-variants``; the pin, change ``adni-nmr-all-columns``; its
+#: third variant, change ``adni-report-nmr-all-columns``), the
 #: roles ``export-sensitivity/<variant>/<subdir>``
 #: of ``--export-sensitivity-dir`` (``EXPORT_SENSITIVITY_SUBDIRS`` in its
 #: order: the bridge table for a variant with hook ``factors``, the variant
@@ -1797,7 +1803,9 @@ assert [variant for variant in EXPORT_VARIANTS if variant in REPORT_EXPORT_VARIA
 #: in ladder order, named by ``RANK_SENSITIVITY_RANK_DIR``) and
 #: ``rank-sensitivity/<subdir>`` of ``--rank-sensitivity-dir`` (change
 #: ``adni-report-rank-sweep``; ``RANK_SENSITIVITY_SUBDIRS`` in its order, the
-#: files of ``REPORT_RANK_SWEEP_FILES``). All 93 are aggregate and committed;
+#: files of ``REPORT_RANK_SWEEP_FILES``). All 106 are aggregate and committed
+#: (93 before ``adni-report-nmr-all-columns`` added the 13 of
+#: ``nmr_all_columns``, which has no bridge table);
 #: no participant-level file is read, and the hashes the report quotes for
 #: one come from these manifests. No other file is read.
 REPORT_INPUT_FILES: dict[str, tuple[str, ...]] = {

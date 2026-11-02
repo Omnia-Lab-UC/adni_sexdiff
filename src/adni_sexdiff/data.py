@@ -140,7 +140,6 @@ from .constants import (
     EXPORT_SENSITIVITY_SUMMARY,
     EXPORT_SENSITIVITY_TABLE,
     EXPORT_VARIANT_EXPECTED_COUNTS,
-    EXPORT_VARIANT_READING_RULES,
     EXPORT_VARIANT_RULE_SETS,
     EXPORT_VARIANTS,
     GROUP_COLUMN,
@@ -9231,7 +9230,7 @@ _RANK_SWEEP_LABELS: dict[int | str, str] = {
 }
 
 
-#: The 29 manifests the report reads, in pipeline order: (label, role in
+#: The 33 manifests the report reads, in pipeline order: (label, role in
 #: ``REPORT_INPUT_FILES``, file name in that role); the primary's and the
 #: arm's nine, then four per variant of ``REPORT_EXPORT_VARIANTS`` in
 #: registry order, then the CN / LMCI / AD arm's four, then the rank sweep's eight
@@ -10349,175 +10348,245 @@ def _first_component_rows(analyses: list[tuple[str, dict]]) -> list[dict]:
     return rows
 
 
+#: The rule of a rule set that reads its variant against the primary only,
+#: cited in the lead of that rule set's group of "Export sensitivity" (design
+#: D3 of ``adni-report-nmr-all-columns``). ``EXPORT_VARIANT_READING_RULES``
+#: has none: its rule 5 defines how a difference between its two variants is
+#: read.
+_GROUP_PRIMARY_ONLY_RULE: dict[str, int] = {"NMR_MEMBERSHIP_READING_RULES": 8}
+
+
+def _export_variant_groups(variants: Sequence[str]) -> list[list[str]]:
+    """The variants grouped by the rule set ``EXPORT_VARIANT_RULE_SETS`` names for each, in the order each rule set first appears (design D2 of ``adni-report-nmr-all-columns``)."""
+    groups: dict[str, list[str]] = {}
+    for v in variants:
+        groups.setdefault(EXPORT_VARIANT_RULE_SETS[v]["rules"], []).append(v)
+    return list(groups.values())
+
+
+def _and_join(items: Sequence[str]) -> str:
+    """``a``, ``a and b``, ``a, b and c``."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def _export_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[str], p_status: dict) -> None:
     """The "Export sensitivity" section: the primary beside every variant of ``REPORT_EXPORT_VARIANTS`` (design D4 of ``adni-report-variants``).
 
+    The variants are grouped by their rule set (``_export_variant_groups``;
+    design D2 of ``adni-report-nmr-all-columns``): the run-handling group
+    (``nist_bridge``, ``per_run_standardized``, ``EXPORT_VARIANT_READING_RULES``)
+    and the membership group (``nmr_all_columns``,
+    ``NMR_MEMBERSHIP_READING_RULES``). A section lead names the groups when
+    the pin holds more than one. Each group has its lead, then its tables,
+    which hold the primary and that group's variants only: the first group's
+    under the titles of the report of 2026-10-31, a later group's prefixed
+    by its variant names (``nmr_all_columns: Statistics: primary and
+    variant``). Every word that depends on the variant (its rule set,
+    citation word, dependence label and what it changes and keeps) comes
+    from ``_variant_words``; the lead of a rule set with a rule that reads
+    its variant against the primary only cites it
+    (``_GROUP_PRIMARY_ONLY_RULE``).
+
     Every value is read from a variant's ``export_sensitivity.csv``, its
     comparison and export manifests, its ``result.json``, ``nist_bridge.csv``
-    and its diagnostics files; the primary's rows from the first registered
+    and its diagnostics files; a group's primary rows from its first
     variant's ``export_sensitivity.csv`` (the chain checked that every
     comparison references the primary's record now on disk). The status
     sentences are ``_export_variant_status_line`` and the variant lines
     ``_export_variant_lines``, string-equal to each ``export_sensitivity.md``.
+    The counts table leaves out the keys the steps compare themselves:
+    ``analysis`` (``export-sensitivity``), ``phase_offset`` (the run-offset
+    table) and ``diagnostics`` (``axis-diagnostics``).
     """
     dirs, manifests = inputs["dirs"], inputs["manifests"]
     primary, records = inputs["records"]["primary"], inputs["records"]["variants"]
     variants = list(REPORT_EXPORT_VARIANTS)
+    groups = _export_variant_groups(variants)
     labels = {v: _variant_labels(v) for v in variants}
     rows = {v: {r["analysis"]: r for r in inputs["tables"]["variants"][v]["comparison"].to_dict("records")} for v in variants}
-    p_row = rows[variants[0]]["primary"]
     v_rows = {v: rows[v][v] for v in variants}
     statuses = {v: manifests[labels[v]["comparison"]].get("counts", {}).get("statuses", {}) for v in variants}
     v_status = {v: {s: _rejected(records[v]["p_values"].get(s)) for s in ANALYSIS_STATISTICS} for v in variants}
     rules = _section_ref("Reading rules")
     ref_files = manifests[labels[variants[0]]["comparison"]].get("reference", {}).get("files", {})
-    b.para(
-        f"The primary (`{dirs['analysis']}`, `{ANALYSIS_RESULT}` sha256 `{ref_files.get(ANALYSIS_RESULT, {}).get('sha256')}`) beside "
-        "its predeclared export variants (`EXPORT_VARIANTS`): "
-        + "; ".join(
-            f"`{v}` (change `{EXPORT_VARIANTS[v]['change']}`: {EXPORT_VARIANTS[v]['setting']}; `{dirs[_variant_role(v, 'analysis')].parent}`)"
-            for v in variants
-        )
-        + ". Every other export and analysis setting is the primary's. Every table in this section quotes a variant and is "
-        f"read under `READING_RULES` and `EXPORT_VARIANT_READING_RULES` ({rules}): the primary row comes first and its "
-        "status is the result; a variant never replaces it (variant rule 1), and a status that differs is run-handling "
-        "dependence (variant rule 2)."
-    )
-    stat_rows = []
-    for s in ANALYSIS_STATISTICS:
-        for label, row in (("primary", p_row), *((v, v_rows[v]) for v in variants)):
-            stat_rows.append({
-                "row": f"{s} {label}", "statistic": s, "analysis": label, "observed": _num(row[f"{s}_observed"]),
-                "p (RRPP)": _num(row[f"{s}_p"]), "rejected": _yes_no(row[f"{s}_rejected"]),
-                "null mean": _num(row[f"{s}_null_mean"]), "null sd": _num(row[f"{s}_null_sd"]), "null q95": _num(row[f"{s}_null_q95"]),
-                "status": "the result" if label == "primary" else _text(statuses[label].get(s)),
-            })
-    b.table("Statistics: primary and variants", stat_rows, ["row", "statistic", "analysis", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "status"], align="lllrrlrrrl")
-    for v in variants:
-        v_row = v_rows[v]
+    primary_text = f"The primary (`{dirs['analysis']}`, `{ANALYSIS_RESULT}` sha256 `{ref_files.get(ANALYSIS_RESULT, {}).get('sha256')}`)"
+    if len(groups) > 1:
         b.para(
-            f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected "
-            f"rank, floor, eigengap and null summary (reading rule 2, variant rule 3): primary rank {_count(p_row['selected_rank'])} "
-            f"(floor {ANALYSIS_RANK_FLOOR}, pooled relative eigengap {_num(p_row['eigengap'])}); {v} rank "
-            f"{_count(v_row['selected_rank'])} (floor {ANALYSIS_RANK_FLOOR}, eigengap {_num(v_row['eigengap'])})"
-            + (
-                "; the ranks differ, which is reported, not ranked (variant rule 3)."
-                if p_row["selected_rank"] != v_row["selected_rank"] else "; the ranks are equal."
+            f"{primary_text} beside its predeclared export variants (`EXPORT_VARIANTS`), in one group per rule set "
+            "(`EXPORT_VARIANT_RULE_SETS`), in registry order: "
+            + "; ".join(
+                _and_join([f"`{v}`" for v in group]) + f" under `{_variant_words(group[0])['rules']}`" for group in groups
             )
+            + f" ({rules}). Each group's tables hold the primary and that group's variants only, the primary row first and "
+            "its status the result."
         )
-    for v in variants:
-        b.heading(f"Status per statistic: `{v}`")
-        b.bullets([
-            _export_variant_status_line(s, statuses[v].get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
-        ])
-    perms = {
-        "primary": primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {},
-        **{v: records[v].get("config_spectrum", {}).get("permutation_pooled_eigengap") or {} for v in variants},
-    }
-    all_rows = {"primary": p_row, **v_rows}
-    space_rows = [
-        {"quantity": "PLS-DA rank (selection)", **{k: f"{_count(r['selected_rank'])} (`{r['component_selection']}`)" for k, r in all_rows.items()}},
-        {"quantity": "rank floor (`ANALYSIS_RANK_FLOOR`)", **{k: str(ANALYSIS_RANK_FLOOR) for k in all_rows}},
-        {"quantity": "cv_mean_auroc", **{k: _num(r["cv_mean_auroc"]) for k, r in all_rows.items()}},
-        {"quantity": "CV repeats completed", **{k: _count(r["cv_repeats_completed"]) for k, r in all_rows.items()}},
-        {"quantity": "pooled relative eigengap", **{k: _num(r["eigengap"]) for k, r in all_rows.items()}},
-        {"quantity": "eigengap permutation null q05 / q50 / q95",
-         **{k: f"{_fmt(q.get('q05'))} / {_fmt(q.get('q50'))} / {_fmt(q.get('q95'))}" for k, q in perms.items()}},
-    ]
-    b.table("Latent space: primary and variants", space_rows, ["quantity", *all_rows], align="l" + "r" * len(all_rows))
-    b.para(
-        "Each variant shares with the primary the cleaned tables, the participants, the NMR block, the covariates and their "
-        "design, the cells, the settings, the CV folds, the seed and the permutations; it differs only in the p180 values "
-        "(variant rule 2)."
-    )
     e_manifest = manifests["export"]
-    exports = {"primary": e_manifest, **{v: manifests[labels[v]["export"]] for v in variants}}
-    offset_rows = []
-    for p in e_manifest.get("settings", {}).get("blocks", EXPORT_BLOCKS):
-        for label, m in exports.items():
-            o = m.get("counts", {}).get("phase_offset", {}).get(p, {})
-            e = m.get("expected", {}).get("phase_offset", {}).get(p, {})
-            offset_rows.append({
-                "row": f"{p} {label}", "block": p, "export": label,
-                "median |d|": _num(o.get("median_abs_d"), ".2f"), "max |d|": _num(o.get("max_abs_d"), ".2f"),
-                "|d| > 0.5": _count(o.get("abs_d_gt_0_5")), "|d| > 1": _count(o.get("abs_d_gt_1")),
-                "|corr(PC1, phase)|": _num(o.get("abs_corr_pc1_phase"), ".2f"), "|corr(PC2, phase)|": _num(o.get("abs_corr_pc2_phase"), ".2f"),
-                "expected |d| > 0.5": _count(e.get("abs_d_gt_0_5")), "expected |d| > 1": _count(e.get("abs_d_gt_1")),
+    for k, group in enumerate(groups):
+        words, one = _variant_words(group[0]), len(group) == 1
+        cite = words["cite"]
+        a_variant, each = ("the variant", "the variant") if one else ("a variant", "each variant")
+        if k == 0:
+            prefix, noun, counts_title = "", "variants", "Variant exports against the predeclared counts"
+        else:
+            prefix, noun = ", ".join(group) + ": ", "variant" if one else "variants"
+            counts_title = f"{prefix}Export{'' if one else 's'} against the predeclared counts"
+        p_row = rows[group[0]]["primary"]
+        clauses = [f"{a_variant} never replaces it ({cite} 1)", f"a status that differs is {words['dependence']} ({cite} 2)"]
+        if words["rules"] in _GROUP_PRIMARY_ONLY_RULE:
+            clauses.append(f"the variant is read against the primary only ({cite} {_GROUP_PRIMARY_ONLY_RULE[words['rules']]})")
+        b.para(
+            (primary_text if len(groups) == 1 else "The primary")
+            + f" beside its predeclared export {noun} (`EXPORT_VARIANTS`): "
+            + "; ".join(
+                f"`{v}` (change `{EXPORT_VARIANTS[v]['change']}`: {EXPORT_VARIANTS[v]['setting']}; `{dirs[_variant_role(v, 'analysis')].parent}`)"
+                for v in group
+            )
+            + f". Every other export and analysis setting is the primary's. Every table "
+            + ("in this section" if len(groups) == 1 else "of this group")
+            + f" quotes {a_variant} and is read under `READING_RULES` and `{words['rules']}` ({rules}): the primary row "
+            "comes first and its status is the result; " + ", ".join(clauses[:-1]) + ", and " + clauses[-1] + "."
+        )
+        stat_rows = []
+        for s in ANALYSIS_STATISTICS:
+            for label, row in (("primary", p_row), *((v, v_rows[v]) for v in group)):
+                stat_rows.append({
+                    "row": f"{s} {label}", "statistic": s, "analysis": label, "observed": _num(row[f"{s}_observed"]),
+                    "p (RRPP)": _num(row[f"{s}_p"]), "rejected": _yes_no(row[f"{s}_rejected"]),
+                    "null mean": _num(row[f"{s}_null_mean"]), "null sd": _num(row[f"{s}_null_sd"]), "null q95": _num(row[f"{s}_null_q95"]),
+                    "status": "the result" if label == "primary" else _text(statuses[label].get(s)),
+                })
+        b.table(f"{prefix}Statistics: primary and {noun}", stat_rows, ["row", "statistic", "analysis", "observed", "p (RRPP)", "rejected", "null mean", "null sd", "null q95", "status"], align="lllrrlrrrl")
+        for v in group:
+            v_row = v_rows[v]
+            b.para(
+                f"`angle` (degrees, endpoint stages {stages[0]} and {stages[-1]}) is read beside each analysis' CV-selected "
+                f"rank, floor, eigengap and null summary (reading rule 2, {cite} 3): primary rank {_count(p_row['selected_rank'])} "
+                f"(floor {ANALYSIS_RANK_FLOOR}, pooled relative eigengap {_num(p_row['eigengap'])}); {v} rank "
+                f"{_count(v_row['selected_rank'])} (floor {ANALYSIS_RANK_FLOOR}, eigengap {_num(v_row['eigengap'])})"
+                + (
+                    f"; the ranks differ, which is reported, not ranked ({cite} 3)."
+                    if p_row["selected_rank"] != v_row["selected_rank"] else "; the ranks are equal."
+                )
+            )
+        for v in group:
+            b.heading(f"Status per statistic: `{v}`")
+            b.bullets([
+                _export_variant_status_line(s, statuses[v].get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
+            ])
+        perms = {
+            "primary": primary.get("config_spectrum", {}).get("permutation_pooled_eigengap") or {},
+            **{v: records[v].get("config_spectrum", {}).get("permutation_pooled_eigengap") or {} for v in group},
+        }
+        all_rows = {"primary": p_row, **{v: v_rows[v] for v in group}}
+        space_rows = [
+            {"quantity": "PLS-DA rank (selection)", **{c: f"{_count(r['selected_rank'])} (`{r['component_selection']}`)" for c, r in all_rows.items()}},
+            {"quantity": "rank floor (`ANALYSIS_RANK_FLOOR`)", **{c: str(ANALYSIS_RANK_FLOOR) for c in all_rows}},
+            {"quantity": "cv_mean_auroc", **{c: _num(r["cv_mean_auroc"]) for c, r in all_rows.items()}},
+            {"quantity": "CV repeats completed", **{c: _count(r["cv_repeats_completed"]) for c, r in all_rows.items()}},
+            {"quantity": "pooled relative eigengap", **{c: _num(r["eigengap"]) for c, r in all_rows.items()}},
+            {"quantity": "eigengap permutation null q05 / q50 / q95",
+             **{c: f"{_fmt(q.get('q05'))} / {_fmt(q.get('q50'))} / {_fmt(q.get('q95'))}" for c, q in perms.items()}},
+        ]
+        b.table(f"{prefix}Latent space: primary and {noun}", space_rows, ["quantity", *all_rows], align="l" + "r" * len(all_rows))
+        b.para(
+            f"{each.capitalize()} shares with the primary the cleaned tables, the participants, {words['kept']}, the covariates and "
+            "their design, the cells, the settings, the CV folds, the seed and the permutations; it differs only in "
+            f"{words['changes']} ({cite} 2)."
+        )
+        exports = {"primary": e_manifest, **{v: manifests[labels[v]["export"]] for v in group}}
+        offset_rows = []
+        for p in e_manifest.get("settings", {}).get("blocks", EXPORT_BLOCKS):
+            for label, m in exports.items():
+                o = m.get("counts", {}).get("phase_offset", {}).get(p, {})
+                e = m.get("expected", {}).get("phase_offset", {}).get(p, {})
+                offset_rows.append({
+                    "row": f"{p} {label}", "block": p, "export": label,
+                    "median |d|": _num(o.get("median_abs_d"), ".2f"), "max |d|": _num(o.get("max_abs_d"), ".2f"),
+                    "|d| > 0.5": _count(o.get("abs_d_gt_0_5")), "|d| > 1": _count(o.get("abs_d_gt_1")),
+                    "|corr(PC1, phase)|": _num(o.get("abs_corr_pc1_phase"), ".2f"), "|corr(PC2, phase)|": _num(o.get("abs_corr_pc2_phase"), ".2f"),
+                    "expected |d| > 0.5": _count(e.get("abs_d_gt_0_5")), "expected |d| > 1": _count(e.get("abs_d_gt_1")),
+                })
+        b.para(
+            "The run offset per block (`phase`, ADNI1 against ADNI2GO, on each export's scale over the exported participants), "
+            f"as the primary export manifest and {each} export manifest record it "
+            "(`counts.phase_offset`), beside the predeclared counts (`EXPORT_EXPECTED_COUNTS`, `EXPORT_VARIANT_EXPECTED_COUNTS`; "
+            "`n/a` where none is predeclared):"
+        )
+        b.table(f"{prefix}Run offset per export", offset_rows, ["row", "block", "export", "median |d|", "max |d|", "|d| > 0.5", "|d| > 1", "|corr(PC1, phase)|", "|corr(PC2, phase)|", "expected |d| > 0.5", "expected |d| > 1"], align="lllrrrrrrrr")
+        flat = {v: _flatten(manifests[labels[v]["export"]].get("counts", {})) for v in group}
+        flat_e = {v: _flatten(manifests[labels[v]["export"]].get("expected", {})) for v in group}
+        keys = dict.fromkeys(
+            key for v in group
+            for key in _flatten({
+                name: value for name, value in EXPORT_VARIANT_EXPECTED_COUNTS[v].items()
+                if name not in ("analysis", "phase_offset", "diagnostics")
             })
-    b.para(
-        "The run offset per block (`phase`, ADNI1 against ADNI2GO, on each export's scale over the exported participants), "
-        "as the primary export manifest and each variant export manifest record it (`counts.phase_offset`), beside the "
-        "predeclared counts (`EXPORT_EXPECTED_COUNTS`, `EXPORT_VARIANT_EXPECTED_COUNTS`; `n/a` where none is predeclared):"
-    )
-    b.table("Run offset per export", offset_rows, ["row", "block", "export", "median |d|", "max |d|", "|d| > 0.5", "|d| > 1", "|corr(PC1, phase)|", "|corr(PC2, phase)|", "expected |d| > 0.5", "expected |d| > 1"], align="lllrrrrrrrr")
-    flat = {v: _flatten(manifests[labels[v]["export"]].get("counts", {})) for v in variants}
-    flat_e = {v: _flatten(manifests[labels[v]["export"]].get("expected", {})) for v in variants}
-    keys = dict.fromkeys(
-        k for v in variants
-        for k in _flatten({key: value for key, value in EXPORT_VARIANT_EXPECTED_COUNTS[v].items() if key not in ("analysis", "phase_offset")})
-    )
-    count_rows = [
-        {"quantity": key, **{c: _text(src[v].get(key)) for v in variants for c, src in ((v, flat), (f"{v} expected", flat_e))}}
-        for key in keys
-    ]
-    b.para(
-        "Each variant export's counts beside its predeclared ones (`EXPORT_VARIANT_EXPECTED_COUNTS`, every key but the run "
-        "offset above and the analysis', which `export-sensitivity` compares itself; a deviation is copied under "
-        f"{_section_ref('Findings')}), as its export manifest records them (`counts`, `expected`):"
-    )
-    b.table("Variant exports against the predeclared counts", count_rows, ["quantity", *(c for v in variants for c in (v, f"{v} expected"))], align="l" + "r" * (2 * len(variants)))
-    for v in variants:
-        m = manifests[labels[v]["export"]]
-        b.heading(f"Export variant `{v}`")
-        b.para(*_export_variant_lines(m))
-        bridge = m.get("bridge")
-        if not bridge:
-            continue
-        observed, expected = bridge.get("summary", {}).get("p180_bridged", {}), m.get("expected", {}).get("p180_bridged", {})
-        b.table(f"{v}: NIST bridge per kit", [
-            {"kit": "not bridged" if k == "not_bridged" else k, "metabolites": _count(observed.get(k)), "expected": _count(expected.get(k))}
-            for k in dict.fromkeys([*observed, *expected])
-        ], ["kit", "metabolites", "expected"], align="lrr")
-        rule = bridge.get("rule", {})
-        runs = [rule.get("reference_run"), rule.get("bridged_run")]
-        table = inputs["tables"]["variants"][v]["bridge"]
-        unbridged = table[table["bridged"] == "False"]
-        b.table(f"{v}: Unbridged metabolites", [
-            {
-                "metabolite": f"`{r['metabolite']}`", "kit": r["kit"], "NIST column": _text(r["nist_column"]),
-                **{f"{c} {run}": _count(r[f"{key}_{run}"]) for run in runs for c, key in (("replicates", "replicates"), ("valid", "valid"), ("ISTD flags", "istd_flags"))},
-                "b": _num(r["b"], "+.3f"),
-            }
-            for r in unbridged.to_dict("records")
-        ], ["metabolite", "kit", "NIST column", *(f"{c} {run}" for run in runs for c in ("replicates", "valid", "ISTD flags")), "b"], align="lll" + "r" * (3 * len(runs) + 1))
-        info = bridge.get("table", {})
-        b.para(
-            f"Each unbridged metabolite keeps factor {_text(rule.get('unbridged_factor'))} (`NIST_BRIDGE_RULE`: bridged when at "
-            f"least {_text(rule.get('inclusion_share'))} of its replicates are valid in each run). The full table `{info.get('name')}` "
-            f"(sha256 `{info.get('sha256')}`, {_count(info.get('rows'))} rows) is referenced by hash ({_section_ref('Provenance')}); "
-            "the factor of every metabolite is in the variant export manifest (`bridge.factors_log2`)."
         )
-    for v in variants:
-        d_manifest = manifests[labels[v]["diagnostics"]]
+        count_rows = [
+            {"quantity": key, **{c: _text(src[v].get(key)) for v in group for c, src in ((v, flat), (f"{v} expected", flat_e))}}
+            for key in keys
+        ]
+        compared = "the analysis', which `export-sensitivity` compares itself"
+        if any("diagnostics" in EXPORT_VARIANT_EXPECTED_COUNTS[v] for v in group):
+            compared += ", and the diagnostics', which `axis-diagnostics` compares"
         b.para(
-            f"Axis diagnostics of `{v}` (`{dirs[_variant_role(v, 'diagnostics')]}`, rank "
-            f"{_count(d_manifest.get('counts', {}).get('components'))}, `is_primary` "
-            f"{_text(d_manifest.get('inputs', {}).get('analysis', {}).get('is_primary'))}, export variant "
-            f"`{_text(d_manifest.get('inputs', {}).get('analysis', {}).get('export_variant'))}`): a component of the variant "
-            "that tracks a variable here is a measurement-space finding about the variant; it never reinterprets either "
-            "analysis' statistics and is never grounds to adopt the variant (variant rule 7)."
+            f"{each.capitalize()} export's counts beside its predeclared ones (`EXPORT_VARIANT_EXPECTED_COUNTS`, every key but the run "
+            f"offset above and {compared}; a deviation is copied under {_section_ref('Findings')}), as its export manifest "
+            "records them (`counts`, `expected`):"
         )
-        _diagnostics_section(b, inputs["tables"]["variants"][v]["diagnostics"], d_manifest, prefix=f"{v}: ")
-    b.table("First component against phase", _first_component_rows([
-        ("primary", inputs["tables"]["diagnostics"]), *((v, inputs["tables"]["variants"][v]["diagnostics"]) for v in variants)
-    ]), ["analysis", "component", "sd", "rho with phase", "rho | design", "flag"], align="llrrrl")
-    for v in variants:
-        settings = manifests[labels[v]["analysis"]].get("settings", {})
-        b.para(
-            f"The `motco analyze` command that reproduces `{v}`'s analysis directory (`cli_equivalent`; "
-            + _text(settings.get("cli_equivalent", {}).get("note")) + "):"
-        )
-        b.code(_text(settings.get("cli_equivalent", {}).get("command")))
+        b.table(counts_title, count_rows, ["quantity", *(c for v in group for c in (v, f"{v} expected"))], align="l" + "r" * (2 * len(group)))
+        for v in group:
+            m = manifests[labels[v]["export"]]
+            b.heading(f"Export variant `{v}`")
+            b.para(*_export_variant_lines(m))
+            bridge = m.get("bridge")
+            if not bridge:
+                continue
+            observed, expected = bridge.get("summary", {}).get("p180_bridged", {}), m.get("expected", {}).get("p180_bridged", {})
+            b.table(f"{v}: NIST bridge per kit", [
+                {"kit": "not bridged" if kit == "not_bridged" else kit, "metabolites": _count(observed.get(kit)), "expected": _count(expected.get(kit))}
+                for kit in dict.fromkeys([*observed, *expected])
+            ], ["kit", "metabolites", "expected"], align="lrr")
+            rule = bridge.get("rule", {})
+            runs = [rule.get("reference_run"), rule.get("bridged_run")]
+            table = inputs["tables"]["variants"][v]["bridge"]
+            unbridged = table[table["bridged"] == "False"]
+            b.table(f"{v}: Unbridged metabolites", [
+                {
+                    "metabolite": f"`{r['metabolite']}`", "kit": r["kit"], "NIST column": _text(r["nist_column"]),
+                    **{f"{c} {run}": _count(r[f"{key}_{run}"]) for run in runs for c, key in (("replicates", "replicates"), ("valid", "valid"), ("ISTD flags", "istd_flags"))},
+                    "b": _num(r["b"], "+.3f"),
+                }
+                for r in unbridged.to_dict("records")
+            ], ["metabolite", "kit", "NIST column", *(f"{c} {run}" for run in runs for c in ("replicates", "valid", "ISTD flags")), "b"], align="lll" + "r" * (3 * len(runs) + 1))
+            info = bridge.get("table", {})
+            b.para(
+                f"Each unbridged metabolite keeps factor {_text(rule.get('unbridged_factor'))} (`NIST_BRIDGE_RULE`: bridged when at "
+                f"least {_text(rule.get('inclusion_share'))} of its replicates are valid in each run). The full table `{info.get('name')}` "
+                f"(sha256 `{info.get('sha256')}`, {_count(info.get('rows'))} rows) is referenced by hash ({_section_ref('Provenance')}); "
+                "the factor of every metabolite is in the variant export manifest (`bridge.factors_log2`)."
+            )
+        for v in group:
+            d_manifest = manifests[labels[v]["diagnostics"]]
+            b.para(
+                f"Axis diagnostics of `{v}` (`{dirs[_variant_role(v, 'diagnostics')]}`, rank "
+                f"{_count(d_manifest.get('counts', {}).get('components'))}, `is_primary` "
+                f"{_text(d_manifest.get('inputs', {}).get('analysis', {}).get('is_primary'))}, export variant "
+                f"`{_text(d_manifest.get('inputs', {}).get('analysis', {}).get('export_variant'))}`): a component of the variant "
+                "that tracks a variable here is a measurement-space finding about the variant; it never reinterprets either "
+                f"analysis' statistics and is never grounds to adopt the variant ({_variant_words(v)['cite']} 7)."
+            )
+            _diagnostics_section(b, inputs["tables"]["variants"][v]["diagnostics"], d_manifest, prefix=f"{v}: ")
+        b.table(f"{prefix}First component against phase", _first_component_rows([
+            ("primary", inputs["tables"]["diagnostics"]), *((v, inputs["tables"]["variants"][v]["diagnostics"]) for v in group)
+        ]), ["analysis", "component", "sd", "rho with phase", "rho | design", "flag"], align="llrrrl")
+        for v in group:
+            settings = manifests[labels[v]["analysis"]].get("settings", {})
+            b.para(
+                f"The `motco analyze` command that reproduces `{v}`'s analysis directory (`cli_equivalent`; "
+                + _text(settings.get("cli_equivalent", {}).get("note")) + "):"
+            )
+            b.code(_text(settings.get("cli_equivalent", {}).get("command")))
 
 
 def _stage_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[str], p_status: dict) -> None:
@@ -10785,7 +10854,7 @@ def _rank_sensitivity_section(b: _ReportBuilder, inputs: dict, *, stages: list[s
 
 
 def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFrame]]:
-    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``).
+    """Render the case-study report from the loaded inputs (design D4 of ``adni-report``, ``adni-report-variants``, ``adni-report-stage-arm`` and ``adni-report-rank-sweep``; D2 to D5 of ``adni-report-nmr-all-columns``).
 
     Parameters
     ----------
@@ -10822,7 +10891,18 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     ``_rank_anchor_lines`` and ``_rank_nesting_table``; the flagged
     components of a diagnostics run are listed in its ``components.csv``
     order (``_flagged_components``); the reading rules are the constants,
-    verbatim. No sentence reads one sensitivity against another. The body
+    verbatim. The export variants of ``REPORT_EXPORT_VARIANTS`` are read in
+    one group per rule set (``_export_variant_groups``): the preamble names
+    each group's rule set, the summary has one paragraph per group (its
+    variants, changes, what they change, ranks, dependence label and rule
+    set, all from ``_variant_words``) followed by each variant's status
+    lines, "Export sensitivity" one group of tables per rule set
+    (``_export_sensitivity_section``), and the reading-rules section one
+    list per rule set, in group order, after
+    ``LATENT_SENSITIVITY_READING_RULES``: six lists with
+    ``EXPORT_VARIANT_READING_RULES`` and ``NMR_MEMBERSHIP_READING_RULES``.
+    No sentence reads one sensitivity against another; a sentence that
+    lists several, each beside the primary, compares none. The body
     depends on the inputs and ``date`` only: no revision, host, time or
     runtime of the report run is written.
     """
@@ -10844,16 +10924,23 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
     a_status = {s: _rejected(arm["p_values"].get(s)) for s in ANALYSIS_STATISTICS}
     sections = iter(REPORT_SECTIONS)
 
+    variants = list(REPORT_EXPORT_VARIANTS)
+    v_groups = _export_variant_groups(variants)
     b.lines.append(f"# {_REPORT_TITLE} — {date}")
     b.para(
         "Generated in full by `adni-sexdiff report` (changes `adni-report`, `adni-report-variants`, "
-        "`adni-report-stage-arm` and `adni-report-rank-sweep`) from the kept aggregate outputs of the pipeline: every "
-        "number is copied from a record, a manifest or a CSV and formatted with the digits of the summary it belongs to, "
-        "every reading sentence is the one `summary.md`, `latent_sensitivity.md`, `export_sensitivity.md`, "
-        "`stage_sensitivity.md` or `rank_sensitivity.md` prints, and the reading rules are the constants, verbatim. The "
-        "primary analysis stays primary in every table; the arm is read beside it under `READING_RULES` and "
-        "`LATENT_SENSITIVITY_READING_RULES`, each export variant under `READING_RULES` and `EXPORT_VARIANT_READING_RULES`, "
-        "the CN / LMCI / AD arm under `READING_RULES` and `STAGE_SENSITIVITY_READING_RULES`, and the rank sweep under "
+        "`adni-report-stage-arm`, `adni-report-rank-sweep` and `adni-report-nmr-all-columns`) from the kept aggregate "
+        "outputs of the pipeline: every number is copied from a record, a manifest or a CSV and formatted with the digits "
+        "of the summary it belongs to, every reading sentence is the one `summary.md`, `latent_sensitivity.md`, "
+        "`export_sensitivity.md`, `stage_sensitivity.md` or `rank_sensitivity.md` prints, and the reading rules are the "
+        "constants, verbatim. The primary analysis stays primary in every table; the arm is read beside it under "
+        "`READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`, "
+        + ", ".join(
+            f"the export variant{'' if len(group) == 1 else 's'} " + _and_join([f"`{v}`" for v in group])
+            + f" under `READING_RULES` and `{_variant_words(group[0])['rules']}`"
+            for group in v_groups
+        )
+        + ", the CN / LMCI / AD arm under `READING_RULES` and `STAGE_SENSITIVITY_READING_RULES`, and the rank sweep under "
         f"`READING_RULES` and `RANK_SENSITIVITY_READING_RULES` ({_section_ref('Reading rules')}). "
         "`adni-sexdiff report --check` compares this file with the outputs cell by cell. No value here is participant-level."
     )
@@ -10888,27 +10975,29 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         "result either way), read under `READING_RULES` and `LATENT_SENSITIVITY_READING_RULES`:"
     )
     b.bullets([_arm_status_line(s, statuses.get(s, "n/a"), p_status[s], a_status[s]) for s in ANALYSIS_STATISTICS])
-    variants = list(REPORT_EXPORT_VARIANTS)
     v_labels = {v: _variant_labels(v) for v in variants}
     v_records = inputs["records"]["variants"]
     v_status = {v: {s: _rejected(v_records[v]["p_values"].get(s)) for s in ANALYSIS_STATISTICS} for v in variants}
-    b.para(
-        "The predeclared export variants "
-        + ", ".join(f"`{v}`" for v in variants)
-        + f" (`EXPORT_VARIANTS`, change `{', '.join(dict.fromkeys(EXPORT_VARIANTS[v]['change'] for v in variants))}`: each "
-        "changes the p180 values only, every other export and analysis setting the primary's; "
-        f"{_section_ref('Export sensitivity')}) selected ranks "
-        + " and ".join(f"{v_records[v]['latent']['selected_lv']} (`{v}`)" for v in variants)
-        + ". Status per statistic (`same` when the rejection under `ANALYSIS_REJECTION_RULE` equals the primary's, else "
-        "`differs (run-handling dependence)`; the primary's status is the result either way), read under `READING_RULES` "
-        "and `EXPORT_VARIANT_READING_RULES`:"
-    )
-    for v in variants:
-        v_statuses = manifests[v_labels[v]["comparison"]].get("counts", {}).get("statuses", {})
-        b.para(f"`{v}` (rank {v_records[v]['latent']['selected_lv']}):")
-        b.bullets([
-            _export_variant_status_line(s, v_statuses.get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
-        ])
+    for group in v_groups:
+        words, one = _variant_words(group[0]), len(group) == 1
+        changes = list(dict.fromkeys(EXPORT_VARIANTS[v]["change"] for v in group))
+        b.para(
+            f"The predeclared export variant{'' if one else 's'} "
+            + ", ".join(f"`{v}`" for v in group)
+            + f" (`EXPORT_VARIANTS`, change{'' if len(changes) == 1 else 's'} " + _and_join([f"`{c}`" for c in changes])
+            + f": {'it changes' if one else 'each changes'} {words['changes']} only, every other export and analysis setting "
+            f"the primary's; {_section_ref('Export sensitivity')}) selected rank{'' if one else 's'} "
+            + " and ".join(f"{v_records[v]['latent']['selected_lv']} (`{v}`)" for v in group)
+            + ". Status per statistic (`same` when the rejection under `ANALYSIS_REJECTION_RULE` equals the primary's, else "
+            f"`{words['differs']}`; the primary's status is the result either way), read under `READING_RULES` "
+            f"and `{words['rules']}`:"
+        )
+        for v in group:
+            v_statuses = manifests[v_labels[v]["comparison"]].get("counts", {}).get("statuses", {})
+            b.para(f"`{v}` (rank {v_records[v]['latent']['selected_lv']}):")
+            b.bullets([
+                _export_variant_status_line(s, v_statuses.get(s, "n/a"), p_status[s], v_status[v][s], v) for s in ANALYSIS_STATISTICS
+            ])
     st_name = STAGE_SENSITIVITY_ARM["name"]
     st_record = inputs["records"]["stage_arm"]
     st_arm = manifests[_STAGE_ARM_LABELS["export"]]["stage_arm"]
@@ -11448,9 +11537,11 @@ def render_report(inputs: dict, *, date: str) -> tuple[str, dict[str, pd.DataFra
         f"`{LATENT_SENSITIVITY_ARM['change']}` before any run), after `READING_RULES`:"
     )
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(LATENT_SENSITIVITY_READING_RULES, 1)))
-    b.heading("EXPORT_VARIANT_READING_RULES")
-    b.para(_export_variant_rules_heading(REPORT_EXPORT_VARIANTS[0])[-1])
-    b.para(*(f"{i}. {rule}" for i, rule in enumerate(EXPORT_VARIANT_READING_RULES, 1)))
+    for group in v_groups:
+        words = _variant_words(group[0])
+        b.heading(words["rules"])
+        b.para(_export_variant_rules_heading(group[0])[-1])
+        b.para(*(f"{i}. {rule}" for i, rule in enumerate(words["rule_tuple"], 1)))
     b.heading("STAGE_SENSITIVITY_READING_RULES")
     b.para(_stage_arm_rules_heading()[-1])
     b.para(*(f"{i}. {rule}" for i, rule in enumerate(STAGE_SENSITIVITY_READING_RULES, 1)))
@@ -11709,35 +11800,59 @@ def _parse_back(text: str, tables: dict[str, pd.DataFrame]) -> tuple[int, int]:
     return len(tables), n_cells
 
 
-def _check_report_layout(path: Path) -> str:
-    """The report's text, after checking that its level-2 headings are ``REPORT_SECTIONS`` in order (design D6 of ``adni-report-variants``).
+#: The level-3 heading of each export variant's block in "Export sensitivity",
+#: one per variant a report quotes, in its order: the variants it lists
+#: (design D6 of ``adni-report-nmr-all-columns``).
+_REPORT_VARIANT_HEADING_RE = re.compile(r"^### Export variant `([^`]+)`$")
 
-    A report written by an earlier layout of ``report`` stops the check
-    before any input gate and before any comparison, naming the report, the
-    sections it lacks and adds, and how to find the revision that committed
-    it, where it checks; nothing is written.
+
+def _check_report_layout(path: Path) -> str:
+    """The report's text, after checking its layout (design D6 of ``adni-report-variants`` and ``adni-report-nmr-all-columns``).
+
+    Its level-2 headings must be ``REPORT_SECTIONS`` in order; then the
+    export variants it lists, its headings ``Export variant `<name>``` in
+    "Export sensitivity" in order (``_REPORT_VARIANT_HEADING_RE``), must be
+    ``REPORT_EXPORT_VARIANTS``. A report written by an earlier layout of
+    ``report`` (the reports of 2026-10-28, 2026-10-29 and 2026-10-30 by
+    their sections, the report of 2026-10-31 by its two export variants)
+    stops the check before any input gate and before any comparison,
+    naming the report, the sections or variants it lacks and adds (or that
+    their order differs), and how to find the revision that committed it,
+    where it checks; nothing is written.
     """
     text = path.read_text()
-    titles = [section["title"] for section in parse_report(text)["sections"][1:]]
-    if titles != list(REPORT_SECTIONS):
-        absent = [t for t in REPORT_SECTIONS if t not in titles]
-        extra = [t for t in titles if t not in REPORT_SECTIONS]
+    parsed = parse_report(text)
+    titles = [section["title"] for section in parsed["sections"][1:]]
+    hint = (
+        f"It checks at the revision that committed it: `git log -1 --format=%H -- {path}`, then `adni-sexdiff report "
+        f"--check --out {path}` in a worktree of that revision (`git worktree add <dir> <revision>`); no cell was compared; "
+        "nothing was written"
+    )
+
+    def stop(what: str, expected: Sequence[str], found: list[str]) -> None:
+        absent = [t for t in expected if t not in found]
+        extra = [t for t in found if t not in expected]
         raise RuntimeError(
-            f"{path} was written by an earlier layout of `report`: its level-2 sections are not REPORT_SECTIONS (absent: "
+            f"{path} was written by an earlier layout of `report`: {what} (absent: "
             + (", ".join(repr(t) for t in absent) or "none") + "; extra: " + (", ".join(repr(t) for t in extra) or "none")
-            + ("" if absent or extra else "; the order differs")
-            + f"). It checks at the revision that committed it: `git log -1 --format=%H -- {path}`, then `adni-sexdiff report "
-            f"--check --out {path}` in a worktree of that revision (`git worktree add <dir> <revision>`); no cell was compared; "
-            "nothing was written"
+            + ("" if absent or extra else "; the order differs") + f"). {hint}"
         )
+
+    if titles != list(REPORT_SECTIONS):
+        stop("its level-2 sections are not REPORT_SECTIONS", REPORT_SECTIONS, titles)
+    section = next(s for s in parsed["sections"] if s["title"] == "Export sensitivity")
+    listed = [m.group(1) for _, line in section["lines"] if (m := _REPORT_VARIANT_HEADING_RE.match(line))]
+    if listed != list(REPORT_EXPORT_VARIANTS):
+        stop("its export variants are not REPORT_EXPORT_VARIANTS", REPORT_EXPORT_VARIANTS, listed)
     return text
 
 
 def check_report(path: str | Path, inputs: dict, *, log: str = "[report]") -> dict:
     """Compare an existing report with the one the inputs generate (design D6 of ``adni-report``); writes nothing.
 
-    A report whose level-2 headings are not ``REPORT_SECTIONS`` in order
-    stops first (``_check_report_layout``).
+    A report whose level-2 headings are not ``REPORT_SECTIONS`` in order, or
+    whose export variants are not ``REPORT_EXPORT_VARIANTS``, stops first
+    (``_check_report_layout``).
 
     Parameters
     ----------
@@ -11832,8 +11947,9 @@ def run_report(
         bridge table (hook ``factors``), the variant export's manifest, the
         variant analysis' three aggregate files, the comparison's three files
         and the variant diagnostics' six. Every variant of the pin is
-        required; a registered variant outside it (change
-        ``adni-nmr-all-columns``) is not read, and a progress line names it.
+        required (all three registered variants since change
+        ``adni-report-nmr-all-columns``); a variant registered later and
+        left outside it is not read, and a progress line names it.
     stage_sensitivity_dir:
         The root of ``stage-sensitivity`` (default
         ``constants.STAGE_SENSITIVITY_DIR``), read through
@@ -11858,10 +11974,14 @@ def run_report(
         regenerate the report and compare every table cell by cell and every
         other line line by line; every mismatch is named (section, table,
         row key, column, both values; or the line with both texts) and the
-        CLI exits non-zero on any. A report whose level-2 headings are not
-        ``REPORT_SECTIONS`` (written by an earlier layout) stops before any
-        gate, naming its absent and extra sections and how to find the
-        revision that committed it, where it checks. Nothing is written.
+        CLI exits non-zero on any. A report written by an earlier layout,
+        whose level-2 headings are not ``REPORT_SECTIONS`` or whose export
+        variants (its ``Export variant `<name>``` headings) are not
+        ``REPORT_EXPORT_VARIANTS`` (change ``adni-report-nmr-all-columns``:
+        the report of 2026-10-31, which checks at 13ce7c8), stops before any
+        gate, naming its absent and extra sections or variants and how to
+        find the revision that committed it, where it checks. Nothing is
+        written.
     force:
         Replace an existing report at ``out`` (write mode).
 
@@ -11874,7 +11994,7 @@ def run_report(
 
     Notes
     -----
-    Inputs are the 93 kept aggregate files of ``REPORT_INPUT_FILES`` (29
+    Inputs are the 106 kept aggregate files of ``REPORT_INPUT_FILES`` (33
     manifests) and nothing else: no participant-level file is opened or
     required, and the hashes the report quotes for one are the values the
     manifests record. So the step runs on any clone with the committed
@@ -11895,9 +12015,9 @@ def run_report(
     analysis and every rank are reported runs (``n_jobs =
     REPORTED_N_JOBS``), every ``numerics`` block present is pinned and
     every manifest records the same MOTCO, scikit-learn and metabo_adni
-    versions; the chain holds link by link (167 links on the committed
-    tree: 76, then 24 for the CN / LMCI / AD arm, then 67 for the rank
-    sweep) from the clean manifests to the arm's, every variant's, the CN /
+    versions; the chain holds link by link (189 links on the committed
+    tree: 31, then 23, 22 and 22 for the three variants, 24 for the CN /
+    LMCI / AD arm, then 67 for the rank sweep) from the clean manifests to the arm's, every variant's, the CN /
     LMCI / AD arm's and the rank sweep's diagnostics, the primary feature
     tables the arm export names as the source of its floors included.
     Write mode also stops on an existing ``out`` without ``force``.
@@ -11905,8 +12025,10 @@ def run_report(
     Output contract (``render_report``): one Markdown file with the
     thirteen sections of ``REPORT_SECTIONS`` in order (summary; provenance;
     cohort; export; primary analysis; axis diagnostics of the primary;
-    latent-adjustment sensitivity; export sensitivity; stage-definition
-    sensitivity; rank sensitivity; findings; reading rules; reproduction),
+    latent-adjustment sensitivity; export sensitivity, one group of tables
+    per rule set of the pinned variants, each holding the primary and its
+    group's variants only; stage-definition sensitivity; rank sensitivity;
+    findings; reading rules; reproduction),
     every table titled by a level-3 heading and keyed by its first column,
     every number copied from a record, a manifest or a CSV at the digits of
     the summary it belongs to, every reading sentence produced by
@@ -11918,11 +12040,13 @@ def run_report(
     by ``_export_variant_lines``, the CN / LMCI / AD arm's bullets and
     definition tables by ``_stage_arm_lines`` and ``_stage_arm_tables``, the
     sweep's anchor and nesting bullets and nesting table by
-    ``_rank_anchor_lines`` and ``_rank_nesting_table``, ``READING_RULES``,
-    then ``LATENT_SENSITIVITY_READING_RULES``, then
-    ``EXPORT_VARIANT_READING_RULES``, then
-    ``STAGE_SENSITIVITY_READING_RULES``, then
-    ``RANK_SENSITIVITY_READING_RULES`` verbatim, the arm's, the variants',
+    ``_rank_anchor_lines`` and ``_rank_nesting_table``, every word that
+    depends on an export variant from ``_variant_words``, six rule lists
+    verbatim: ``READING_RULES``, then ``LATENT_SENSITIVITY_READING_RULES``,
+    then one per rule set of the pinned variants in group order
+    (``EXPORT_VARIANT_READING_RULES``, ``NMR_MEMBERSHIP_READING_RULES``),
+    then ``STAGE_SENSITIVITY_READING_RULES``, then
+    ``RANK_SENSITIVITY_READING_RULES``, the arm's, each variant group's,
     the CN / LMCI / AD arm's and the sweep's constants named beside every
     table that quotes them, no sentence reading one sensitivity against
     another, and the primary's status the result in every table. The body depends on
@@ -11946,7 +12070,10 @@ def run_report(
             raise FileNotFoundError(f"{out_path} does not exist; nothing to check (write one with `adni-sexdiff report`)")
         date = _report_date(out_path)
         _check_report_layout(out_path)
-        print(f"{log} checking {out_path} (date {date} from its name; its sections are REPORT_SECTIONS)")
+        print(
+            f"{log} checking {out_path} (date {date} from its name; its sections are REPORT_SECTIONS and its export variants "
+            "REPORT_EXPORT_VARIANTS)"
+        )
     else:
         out_path = Path(out) if out is not None else reports_dir / REPORT_NAME.format(date=date_type.today().isoformat())
         date = _report_date(out_path)
