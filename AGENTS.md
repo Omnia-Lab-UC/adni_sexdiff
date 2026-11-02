@@ -30,7 +30,13 @@ primary and never replacing it; the report covers them since change
 derived ones among them, run by the same step and read beside the primary
 under its own rules; the report covers it since change
 `adni-report-nmr-all-columns`, whose pin `REPORT_EXPORT_VARIANTS` holds all
-three variants, each group of a rule set in its own tables) and the
+three variants, each group of a rule set in its own tables; three scale
+variants, `raw_scale`, `log2_plus_one` and `glog`, change
+`adni-scale-variants`: both blocks on the raw scale, `log2(x + 1)` or the
+generalized log, the primary's membership, run by the same step and read
+beside the primary under their shared rules
+`SCALE_VARIANT_READING_RULES`; registered outside the report's pin, which
+a later report change extends) and the
 sensitivity step `stage-sensitivity`
 (change `adni-stage-sensitivity`: the predeclared CN / LMCI / AD arm, the
 primary export's rows of the participants whose `DX.bl` is CN, LMCI or
@@ -68,7 +74,8 @@ diagnostic constants (`DIAGNOSTIC_VARIABLES`,
 `DIAGNOSTIC_CORRELATION_THRESHOLD`) and the sensitivity constants
 (`LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
 `LATENT_SENSITIVITY_READING_RULES`; `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`,
-`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`;
+`EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
+`SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES`;
 `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`;
 `RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`); every
 constant the six steps and the four sensitivity steps need is decided (see
@@ -293,8 +300,9 @@ implemented by its own OpenSpec change, in order.
      and no arm value changes a constant, selects a covariate, reruns the
      primary or defines a variant.
    - Sensitivity step, after `axis-diagnostics` and before `report`:
-     `export-sensitivity --variant {nist_bridge,per_run_standardized,nmr_all_columns,all}`
-     (changes `adni-nist-bridge` and `adni-nmr-all-columns`) – from
+     `export-sensitivity --variant {nist_bridge,per_run_standardized,nmr_all_columns,raw_scale,log2_plus_one,glog,all}`
+     (changes `adni-nist-bridge`, `adni-nmr-all-columns` and
+     `adni-scale-variants`) – from
      `results/cleaned/` (`P180.csv`,
      `p180_runs.csv`, `NMR.csv`, each against its `clean_manifest.json`),
      `results/cohort/` (`cohort.csv`, `cohort_manifest.json`), the primary
@@ -308,7 +316,9 @@ implemented by its own OpenSpec change, in order.
      against its manifest and against the clean and cohort files now on
      disk (`_check_primary_export_chain`), the primary analysis as a
      chained reference (`_check_primary_reference`), the archives and their
-     four members (`_read_nist_archives`). Per variant of `EXPORT_VARIANTS`
+     four members (`_read_nist_archives`), for `glog` a kept metabolite with
+     no positive cell (λ undefined, `_scale_transform`; it runs before the
+     rule's floor gate, which such a column fails too). Per variant of `EXPORT_VARIANTS`
      (registry order for `all`, which stops at the existing-variant gate
      when a variant's outputs exist, so a new variant runs by its name):
      the export through the body `export` shares (`_run_export`, with the
@@ -318,7 +328,13 @@ implemented by its own OpenSpec change, in order.
      `membership` (`nmr_all_columns`), every cleaned NMR column kept in
      cleaned order, each on the rule's scale with its own floor, the rule's
      165 columns compared with the primary `nmr.csv`
-     (`rule_columns_equal_primary`); the primary's bytes are its gate), the
+     (`rule_columns_equal_primary`), or `scale` (block `all`: `raw_scale`,
+     `log2_plus_one`, `glog`), every kept cell of both blocks on the
+     variant's transform of `SCALE_VARIANT_RULE` (`_scale_transform`) on
+     the primary's membership, the rule's floor computed, gated and recorded
+     and not applied, an `offset` column in the feature tables, only
+     `metadata.csv` and `covariates.csv` compared with the primary's; the
+     primary's bytes are its gate), the
      analysis through `_run_trajectory_analysis` at the primary's settings,
      and the comparison. Every variant-specific word of the documents (the
      rule set, its citation word, the dependence label and what the variant
@@ -333,24 +349,31 @@ implemented by its own OpenSpec change, in order.
      with step `export-sensitivity`, the variant, the primary export as
      `reference`, the QC hashes beside the predeclared ones, the bridge's
      hash, summary and factors, for `nmr_all_columns` `derived_kept` and
-     `rule_columns_equal_primary`, `EXPORT_VARIANT_EXPECTED_COUNTS` beside
-     the observed counts), `analysis/` (the seven files `analyze` writes,
+     `rule_columns_equal_primary`, for a scale variant `settings.units` (its
+     transform), `settings.scale`, `counts.scale` (the medians below the
+     offset for `log2_plus_one`, the quantiles of λ over the median for
+     `glog`) and the primary's shape counts and spectrum in `reference`,
+     `EXPORT_VARIANT_EXPECTED_COUNTS` beside the observed counts), `analysis/` (the seven files `analyze` writes,
      the primary as `reference`; `summary.md` with an "Export variant"
      section and the variant's rule set after `READING_RULES`) and
      `comparison/` (`export_sensitivity.csv`, the primary row then the
      variant row read from the records; `export_sensitivity.md`, statuses
      `same` / `differs (<dependence>)`, `run-handling dependence` for the
-     p180 variants and `feature-membership dependence` for
-     `nmr_all_columns`, the run offsets of both exports, the bridge summary
-     or the membership, block shares and NMR shape counts, and both sets of
-     rules; `export_sensitivity_manifest.json`), the staged subdirectories
+     p180 variants, `feature-membership dependence` for `nmr_all_columns`
+     and `scale dependence` for the scale variants, the run offsets of both
+     exports, the bridge summary, or the membership, block shares and NMR
+     shape counts, or the transform, offsets and per block the shape counts
+     and numerical ranks of both exports, and both sets of rules;
+     `export_sensitivity_manifest.json`), the staged subdirectories
      (`bridge/` for `nist_bridge` only) renamed together; never
      `diagnostics/`, which `axis-diagnostics --input-dir
      <variant>/motco_input --analysis-dir <variant>/analysis --out-dir
      <variant>/diagnostics` writes (its `diagnostics.md` names the variant
      and the block it changes and prints both sets of rules; its expected
      counts are the variant's own `diagnostics` counts when its entry holds
-     them, `nmr_all_columns` with 245 NMR features). Findings, never stops:
+     them, `nmr_all_columns` with 245 NMR features, and the rank-independent
+     ones otherwise, the scale variants with 165; for a scale variant it
+     names an export whose scale differs). Findings, never stops:
      those of `export` and `analyze`, a QC hash that differs from its
      predeclared value, a metabolite without a NIST column, a run that
      differs from `phase`, an unchanged file that differs from the
@@ -725,8 +748,10 @@ behavior or defaults change.
   `ANALYSIS_LATENT_ADJUSTMENT`, `READING_RULES`, `DIAGNOSTIC_VARIABLES`,
   `DIAGNOSTIC_CORRELATION_THRESHOLD`, `LATENT_SENSITIVITY_ARM`,
   `LATENT_SENSITIVITY_COVARIATE_ROLES`, `LATENT_SENSITIVITY_READING_RULES`,
-  `EXPORT_VARIANTS` (with its entry `nmr_all_columns`), `NIST_BRIDGE_RULE`,
+  `EXPORT_VARIANTS` (with its entries `nmr_all_columns`, `raw_scale`,
+  `log2_plus_one` and `glog`), `NIST_BRIDGE_RULE`,
   `EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
+  `SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES`,
   `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`,
   `RANK_SENSITIVITY_LADDER`, `RANK_SENSITIVITY_READING_RULES`;
   `constants.py` reserves the others' names in its docstring and defines
@@ -818,7 +843,13 @@ behavior or defaults change.
   `EXPORT_VARIANT_RULE_SETS` (per variant its rules, citation word,
   dependence label, source, heading and reader; two import-time assertions
   tie its keys to the registry and each `rules` to a tuple of the module),
-  change `adni-nmr-all-columns`; `STAGE_SENSITIVITY_ARM` and
+  change `adni-nmr-all-columns`; `SCALE_VARIANT_RULE`, the `EXPORT_VARIANTS`
+  entries `raw_scale`, `log2_plus_one` and `glog` (block `all`, hook
+  `scale`) and `SCALE_VARIANT_READING_RULES` defined, with the predeclared
+  `EXPORT_VARIANT_EXPECTED_COUNTS` of the three (`analysis` among their
+  keys, no `diagnostics`; their shared keys `_SCALE_VARIANT_SHARED_COUNTS`)
+  and their shared `EXPORT_VARIANT_RULE_SETS` entry `_SCALE_RULE_SET`, change
+  `adni-scale-variants`; `STAGE_SENSITIVITY_ARM` and
   `STAGE_SENSITIVITY_READING_RULES` defined, with three import-time
   assertions tying the arm to `STAGE_RULE`, the predeclared
   `STAGE_SENSITIVITY_EXPECTED_COUNTS` (`export`, `analysis`,
@@ -877,7 +908,9 @@ behavior or defaults change.
   `_export_variant_lines`, which the report prints too, the variant's words
   `_variant_words` (its entry of `EXPORT_VARIANT_RULE_SETS` with what it
   changes and keeps, read by every variant renderer, change
-  `adni-nmr-all-columns`), the rules section `_export_variant_rules_lines`,
+  `adni-nmr-all-columns`; a scale variant's words, change
+  `adni-scale-variants`), the scale hook's transform `_scale_transform`,
+  the rules section `_export_variant_rules_lines`,
   the `phase` line `_export_variant_phase_line`, and
   `render_export_sensitivity`) and the sensitivity step
   `stage-sensitivity` (`run_stage_sensitivity`, with the arm export
@@ -935,7 +968,11 @@ behavior or defaults change.
   `stage-sensitivity` does not), `spike_nmr_all_columns.py` (the NMR
   membership change's read-only spike; it fits the derived columns on the
   concentrations and measures the joint matrix, which `export-sensitivity`
-  does not).
+  does not), `spike_scale_variants.py` (the scale variants change's
+  read-only spike; it rebuilds both blocks on the rule's scale against the
+  primary's CSVs and measures the three scales, the offsets against the
+  concentrations and each scale's agreement with the rule's, which
+  `export-sensitivity` does not).
 - `data/` – raw ADNI files, uploaded by hand; gitignored, never committed.
 - `results/` – pipeline outputs; only the aggregate files named in
   constraint 1 are committed. `results/motco_latent_sensitivity/` holds the
@@ -1119,7 +1156,8 @@ behavior or defaults change.
   `DIAGNOSTIC_VARIABLES`, `DIAGNOSTIC_CORRELATION_THRESHOLD`,
   `LATENT_SENSITIVITY_ARM`, `LATENT_SENSITIVITY_COVARIATE_ROLES`,
   `LATENT_SENSITIVITY_READING_RULES`, `EXPORT_VARIANTS`, `NIST_BRIDGE_RULE`,
-  `EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES` (with the
+  `EXPORT_VARIANT_READING_RULES`, `NMR_MEMBERSHIP_READING_RULES`,
+  `SCALE_VARIANT_RULE`, `SCALE_VARIANT_READING_RULES` (with the
   predeclared `EXPORT_VARIANT_EXPECTED_COUNTS`), `STAGE_SENSITIVITY_ARM`,
   `STAGE_SENSITIVITY_READING_RULES` (with the predeclared
   `STAGE_SENSITIVITY_EXPECTED_COUNTS`), `RANK_SENSITIVITY_LADDER`,
@@ -1167,9 +1205,9 @@ behavior or defaults change.
     `EXPORT_EXPECTED_COUNTS`. Its variants enter `EXPORT_VARIANTS`, each by
     its own proposal: `nist_bridge` and `per_run_standardized` by
     `adni-nist-bridge`, `nmr_all_columns` (all 245 NMR columns) by
-    `adni-nmr-all-columns`; the others registered after the primary
-    analysis (the raw scale, `log2(x + 1)`, the generalized log) are one
-    later change.
+    `adni-nmr-all-columns`, `raw_scale`, `log2_plus_one` and `glog` (the
+    raw scale, `log2(x + 1)` and the generalized log, on both blocks) by
+    `adni-scale-variants`.
   - `ANALYSIS_PERMUTATIONS`, `ANALYSIS_SEED`, `ANALYSIS_ALPHA`,
     `ANALYSIS_REJECTION_RULE` – decided by `adni-analyze`: 9999 RRPP
     permutations (the p-value `(1 + b) / (1 + B)` is exact in size at any
@@ -1368,6 +1406,83 @@ behavior or defaults change.
 
     The rank is not predeclared. No variant value selects a metabolite,
     changes a constant or defines a variant.
+  - `SCALE_VARIANT_RULE`, the `EXPORT_VARIANTS` entries `raw_scale`,
+    `log2_plus_one` and `glog`, `SCALE_VARIANT_READING_RULES`, the
+    dependence label, `EXPORT_VARIANT_EXPECTED_COUNTS` of the three –
+    decided by `adni-scale-variants` (2026-11-02, before any run of them;
+    the user chose all three variants, λ per metabolite, one shared rule
+    set and the report left to a later change). The scales of a kept cell
+    `x` (a cleaned concentration in its platform's unit: p180 µM, NMR
+    mostly mmol/L), in place of the rule's `log2(x + floor)`:
+    - `raw_scale`: `x`, no offset;
+    - `log2_plus_one`: `log2(x + 1)`, offset 1 in the platform's unit (the
+      2022 study's transform);
+    - `glog`: `log2((x + sqrt(x² + λ²)) / 2)`, λ per metabolite its
+      smallest positive value over the exported participants divided by 10
+      (`lambda_divisor`); a metabolite with no positive cell leaves λ
+      undefined and stops the step before anything is written (none on the
+      committed inputs).
+
+    The entries: block `all` (both blocks), hook `scale`, rule
+    `SCALE_VARIANT_RULE`, no data root; the primary's membership (133 p180
+    metabolites, 165 NMR concentrations), participants, metadata and
+    covariates; the rule's floor computed, gated and recorded per
+    metabolite, not applied; every analysis setting the primary's. The
+    three earlier entries are untouched (no key added). The eight scale
+    rules, shared by the three and printed verbatim after `READING_RULES`
+    in each one's `summary.md`, `export_sensitivity.md`, `diagnostics.md`
+    and every report that quotes it, in place of
+    `EXPORT_VARIANT_READING_RULES`, cited as "scale rule N":
+    1. A scale variant never replaces the primary, and no result of it
+       changes a constant (the scale of `EXPORT_FEATURE_RULE` included).
+    2. It differs only in the scale of both blocks; every scale is monotone
+       in the concentration, so each participant's rank on each feature is
+       the primary's and the spacing changes. A differing status is
+       dependence on the scale.
+    3. Its rank, floor, eigengap and `angle` null summary are read beside
+       its `angle`; a differing rank is reported, not ranked.
+    4. `log2_plus_one` and `glog` keep the log and change its offset: under
+       `log2(x + 1)` a scarce metabolite gets a nearly linear scale (median
+       below 1 for 46 p180 and 129 NMR metabolites); it is not a
+       reproduction of the 2022 study. `glog` is `log2(x)` within 0.004
+       bits, puts a zero cell 4.3 bits below the smallest positive value and
+       carries left tails (|skew| > 1 for 6 p180 and 25 NMR metabolites).
+    5. `raw_scale` has right tails (|skew| > 1 for 46 p180 and 43 NMR
+       metabolites) and an NMR block of numerical rank 104 of 165 (the
+       lipoprotein sums are exact on the concentration scale).
+    6. Its non-rejection is no more informative than the primary's; a
+       rejection only in a variant is scale dependence.
+    7. The shape counts, numerical ranks, run offset per block and the
+       offset per metabolite are reported beside the results. A variant
+       axis in the diagnostic is a measurement-space finding.
+    8. It is read against the primary only, never against another scale
+       variant or another sensitivity.
+
+    Rules 1, 2, 3, 6 and 7 have the roles of `EXPORT_VARIANT_READING_RULES`
+    1, 2, 3, 6 and 7. The dependence label is `differs (scale
+    dependence)`; the three share one `EXPORT_VARIANT_RULE_SETS` entry
+    (citation word "scale rule", source "the scale of both blocks").
+
+    Predeclared counts, from the change's spike and the committed
+    manifests; shared by the three: 1501 participants in the primary's
+    cells, the primary's features (p180 133 / 133, NMR 245 cleaned, 165
+    kept, derived 72 / 4 / 1 / 3), zero cells p180 0 and NMR 41 in 3
+    metabolites (before the transform), 0 floors not positive, 0
+    non-finite cells, 0 runs that differ from `phase`, `metadata.csv` and
+    `covariates.csv` equal to the primary's, 0 missing covariate values,
+    and every key of `ANALYSIS_EXPECTED_COUNTS`; per variant (`raw_scale`;
+    `log2_plus_one`; `glog`):
+    - p180 |skew| > 1 / largest |z| > 8: 46 / 12; 14 / 9; 6 / 6;
+    - NMR |skew| > 1 / largest |z| > 8: 43 / 4; 30 / 4; 25 / 13;
+    - numerical rank p180 / NMR: 133 / 104; 133 / 165; 133 / 165;
+    - phase |d| > 0.5 / > 1, p180: 108 / 76; 108 / 80; 109 / 80, NMR 2 / 0
+      in each;
+    - `log2_plus_one` only: median below the offset 1 for 46 p180 and 129
+      NMR metabolites.
+
+    No `diagnostics` key: the diagnostic's rank-independent keys hold (165
+    NMR features). The ranks are not predeclared. No variant value selects
+    a metabolite or a scale, changes a constant or defines a variant.
   - `STAGE_SENSITIVITY_ARM`, `STAGE_SENSITIVITY_READING_RULES`,
     `STAGE_SENSITIVITY_EXPECTED_COUNTS` – decided by
     `adni-stage-sensitivity` (2026-10-29, before any run; the user chose
