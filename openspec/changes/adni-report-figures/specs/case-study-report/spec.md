@@ -326,12 +326,12 @@ The report SHALL be written to a temporary file and its figures to a temporary d
 The report, its figures, their data CSVs and every progress line of the step SHALL hold no participant identifier and SHALL quote aggregate values only: counts, statistics, hashes, settings and constants.
 
 #### Scenario: Identifier search
-- **WHEN** the report is searched for a `rid` value or the token `RID`
-- **THEN** only column-name mentions are found
+- **WHEN** the report is searched for the token `RID` and for the `rid` values of the exported participants
+- **THEN** the token appears only as a column name, and no value is a participant identifier: a number equal to a `rid` value is a count, rank or other aggregate value copied from its source
 
 #### Scenario: Figure data search
-- **WHEN** the figures directory is searched for a `rid` value or the token `RID`
-- **THEN** nothing is found, and every source named in a data CSV is a committed aggregate file of `REPORT_INPUT_FILES` or, for a reference line such as α or the correlation flag, a named constant of `constants.py`
+- **WHEN** the figures directory is searched for the token `RID` and for the `rid` values of the exported participants
+- **THEN** the token is not found; no key, field or value is a participant identifier, since a cell equal to a `rid` value is a count, rank or other aggregate value, as its `source` and `field` show; and every source named in a data CSV is a committed aggregate file of `REPORT_INPUT_FILES` or, for a reference line such as α or the correlation flag, a named constant of `constants.py`
 
 ### Requirement: The report covers the variants it names
 The step SHALL read, check and quote exactly the export variants of `REPORT_EXPORT_VARIANTS`, in its order, a subsequence of `EXPORT_VARIANTS`. A registered variant outside it SHALL NOT be read or required, and SHALL leave the report body unchanged. The step SHALL name it on a progress line, never in the body. A change that adds a variant to the report SHALL extend `REPORT_EXPORT_VARIANTS` and re-issue the report.
