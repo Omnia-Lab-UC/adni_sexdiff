@@ -293,7 +293,7 @@ The report body SHALL depend only on the input files and the report's file name:
 - **THEN** the two files differ only in the title line
 
 ### Requirement: Check selects the report and reruns the gates
-Without `--out`, `--check` SHALL read the newest report under `reports/` by the date in its name, then by its same-day ordinal (a name without one first). Before any other gate, a report whose level-2 headings differ from the current sections SHALL stop the check, naming the report, the sections it lacks or adds, and how to find the revision that committed it. The check SHALL then run every gate of the write mode before comparing, so a broken chain or an unreported run fails the check naming the cause.
+Without `--out`, `--check` SHALL read the newest report under `reports/` by the date in its name, then by its same-day ordinal (a name without one first). Before any other gate, a report whose level-2 headings differ from the current sections SHALL stop the check, naming the report, the sections it lacks or adds, and how to find the revision that committed it. The check SHALL then run every gate of the write mode before comparing.
 
 #### Scenario: No report
 - **WHEN** `reports/` holds no `motco-adni-*.md` and `--out` is not given
