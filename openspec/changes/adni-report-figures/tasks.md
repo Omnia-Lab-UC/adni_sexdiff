@@ -132,15 +132,15 @@ Every task runs on any machine with the Nix shell and the committed tree, except
 
 ## 7. The report
 
-- [ ] 7.1 On the clean tree, after the implementation is committed, run `uv run adni-sexdiff report` (today's name, or `--out` with the day's next free name). Verify:
+- [x] 7.1 On the clean tree, after the implementation is committed, run `uv run adni-sexdiff report` (today's name, or `--out` with the day's next free name). Verify:
   - it writes the report and `reports/figures/<stem>/` (eighteen files);
   - `report --check` passes;
   - PNG renders in the scratch directory look right;
   - `grep -rn "RID" reports/figures/<stem>/` finds nothing.
 
-  Update the status paragraph of `AGENTS.md` (the newest report, the default of `--check`) in a separate commit.
-- [ ] 7.2 On a second machine (the cluster login node once the clone exists, or another of the user's machines) with the same lock, run `uv sync --locked` and then `uv run adni-sexdiff report --check` on the branch. Verify that it passes, every SVG included. Record the machine's CPU and the outcome in this line. If an SVG differs, stop and diagnose (design, Risks) before committing the report.
-- [ ] 7.3 Commit the report and its figures directory alone, naming every file added and why it is aggregate. Verify with `git show --stat HEAD`, which lists the report and the eighteen figure files only.
+  Update the status paragraph of `AGENTS.md` (the newest report, the default of `--check`) in a separate commit. Outcome (2026-11-02, clean tree at fdcc991): `report` without `--out` stopped naming the next free same-day name, so `--out reports/motco-adni-2026-11-02-4.md` wrote the report (15 sections, 113 tables, 7568 cells, parsed back equal) and `reports/figures/motco-adni-2026-11-02-4/` (18 files, 1.4 MB on disk, each data CSV read back equal to its rows); `report --check` (default: the newest report, this one) compared 113 tables, 7568 cells, 1385 other lines, 9 data CSVs (1274 rows) and 9 SVGs with no mismatch, exit 0; the figure files are byte-identical to the scratch run under another name; PNG renders of the nine looked right; `grep -rnw RID` finds nothing in the figures directory or the report.
+- [x] 7.2 On a second machine (the cluster login node once the clone exists, or another of the user's machines) with the same lock, run `uv sync --locked` and then `uv run adni-sexdiff report --check` on the branch. Verify that it passes, every SVG included. Record the machine's CPU and the outcome in this line. If an SVG differs, stop and diagnose (design, Risks) before committing the report. Outcome (2026-11-02): the cluster login node (`cluster.ing.uc.cl`, Intel Xeon E5-2630 v4 @ 2.20GHz, AVX2 without AVX-512, glibc 2.34), a plain clone of `main` at `/home1/tgonza/adni_sexdiff` with the branch at 036a14e fetched from a git bundle (not pushed), the report and its 18 figure files copied over SSH with equal sha256; `uv sync --locked` (uv 0.12.10, which chose Python 3.13.15 there against 3.12.15 here) installed matplotlib 3.11.2; `uv run --locked adni-sexdiff report --check` compared 113 tables, 7568 cells, 1385 other lines, 9 data CSVs (1274 rows) and 9 SVGs with no mismatch, exit 0; numerics pinned (`log2` baseline, OpenBLAS Haswell × 1 thread). The copies were then removed from the clone, which is clean.
+- [x] 7.3 Commit the report and its figures directory alone, naming every file added and why it is aggregate. Verify with `git show --stat HEAD`, which lists the report and the eighteen figure files only. Outcome (2026-11-02): commit 0b14bde holds `reports/motco-adni-2026-11-02-4.md` and the 18 files of `reports/figures/motco-adni-2026-11-02-4/` only (19 files), its message naming each and why it is aggregate; the status paragraphs of `AGENTS.md` and `README.md` follow in a separate commit.
 
 ## Workflow follow-up
 

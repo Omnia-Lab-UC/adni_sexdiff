@@ -27,10 +27,13 @@ own rule set), the CN / LMCI / AD arm and the rank sweep, and since
 design (section "Operating characteristics", read under
 `OPERATING_CHARACTERISTICS_READING_RULES` beside `READING_RULES`; a
 non-rejection of `delta`, `angle` or `shape` in the primary is measured as
-uninformative). The newest report is `reports/motco-adni-2026-11-02-3.md`,
-the default of `report --check` (the reports of 2026-10-28, 2026-10-29,
-2026-10-30, 2026-10-31, 2026-11-02 and 2026-11-02-2, of earlier layouts,
-cover fewer).
+uninformative), and since `adni-report-figures` it draws nine figures,
+committed beside it under `reports/figures/<report stem>/` (an SVG and a
+data CSV each) and checked by `report --check`. The newest report is
+`reports/motco-adni-2026-11-02-4.md`, the default of `report --check`
+(the reports of 2026-10-28, 2026-10-29, 2026-10-30, 2026-10-31, 2026-11-02,
+2026-11-02-2 and 2026-11-02-3, of earlier layouts, cover fewer and have no
+figures).
 The
 statistical choices made so far are `CLEAN_OPTIONS`, `COHORT_RULE`,
 `STAGE_RULE`, `ANALYSIS_COVARIATES`, `EXPORT_FEATURE_RULE`, the analysis

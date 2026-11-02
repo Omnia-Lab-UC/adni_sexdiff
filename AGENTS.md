@@ -57,10 +57,18 @@ under `EXPORT_VARIANT_READING_RULES`, `nmr_all_columns` under
 and since `adni-operating-characteristics` it quotes MOTCO's size and power
 at this design in the section "Operating characteristics", read under
 `OPERATING_CHARACTERISTICS_READING_RULES` beside `READING_RULES`, for the
-primary only; the newest is `reports/motco-adni-2026-11-02-3.md`, the
-default of `report --check` (the reports of 2026-10-28, 2026-10-29,
-2026-10-30, 2026-10-31, 2026-11-02 and 2026-11-02-2, of earlier layouts,
-cover fewer). The cluster copy and clone do not exist yet. A data machine is
+primary only, and since `adni-report-figures` it draws nine figures
+(`REPORT_FIGURES`), committed beside it under
+`reports/figures/<report stem>/` and checked by `report --check`; the
+newest is `reports/motco-adni-2026-11-02-4.md` with
+`reports/figures/motco-adni-2026-11-02-4/`, the default of
+`report --check` (the reports of 2026-10-28, 2026-10-29, 2026-10-30,
+2026-10-31, 2026-11-02, 2026-11-02-2 and 2026-11-02-3, of earlier layouts,
+cover fewer and have no figures). The cluster clone exists since
+2026-11-02 (`/home1/tgonza/adni_sexdiff`, a plain clone made by an agent
+under constraint 7, where `report --check` of 2026-11-02-4 passed with
+every figure); the cluster's data copy does not exist yet, so of the
+steps only `report` runs there. A data machine is
 any of the user's machines whose
 local participant-level files under `results/` (the export CSVs,
 `cohort.csv`, the primary's `latent_scores.csv` and
