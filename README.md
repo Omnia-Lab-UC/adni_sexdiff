@@ -63,7 +63,13 @@ it (`clean` → `cohort` → `export` → `analyze` into a scratch directory), a
 hash check of every output the committed manifests record, and copying
 the participant-level files into the gitignored paths under `results/`.
 The manifests written before `adni-portable-numerics` record no machine,
-but their outputs reproduce pinned on any machine.
+but their outputs reproduce pinned on any machine, except two outputs no
+step reads: the p180 `metabo_adni.log` when the environment is at another
+path (a pandas warning prints that path) and `result.json`'s
+`measurement.runtime_seconds` (with `software.python` under another
+Python). The cluster is a data machine since 2026-11-02: its data root,
+an owner-only copy of the user's data machine's, was rebuilt pinned there
+and its participant-level files installed under `results/`.
 
 **ADNI is controlled-access (DUA).** Nothing participant-level is ever
 committed: no raw file, no cleaned matrix, no cohort table, no MOTCO input
